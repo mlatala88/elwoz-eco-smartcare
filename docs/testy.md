@@ -1,19 +1,21 @@
 # ELWOZ ECO SmartCare – Procedura Testowa i Rejestr Weryfikacji
-**Wersja:** 0.2.5 (Rozwiązanie wyczerpania tokenów: 8192 max tokens, thinkingLevel MINIMAL, wczesna kontrola finishReason, diagnostyka)  
+**Wersja:** 0.2.6 (FINAL RELEASE: Naprawa Dashboardu, dynamiczne mapowanie, 2 wykresy, powiadomienia e-mail, zweryfikowany profil Google, standardy CX/PR)  
 **Projekt:** Studencki prototyp wdrożeniowy – Uniwersytet WSB Merito w Gdańsku  
 **Przedsiębiorstwo:** ELWOZ ECO Sp. z o.o. (Rejon Kartuzy)  
-**Dedykowane konto testowe:** `wsb.student.tester@gmail.com`
+**Dedykowane konto testowe:** `wsb.student.tester@gmail.com`  
+**Zweryfikowany link do opinii Google:** `https://search.google.com/local/writereview?placeid=ChIJ13yCwGSa_UYRqkDdyWL8wdA`
 
 ---
 
 ## 1. Cel i zasady przeprowadzania testów
 
-Niniejsza procedura służy do zweryfikowania poprawności działania aplikacji **ELWOZ ECO SmartCare** po wprowadzeniu poprawek v0.2.5:
+Niniejsza procedura służy do zweryfikowania poprawności działania aplikacji **ELWOZ ECO SmartCare** po wprowadzeniu poprawek końcowych v0.2.6:
 1. **Wyłącznie dane fikcyjne:** Żadne testowe zgłoszenie nie może zawierać rzeczywistych nazwisk, prywatnych adresów ani numerów telefonów mieszkańców Kartuz.
 2. **Brak zmyślonych rezultatów:** W tabelach poniżej pola dotyczące rzeczywistych rezultatów i pomiarów czasu pozostawiono do uzupełnienia w trakcie faktycznych sesji testowych przez zespół.
 3. **Twarde zabezpieczenie serwerowe (Backend Whitelist Guard):** Backend bezwzględnie blokuje wysyłkę na jakikolwiek inny adres niż `wsb.student.tester@gmail.com`, a temat wiadomości zawsze otrzymuje prefiks `[TEST]`.
 4. **Zasady etyczne Google Reviews:** Prośba o recenzję jest neutralna, bez nagród, bez sugerowania ocen, bez filtrowania zadowolonych/niezadowolonych mieszkańców i BEZ TEKSTU ZASTĘPCZEGO (placeholdera).
 5. **Natywne Structured Outputs i filtracja thought:** Odpowiedź AI jest wymuszana w schemacie JSON, a bloki myśli modelu rozumującego są ignorowane.
+6. **Dynamiczny Dashboard i wykresy:** Formuły bazują na dynamicznym wyszukiwaniu nagłówków kolumn i składni przecinkowej, a wykresy nie ulegają duplikacji.
 
 ---
 
@@ -41,6 +43,11 @@ Niniejsza procedura służy do zweryfikowania poprawności działania aplikacji 
 | **TEST-18** | **Obsługa błędów analizy AI i brak zamykania okna** | Symulacja błędu sieci, limitu quota lub niepoprawnych danych. | Okno dialogowe weryfikacji AI pozostaje otwarte; wyświetla się czytelny komunikat; przycisk zmienia stan na `🤖 Ponów analizę AI`. | *(do uzupełnienia po teście)* | `Do wykonania` | | |
 | **TEST-19** | **Samodzielny test diagnostyczny Gemini API z menu SmartCare** | Wybór z menu: *SmartCare -> 🔍 Test diagnostyczny Gemini API*. | Wyświetla się okno modalne z pełną diagnostyką: nazwa modelu Flash, HTTP 200, finishReason: STOP, liczba części thought (odfiltrowane), zużycie tokenów (prompt, candidates, thinking) oraz podgląd sparsowanego JSON. | *(do uzupełnienia po teście)* | `Do wykonania` | | |
 | **TEST-20** | **Weryfikacja puli 8192 tokenów i eliminacja błędu braku klamer JSON** | Analiza zgłoszeń ELW-2026-0001 i ELW-2026-0002 przez Gemini Flash. | Brak błędu obcięcia tokenów; model generuje kompletny JSON ze wszystkimi wymaganymi polami; pola CRM w arkuszu ZGŁOSZENIA zostają poprawnie wypełnione. | *(do uzupełnienia po teście)* | `Do wykonania` | | |
+| **TEST-21** | **Dynamiczny Dashboard i eliminacja błędu #ERROR!** | Przeliczenie statystyk dla 3 istniejących zgłoszeń (total = 3, kategorie = 1 każda, 1 rozwiązane). | Komórka C5 wyświetla `3`, kategorie w kolumnie C wyświetlają `1`, brak błędów `#ERROR!`; wygenerowane 2 czytelne wykresy (kategorii i statusów). | *(do uzupełnienia po teście)* | `Do wykonania` | | |
+| **TEST-22** | **Automatyczne powiadomienia e-mail o nowym zgłoszeniu** | Wysłanie nowego zgłoszenia przez formularz Google Forms. | Wyzwalacz `handleNewTicketSubmit` wysyła e-mail z powiadomieniem na `wsb.student.tester@gmail.com`; zdarzenie odnotowane w `HISTORIA KOMUNIKACJI`. | *(do uzupełnienia po teście)* | `Do wykonania` | | |
+| **TEST-23** | **Blokada przycisków i status w oknie edycji wiadomości** | Kliknięcie *Usprawnij styl z AI* w oknie przygotowania wiadomości. | Przycisk *Zatwierdź i wyślij* zostaje zablokowany; wyświetla się komunikat `AI przygotowuje odpowiedź…`; po zakończeniu przyciski odblokowują się, a treść można edytować. | *(do uzupełnienia po teście)* | `Do wykonania` | | |
+| **TEST-24** | **Weryfikacja standardów PR i CX w stylizacji AI** | Przekazanie do stylizacji roboczej notatki zawierającej wzmianki o naganach kierowcy lub fikcyjnych trasach. | Model usuwa wzmianki o karach i fikcyjnych faktach, stosuje powitanie *Dzień dobry,*, dziękuje za kontakt i przeprasza za utrudnienia, zachowując oficjalne dane POK. | *(do uzupełnienia po teście)* | `Do wykonania` | | |
+| **TEST-25** | **Jednoklikowa aktualizacja systemu do v0.2.6** | Wybór z menu: *SmartCare -> 🚀 Aktualizuj system do v0.2.6*. | Skrypt idempotentnie aktualizuje formuły Dashboardu, wykresy, parametry USTAWIENIA, formatuje wiersze ZGŁOSZENIA (28px, CLIP) i wyświetla raport podsumowujący. | *(do uzupełnienia po teście)* | `Do wykonania` | | |
 
 ---
 

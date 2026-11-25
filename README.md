@@ -1,12 +1,13 @@
 # ELWOZ ECO SmartCare – Cyfrowy Punkt Obsługi Mieszkańca
-**Wersja:** 0.2.5 (Rozwiązanie wyczerpania tokenów: 8192 max tokens, thinkingLevel MINIMAL, wczesna kontrola finishReason, diagnostyka)  
+**Wersja:** 0.2.6 (FINAL RELEASE: Naprawa Dashboardu, dynamiczne mapowanie, 2 wykresy, powiadomienia e-mail, zweryfikowany profil Google, standardy CX/PR)  
 **Projekt zaliczeniowy:** *Nowoczesne technologie w marketingu i sprzedaży* – Uniwersytet WSB Merito w Gdańsku  
 **Przedsiębiorstwo:** ELWOZ ECO Sp. z o.o.  
 **Obszar wdrożenia:** Rejon Kartuz i okoliczne sołectwa  
 **Oficjalna strona przedsiębiorstwa:** [elwozeco.pl](https://elwozeco.pl/)  
 **Dedykowane konto testowe Google:** `wsb.student.tester@gmail.com`  
 **Publiczna strona demonstracyjna (GitHub Pages):** [https://mlatala88.github.io/elwoz-eco-smartcare/](https://mlatala88.github.io/elwoz-eco-smartcare/)  
-**Aktywny formularz Google Forms:** [https://docs.google.com/forms/d/e/1FAIpQLSdZXjHX0Tt5GqF5yacDZpouKtrcsxPBhXx-K2s5cqYfEFtnkA/viewform](https://docs.google.com/forms/d/e/1FAIpQLSdZXjHX0Tt5GqF5yacDZpouKtrcsxPBhXx-K2s5cqYfEFtnkA/viewform)
+**Aktywny formularz Google Forms:** [https://docs.google.com/forms/d/e/1FAIpQLSdZXjHX0Tt5GqF5yacDZpouKtrcsxPBhXx-K2s5cqYfEFtnkA/viewform](https://docs.google.com/forms/d/e/1FAIpQLSdZXjHX0Tt5GqF5yacDZpouKtrcsxPBhXx-K2s5cqYfEFtnkA/viewform)  
+**Zweryfikowany link do opinii Google:** [https://search.google.com/local/writereview?placeid=ChIJ13yCwGSa_UYRqkDdyWL8wdA](https://search.google.com/local/writereview?placeid=ChIJ13yCwGSa_UYRqkDdyWL8wdA)
 
 ---
 
@@ -23,7 +24,7 @@
 10. [Rzetelne szablony wiadomości i procedura komunikacji](#10-rzetelne-szablony-wiadomości-i-procedura-komunikacji)
 11. [Zarządzanie reputacją i zasady opinii Google](#11-zarządzanie-reputacją-i-zasady-opinii-google)
 12. [Dziennik audytu (HISTORIA KOMUNIKACJI)](#12-dziennik-audytu-historia-komunikacji)
-13. [Rozszerzony Dashboard i Rejestr Zgłoszeń (Kalkulacje KPI)](#13-rozszerzony-dashboard-i-rejestr-zgłoszeń-kalkulacje-kpi)
+13. [Rozszerzony Dashboard i Rejestr Zgłoszeń (Kalkulacje KPI i Wykresy)](#13-rozszerzony-dashboard-i-rejestr-zgłoszeń-kalkulacje-kpi-i-wykresy)
 14. [Gemini Structured Outputs, kontrola tokenów i diagnostyka](#14-gemini-structured-outputs-kontrola-tokenów-i-diagnostyka)
 15. [Instrukcja publikacji na GitHub Pages](#15-instrukcja-publikacji-na-github-pages)
 16. [Generowanie Kodu QR (Dla pojemników i prezentacji)](#16-generowanie-kodu-qr-dla-pojemników-i-prezentacji)
@@ -37,7 +38,15 @@
 
 Projekt **ELWOZ ECO SmartCare** realizowany jest na Uniwersytecie WSB Merito w Gdańsku jako studencki projekt wdrożeniowy dedykowany spółce **ELWOZ ECO Sp. z o.o.**, odpowiedzialnej za odbiór odpadów komunalnych w rejonie Kartuz.
 
-Wydanie **0.2.5** rozwiązuje problem ucinania odpowiedzi przez wyczerpanie tokenów (`finishReason: MAX_TOKENS`) oraz eliminuje błąd `Treść wygenerowana przez model nie zawiera struktury JSON (brak klamer)`:
+Wydanie końcowe **0.2.6 (FINAL RELEASE)** finalizuje wszystkie funkcjonalności operacyjne:
+- **Pełna naprawa Dashboardu i statystyk:** Dynamiczne mapowanie kolumn po nagłówkach (`getTicketsColumnMap`) oraz poprawna składnia przecinkowa US English w `setFormula()`, eliminująca `#ERROR!` i gwarantująca poprawne zliczenia (3 zgłoszenia testowe = 3 łącznie, po 1 w kategoriach);
+- **Wizualizacja analityczna:** 2 automatycznie generowane wykresy (rozkład kategorii i rozkład statusów) z ochroną przed duplikacją;
+- **Automatyczne powiadomienia e-mail o nowych zgłoszeniach:** Natychmiastowa wysyłka powiadomień HTML do BOK przy każdym nowym zgłoszeniu (na `wsb.student.tester@gmail.com`) z rejestracją w `HISTORIA KOMUNIKACJI`;
+- **Autentyczny profil Google:** Wdrożenie zweryfikowanego linku `https://search.google.com/local/writereview?placeid=ChIJ13yCwGSa_UYRqkDdyWL8wdA` w `USTAWIENIA` i modułach komunikacji;
+- **Standardy PR i CX w stylizacji AI:** Zakaz ujawniania wewnętrznych kar/reprymend, zakaz zmyślania faktów/tras, profesjonalny zwrot powitalny, podziękowanie i ewentualne przeprosiny;
+- **Blokada przycisków i statusy w oknie wiadomości:** Przycisk wysyłki jest blokowany podczas stylizacji AI, zapobiegając wyścigom, z zachowaniem pełnej edytowalności tekstu;
+- **Czytelność arkusza ZGŁOSZENIA:** Ergonomiczna wysokość wierszy (28px) oraz strategia zawijania `CLIP` bez utraty zawartości komórek;
+- **Jednoklikowa aktualizacja:** Funkcja `🚀 Aktualizuj system do v0.2.6` w menu arkusza.
 - **Zwiększenie limitu tokenów do 8192:** Budżet tokenów wyjściowych (`maxOutputTokens: 8192`) zapewnia pełne wygenerowanie struktury JSON nawet przy dłuższym procesie myślowym modeli Flash;
 - **Konfiguracja poziomu myślenia (thinkingConfig):** Wymuszenie `thinkingLevel: "MINIMAL"` (dla Gemini 3+) oraz `thinkingBudget: 0` (dla Gemini 2.5) minimalizuje zbędną konsumpcję tokenów i skraca czas oczekiwania;
 - **Zalecana temperatura (temperature: 1.0):** Zgodnie z oficjalną dokumentacją Google dla modeli rozumujących Gemini ze Structured Outputs, temperatura 1.0 zapobiega zapętleniom i degradacji myślenia;
@@ -154,26 +163,34 @@ elwoz-eco-smartcare/
 4. Wklej zawartość plików `google/setup.gs`, `google/communication.gs` oraz `google/ai.gs`.
 5. Uruchom funkcję **`setupSmartCareSystem`** i zaakceptuj uprawnienia.
 
-### Dla istniejącej instalacji (aktualizacja do v0.2.5):
-Jeśli arkusz i formularz są już zainstalowane na Twoim koncie:
+### Dla istniejącej instalacji (aktualizacja do v0.2.6 FINAL):
+Jeśli arkusz i formularz są już zainstalowane na koncie `wsb.student.tester@gmail.com`:
 1. Otwórz edytor Apps Script w istniejącym arkuszu Google Sheets (**Rozszerzenia → Apps Script**).
 2. Zaktualizuj zawartość **WYŁĄCZNIE DWÓCH PLIKÓW**:
-   - `ai.gs` – wklej nową zawartość z repozytorium `google/ai.gs` (wersja 0.2.5);
-   - `communication.gs` – wklej nową zawartość z repozytorium `google/communication.gs` (wersja 0.2.5).
+   - `setup.gs` – wklej zaktualizowaną zawartość z `google/setup.gs` (wersja 0.2.6);
+   - `communication.gs` – wklej zaktualizowaną zawartość z `google/communication.gs` (wersja 0.2.6).
+   *(Moduł `ai.gs` pozostaje bez zmian – wersja v0.2.5 działa stabilnie).*
 3. Zapisz projekt (Ctrl + S).
-4. Przeładuj arkusz Google Sheets – w menu pojawi się opcja `📋 SmartCare -> 🔍 Test diagnostyczny Gemini API`, która pozwala zweryfikować poprawność integracji.
-   *(Nie musisz uruchamiać instalatora od nowa ani tworzyć nowego formularza czy arkusza!)*
+4. Przeładuj arkusz Google Sheets (F5) i z menu wybierz:
+   **`📋 SmartCare -> 🚀 Aktualizuj system do v0.2.6`**.
+5. Funkcja automatycznie:
+   - Zaktualizuje formuły Dashboardu przy użyciu dynamicznego mapowania kolumn, eliminując `#ERROR!`;
+   - Wygeneruje dwa czytelne wykresy analityczne (rozkład kategorii i statusów) bez duplikacji;
+   - Wprowadzi zweryfikowany link do Profilu Google w `USTAWIENIA`;
+   - Skonfiguruje parametry automatycznych powiadomień wewnętrznych;
+   - Ustawi jednolitą wysokość wierszy (28px) oraz styl zawijania `CLIP` w arkuszu `ZGŁOSZENIA`;
+   - Wyświetli okno raportu z podsumowaniem wykonanych działań.
 
 ---
 
 ## 8. Natywny formularz Google Forms i eliminacja localStorage
 
-W wersji **0.2.3**:
+W wersji **0.2.6**:
 - Mieszkaniec wypełnia rzeczywisty formularz Google Forms osadzony w responsywnej ramce iframe lub za pomocą przycisku bezpośredniego otwarcia formularza.
 - Adres aktywnego formularza jest skonfigurowany w `js/config.js`:
   `https://docs.google.com/forms/d/e/1FAIpQLSdZXjHX0Tt5GqF5yacDZpouKtrcsxPBhXx-K2s5cqYfEFtnkA/viewform`.
 - Zgłoszenie natychmiast pojawia się w arkuszu odpowiedzi.
-- Zainstalowany wyzwalacz `onFormSubmit` (chroniony `LockService`) natychmiast nadaje unikalny identyfikator sprawy oraz status *Nowe*.
+- Zainstalowany wyzwalacz `onFormSubmit` (`handleNewTicketSubmit` chroniony `LockService`) natychmiast nadaje unikalny identyfikator sprawy, ustawia status *Nowe*, wysyła powiadomienie e-mail do BOK i loguje zdarzenie w `HISTORIA KOMUNIKACJI`.
 
 ---
 
@@ -186,9 +203,13 @@ W arkuszu kalkulacyjnym na koncie `wsb.student.tester@gmail.com` dostępne jest 
 | **1. 🤖 Analizuj zgłoszenie przez AI** | Otwiera okno weryfikacji zanonimizowanego opisu (Human-in-the-Loop) i analizuje sprawę przez **Gemini Flash**. |
 | **2. ✉️ Przygotuj potwierdzenie przyjęcia** | Generuje szablon A w oknie modalnym (zabezpieczonym funkcją `escapeHtml`). |
 | **3. ✉️ Przygotuj informację o postępach** | Generuje szablon B informujący o weryfikacji okoliczności zgłoszenia. |
-| **4. ✉️ Przygotuj informację o rozwiązaniu** | Wymaga uzupełnienia pola *Sposób rozwiązania sprawy*; generuje szablon C. |
-| **5. ⭐ Przygotuj prośbę o opinię Google** | Blokuje wysyłkę z placeholderem; wymaga autentycznego linku w USTAWIENIACH. |
+| **4. ✉️ Przygotuj informację o rozwiązaniu** | Wymaga uzupełnienia pola *Sposób rozwiązania sprawy*; generuje szablon C ze zweryfikowanym linkiem do opinii. |
+| **5. ⭐ Przygotuj prośbę o opinię Google** | Generuje szablon D z bezpośrednim linkiem Google (`placeid=ChIJ13yCwGSa_UYRqkDdyWL8wdA`); chroni przed duplikacją. |
 | **6. 📞 Odnotuj kontakt telefoniczny** | Rejestruje notatkę z rozmowy i aktualizuje daty kontaktu jako obiekty `Date`. |
+| **7. 📜 Wyświetl historię komunikacji** | Prezentuje pełny dziennik zdarzeń dla wybranego zgłoszenia. |
+| **🔍 Test diagnostyczny Gemini API** | Testuje integrację z modelem Gemini Flash na danych mockowych i wyświetla metadane zużycia tokenów. |
+| **🚀 Aktualizuj system do v0.2.6** | Idempotentna funkcja aktualizacji formuł, wykresów, formatowania i ustawień do v0.2.6. |
+| **⚙️ Ustawienia / Klucz Gemini API** | Pozwala bezpiecznie zapisać klucz API w Script Properties bez umieszczania go w kodzie. |
 | **7. 📜 Wyświetl historię komunikacji** | Prezentuje pełną tabelę audytową dotychczasowej korespondencji dla zaznaczonego ID. |
 | **🔄 Aktualizuj formuły Dashboardu (v0.2.3)** | Bezpiecznie aktualizuje formuły KPI w godzinach bez modyfikacji danych. |
 | **⚙️ Ustawienia / Klucz Gemini API** | Bezpieczny konfigurator klucza API w `ScriptProperties`. |
@@ -227,21 +248,32 @@ Każde zdarzenie kontaktowe jest rejestrowane w zakładce `HISTORIA KOMUNIKACJI`
 
 ---
 
-## 13. Rozszerzony Dashboard i Rejestr Zgłoszeń (Kalkulacje KPI)
+## 13. Rozszerzony Dashboard i Rejestr Zgłoszeń (Kalkulacje KPI i Wykresy)
 
-Wskaźniki w zakładce `DASHBOARD`:
-- **Czas pierwszej reakcji (komórka C8):** Liczony w godzinach z dokładnością do dwóch miejsc po przecinku:
-  `=IFERROR(ROUND(AVERAGE(FILTER((ZGŁOSZENIA!U2:U - ZGŁOSZENIA!A2:A)*24; ISNUMBER(ZGŁOSZENIA!U2:U); ISNUMBER(ZGŁOSZENIA!A2:A))); 2); 0)`
-- **Czas rozwiązania sprawy (komórka D8):** Liczony w godzinach z dokładnością do dwóch miejsc po przecinku:
-  `=IFERROR(ROUND(AVERAGE(FILTER((ZGŁOSZENIA!W2:W - ZGŁOSZENIA!A2:A)*24; ISNUMBER(ZGŁOSZENIA!W2:W); ISNUMBER(ZGŁOSZENIA!A2:A))); 2); 0)`
-- **Odsetek zakończonych z prośbą o opinię (komórka C11):** Obliczany wyłącznie wśród spraw rozwiązanych / zamkniętych:
-  `=IFERROR(ROUND(COUNTIFS(ZGŁOSZENIA!X2:X; "TAK"; ZGŁOSZENIA!H2:H; "Rozwiązane") / MAX(1; COUNTIF(ZGŁOSZENIA!H2:H; "Rozwiązane") + COUNTIF(ZGŁOSZENIA!H2:H; "Zamknięte")); 4); 0)`
+W wersji **0.2.6 (FINAL RELEASE)** zakładka `DASHBOARD` została całkowicie zmodernizowana i naprawiona:
+- **Dynamiczne mapowanie kolumn po nagłówkach (`getTicketsColumnMap`):** Formuły nie korzystają już z podatnych na błędy, sztywnych liter kolumn (takich jak `B2:B`), lecz dynamicznie sprawdzają faktyczne położenie nagłówków (`Data zgłoszenia`, `Data pierwszego kontaktu`, `Data rozwiązania`, `Status`, `Kategoria`).
+- **Składnia US English z przecinkami w `setFormula()`:** Zastąpienie regionalnych średników standardowymi przecinkami wyeliminowało błąd `#ERROR!` w arkuszu.
+- **Prawidłowe zliczanie i wskaźniki operacyjne:**
+  - **Łączna liczba zgłoszeń (C5):** `=COUNTIF(ZGŁOSZENIA!{id}2:{id}, "<>")`
+  - **Zgłoszenia nowe (D5), w realizacji (E5), rozwiązane (F5):** Dynamiczne formuły `COUNTIF`
+  - **Czas pierwszej reakcji (komórka C8):** Liczony w godzinach z dokładnością do dwóch miejsc po przecinku:  
+    `=IFERROR(ROUND(AVERAGE(FILTER((ZGŁOSZENIA!{firstContact}2:{firstContact} - ZGŁOSZENIA!{created}2:{created})*24, ISNUMBER(ZGŁOSZENIA!{firstContact}2:{firstContact}), ISNUMBER(ZGŁOSZENIA!{created}2:{created}))), 2), 0)`
+  - **Czas rozwiązania sprawy (komórka D8):** Liczony w godzinach z dokładnością do dwóch miejsc po przecinku:  
+    `=IFERROR(ROUND(AVERAGE(FILTER((ZGŁOSZENIA!{resolved}2:{resolved} - ZGŁOSZENIA!{created}2:{created})*24, ISNUMBER(ZGŁOSZENIA!{resolved}2:{resolved}), ISNUMBER(ZGŁOSZENIA!{created}2:{created}))), 2), 0)`
+  - **Wskaźnik zadowolenia mieszkańców (C10):** Średnia ocen mieszkańców w skali 1–5:  
+    `=IFERROR(ROUND(AVERAGE(IFERROR(FILTER(ZGŁOSZENIA!{rating}2:{rating}, ISNUMBER(ZGŁOSZENIA!{rating}2:{rating}), ZGŁOSZENIA!{rating}2:{rating}>=1, ZGŁOSZENIA!{rating}2:{rating}<=5))), 2), 0.0)`
+  - **Odsetek zakończonych z prośbą o opinię (komórka C11):** Obliczany wyłącznie wśród spraw rozwiązanych / zamkniętych:  
+    `=IFERROR(ROUND(COUNTIFS(ZGŁOSZENIA!{reviewSent}2:{reviewSent}, "TAK", ZGŁOSZENIA!{status}2:{status}, "Rozwiązane") / MAX(1, COUNTIF(ZGŁOSZENIA!{status}2:{status}, "Rozwiązane") + COUNTIF(ZGŁOSZENIA!{status}2:{status}, "Zamknięte")), 4), 0)`
+- **Wykresy analityczne Google Sheets:**
+  - **Wykres 1 (Słupkowy / BarChart):** Wizualizuje liczbę zgłoszeń według poszczególnych kategorii (brak odbioru, uszkodzony pojemnik, gabaryty, PSZOK itp.) z zakresu `B15:C20`.
+  - **Wykres 2 (Kolumnowy / ColumnChart):** Prezentuje aktualny stan spraw (Nowe, Do weryfikacji, W realizacji, Rozwiązane) z zakresu `E15:F19`.
+  - Wykresy są automatycznie generowane i zabezpieczone przed duplikowaniem przez funkcję `setupDashboardCharts`.
 
 ---
 
 ## 14. Gemini Structured Outputs, kontrola tokenów i diagnostyka
 
-W wersji **0.2.5** wyeliminowano błąd `Treść wygenerowana przez model nie zawiera struktury JSON (brak klamer)` oraz wprowadzono pełną stabilność tokenową:
+W wersji **0.2.5/0.2.6** wyeliminowano błąd `Treść wygenerowana przez model nie zawiera struktury JSON (brak klamer)` oraz wprowadzono pełną stabilność tokenową:
 1. **Zwiększenie limitu tokenów (maxOutputTokens: 8192):** Poprzedni limit 1000 tokenów był wyczerpywany przez myśli modeli Flash, co uniemożliwiało wygenerowanie JSON. Limit 8192 zapewnia pełną swobodę generowania.
 2. **Optymalizacja poziomu myślenia (thinkingConfig):** Wymuszenie `thinkingLevel: "MINIMAL"` (Gemini 3+) oraz `thinkingBudget: 0` (Gemini 2.5) zapobiega zbędnemu zużywaniu tokenów.
 3. **Oficjalna temperatura (temperature: 1.0):** Zgodnie z zaleceniami Google dla modeli rozumujących Gemini ze Structured Outputs, temperatura 1.0 zapobiega błędom i zapętleniom.
@@ -262,8 +294,11 @@ Repozytorium GitHub: `mlatala88/elwoz-eco-smartcare`
 1. Wypchnij kod do repozytorium:
    ```bash
    git add .
-   git commit -m "Release v0.2.5: Fix token exhaustion with 8192 max tokens, minimal thinking level, early finishReason check, and diagnostic function"
+   git commit -m "Release v0.2.6 (FINAL): Repair dashboard with dynamic mapping and charts, add new ticket notifications, verified review link, and CX/PR standards"
    git push origin main
+   ```
+2. Publikacja jest aktywna pod adresem:
+   **[https://mlatala88.github.io/elwoz-eco-smartcare/](https://mlatala88.github.io/elwoz-eco-smartcare/)**
    ```
 2. Publikacja jest aktywna pod adresem:
    **[https://mlatala88.github.io/elwoz-eco-smartcare/](https://mlatala88.github.io/elwoz-eco-smartcare/)**

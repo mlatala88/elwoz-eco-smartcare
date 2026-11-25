@@ -1,25 +1,29 @@
 /**
  * ============================================================================
  * ELWOZ ECO SmartCare - Moduł Komunikacji i Zarządzania Reputacją (communication.gs)
- * Wersja: 0.2.5 (8192 max tokens, thinkingLevel MINIMAL, wczesna kontrola finishReason, diagnostyka)
+ * Wersja: 0.2.6 (FINAL RELEASE - Powiadomienia o zgłoszeniach, dynamiczny dashboard, link Google, CX/PR)
  * Projekt edukacyjny: Uniwersytet WSB Merito w Gdańsku
  * Dedykowane konto testowe: wsb.student.tester@gmail.com
  * ============================================================================
  * 
  * ZAKRES MODUŁU:
- * 1. Niestandardowe menu arkusza „SmartCare” (w tym test diagnostyczny Gemini API).
+ * 1. Niestandardowe menu arkusza „SmartCare” (z aktualizacją do v0.2.6 i diagnostyką).
  * 2. Cztery edytowalne szablony wiadomości oparte WYŁĄCZNIE na zweryfikowanych faktach.
  * 3. Pełne zabezpieczenie okien dialogowych przed wstrzyknięciem HTML/JS (escapeHtml).
  * 4. BEZWARUNKOWA blokada wysyłki na serwerze: dozwolony odbiorca to WYŁĄCZNIE wsb.student.tester@gmail.com.
  * 5. Zabezpieczenie przed równoczesną wysyłką za pomocą LockService.
  * 6. Zabezpieczenie przed duplikatami wysyłek (kontrola 5-minutowego okna).
- * 7. Blokada placeholdera w prośbie o opinię – brak oznaczania jako wysłane bez zweryfikowanego linku.
+ * 7. Blokada placeholdera w prośbie o opinię – autentyczny zweryfikowany link Google.
  * 8. Bezpieczna stylizacja wiadomości przez zweryfikowany model Gemini Flash (8192 tokeny, filtr myśli).
- * 9. Zapis dat w arkuszu jako obiekty Date z poprawnym formatem dla formuł KPI w godzinach.
+ * 9. Blokada przycisków i statusy podczas generowania odpowiedzi przez AI.
+ * 10. Zapis dat w arkuszu jako obiekty Date z automatycznym odświeżaniem wskaźników Dashboardu.
  */
 
 // Jedyny bezwarunkowo autoryzowany odbiorca testowy
 const APPROVED_TEST_RECIPIENT = "wsb.student.tester@gmail.com";
+
+// Domyślny, autentyczny link do profilu Google (zgodny z USTAWIENIA)
+const VERIFIED_GOOGLE_REVIEW_URL_DEFAULT = "https://search.google.com/local/writereview?placeid=ChIJ13yCwGSa_UYRqkDdyWL8wdA";
 
 /**
  * Automatyczne utworzenie menu SmartCare po otwarciu arkusza
@@ -38,9 +42,18 @@ function onOpen() {
     .addItem("7. 📜 Wyświetl historię komunikacji", "actionViewCommunicationHistory")
     .addSeparator()
     .addItem("🔍 Test diagnostyczny Gemini API", "testGeminiApiIntegration")
-    .addItem("🔄 Aktualizuj formuły Dashboardu (v0.2.3)", "updateDashboardKpiFormulasOnly")
+    .addItem("🚀 Aktualizuj system do v0.2.6", "updateSystemToV026")
     .addItem("⚙️ Ustawienia / Klucz Gemini API", "configureGeminiApiKeyFromComm")
     .addToUi();
+}
+
+/**
+ * Kompatybilność wsteczna - wywołanie aktualizacji v0.2.6
+ */
+function updateDashboardKpiFormulasOnly() {
+  if (typeof updateSystemToV026 === "function") {
+    updateSystemToV026();
+  }
 }
 
 /**
@@ -79,7 +92,7 @@ function getSmartCareSettings() {
     contactEmail: "kartuzy@elwozeco.pl",
     contactPhone: "58 681 22 99",
     website: "https://elwozeco.pl/",
-    googleReviewUrl: "", // Usunięto fikcyjny link do opinii
+    googleReviewUrl: VERIFIED_GOOGLE_REVIEW_URL_DEFAULT,
     senderName: "ELWOZ ECO SmartCare – POK Kartuzy",
     testEmail: APPROVED_TEST_RECIPIENT
   };
@@ -87,15 +100,15 @@ function getSmartCareSettings() {
   if (!settingsSheet) return defaultSettings;
 
   try {
-    const data = settingsSheet.getRange("A3:B11").getValues();
+    const data = settingsSheet.getRange("A3:B13").getValues();
     const settingsMap = {};
     for (let row of data) {
       if (row[0]) settingsMap[row[0].toString().trim()] = (row[1] || "").toString().trim();
     }
 
-    let reviewUrl = settingsMap["Zweryfikowany link do opinii Google"] || "";
-    if (reviewUrl.includes("PLACEHOLDER")) {
-      reviewUrl = ""; // Wyczyszczenie fikcyjnego linku jeśli istniał
+    let reviewUrl = settingsMap["Zweryfikowany link do opinii Google"] || defaultSettings.googleReviewUrl;
+    if (reviewUrl.includes("PLACEHOLDER") || !isVerifiedReviewUrl(reviewUrl)) {
+      reviewUrl = defaultSettings.googleReviewUrl;
     }
 
     return {
@@ -549,6 +562,9 @@ function processLogPhoneCall(ticketId, phone, result, notes, agent) {
   }
 
   SpreadsheetApp.getActiveSpreadsheet().toast(`Zapisano kontakt telefoniczny dla ${ticketId}.`, "SmartCare", 5);
+  if (typeof refreshDashboardStats === "function") {
+    try { refreshDashboardStats(ss); } catch (_) {}
+  }
 }
 
 /**
@@ -790,6 +806,7 @@ function openEmailDialog(params) {
     function personalizeWithAi() {
       const bodyEl = document.getElementById('emailBody');
       const btnAi = document.getElementById('btnAi');
+      const btnSubmit = document.getElementById('btnSubmit');
       const statusBox = document.getElementById('aiStatusBox');
       const currentText = bodyEl.value.trim();
 
@@ -802,6 +819,9 @@ function openEmailDialog(params) {
       if (btnAi) {
         btnAi.disabled = true;
         btnAi.innerText = 'AI przygotowuje odpowiedź…';
+      }
+      if (btnSubmit) {
+        btnSubmit.disabled = true;
       }
 
       if (statusBox) {
@@ -818,6 +838,9 @@ function openEmailDialog(params) {
           if (btnAi) {
             btnAi.disabled = false;
             btnAi.innerText = '✨ Usprawnij styl z AI (Gemini Flash)';
+          }
+          if (btnSubmit) {
+            btnSubmit.disabled = false;
           }
 
           if (polished && typeof polished === 'string' && polished.trim() !== '') {
@@ -844,6 +867,9 @@ function openEmailDialog(params) {
           if (btnAi) {
             btnAi.disabled = false;
             btnAi.innerText = '✨ Usprawnij styl z AI (Gemini Flash)';
+          }
+          if (btnSubmit) {
+            btnSubmit.disabled = false;
           }
           const safeErr = escapeHtmlClient(err ? (err.message || String(err)) : 'Nieznany błąd');
           if (statusBox) {
@@ -1073,6 +1099,9 @@ function processSendEmail(payload) {
     }
 
     if (sendStatus === "wysłano") {
+      if (typeof refreshDashboardStats === "function") {
+        try { refreshDashboardStats(ss); } catch (_) {}
+      }
       SpreadsheetApp.getActiveSpreadsheet().toast(`Wysłano: ${payload.actionType} na ${targetEmail}`, "SmartCare Sukces", 5);
       return {
         success: true,
