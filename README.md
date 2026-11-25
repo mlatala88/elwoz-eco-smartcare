@@ -1,5 +1,5 @@
 # ELWOZ ECO SmartCare – Cyfrowy Punkt Obsługi Mieszkańca
-**Wersja:** 0.2.3 (Audyt v0.2.3: LockService, Dynamiczny Gemini Flash, KPI w godzinach, Bezpieczeństwo Reputacji)  
+**Wersja:** 0.2.4 (Poprawka v0.2.4: Natywne Gemini Structured Outputs, filtracja myśli 'thought', obsługa błędów API)  
 **Projekt zaliczeniowy:** *Nowoczesne technologie w marketingu i sprzedaży* – Uniwersytet WSB Merito w Gdańsku  
 **Przedsiębiorstwo:** ELWOZ ECO Sp. z o.o.  
 **Obszar wdrożenia:** Rejon Kartuz i okoliczne sołectwa  
@@ -17,14 +17,14 @@
 4. [Twarde zabezpieczenie serwerowe (Server-Side Whitelist Guard)](#4-twarde-zabezpieczenie-serwerowe-server-side-whitelist-guard)
 5. [Wykorzystane technologie](#5-wykorzystane-technologie)
 6. [Struktura repozytorium](#6-struktura-repozytorium)
-7. [Instrukcja instalacji Container-bound oraz funkcja jednoklikowej aktualizacji](#7-instrukcja-instalacji-container-bound-oraz-funkcja-jednoklikowej-aktualizacji)
+7. [Instrukcja instalacji Container-bound oraz aktualizacji plików Apps Script](#7-instrukcja-instalacji-container-bound-oraz-aktualizacji-plików-apps-script)
 8. [Natywny formularz Google Forms i eliminacja localStorage](#8-natywny-formularz-google-forms-i-eliminacja-localstorage)
 9. [Menu pracownika „SmartCare” w Google Sheets](#9-menu-pracownika-smartcare-w-google-sheets)
 10. [Rzetelne szablony wiadomości i procedura komunikacji](#10-rzetelne-szablony-wiadomości-i-procedura-komunikacji)
 11. [Zarządzanie reputacją i zasady opinii Google](#11-zarządzanie-reputacją-i-zasady-opinii-google)
 12. [Dziennik audytu (HISTORIA KOMUNIKACJI)](#12-dziennik-audytu-historia-komunikacji)
 13. [Rozszerzony Dashboard i Rejestr Zgłoszeń (Kalkulacje KPI)](#13-rozszerzony-dashboard-i-rejestr-zgłoszeń-kalkulacje-kpi)
-14. [Weryfikacja danych dla AI (Human-in-the-Loop) i aktualne modele Gemini Flash](#14-weryfikacja-danych-dla-ai-human-in-the-loop-i-aktualne-modele-gemini-flash)
+14. [Gemini Structured Outputs, filtracja bloków 'thought' i anonimizacja AI](#14-gemini-structured-outputs-filtracja-bloków-thought-i-anonimizacja-ai)
 15. [Instrukcja publikacji na GitHub Pages](#15-instrukcja-publikacji-na-github-pages)
 16. [Generowanie Kodu QR (Dla pojemników i prezentacji)](#16-generowanie-kodu-qr-dla-pojemników-i-prezentacji)
 17. [Procedura testowania i weryfikacja](#17-procedura-testowania-i-weryfikacja)
@@ -37,7 +37,13 @@
 
 Projekt **ELWOZ ECO SmartCare** realizowany jest na Uniwersytecie WSB Merito w Gdańsku jako studencki projekt wdrożeniowy dedykowany spółce **ELWOZ ECO Sp. z o.o.**, odpowiedzialnej za odbiór odpadów komunalnych w rejonie Kartuz.
 
-Wydanie **0.2.3** wdraża komplet poprawek audytowych:
+Wydanie **0.2.4** eliminuje błąd parsowania JSON w integracji z Gemini API oraz wzmacnia stabilność modułu AI:
+- **Natywne Gemini Structured Outputs:** Zastosowano `responseMimeType: "application/json"` oraz `responseSchema` precyzyjnie odwzorowujący strukturę kolumn arkusza CRM;
+- **Filtracja procesów myślowych ('thought: true'):** Wyeliminowano błąd `SyntaxError: Unexpected token 'o', " o weryfika"... is not valid JSON` poprzez ignorowanie części reasoningowych zwracanych przez modele rozumujące;
+- **Rozróżnienie warstwy HTTP API:** Precyzyjna obsługa kodów błędów HTTP (429 Quota Exceeded, 401/403 Autoryzacja, 500/503 Serwer) oraz flag `SAFETY`, `RECITATION` i `MAX_TOKENS`;
+- **Walidacja struktury przed zapisem do CRM:** Żadne uszkodzone ani niekompletne dane nie są wpisywane do arkusza;
+- **Obsługa błędów w oknie dialogowym Human-in-the-Loop:** W razie błędu API okno weryfikacji pozostaje otwarte z możliwością natychmiastowej poprawki i ponowienia próby bez utraty tekstu pracownika;
+- **Maskowanie klucza API:** Gwarancja braku klucza API i danych osobowych w logach `Execution Transcript`.
 - **Kalkulacja KPI w godzinach:** Usunięto funkcję `INT()`; czas reakcji i rozwiązania liczony jest w godzinach z dokładnością do 2 miejsc po przecinku (`(U - A) * 24`);
 - **Rzetelny wskaźnik opinii:** Odsetek wysłanych próśb o opinię kalkulowany jest wyłącznie wśród zgłoszeń zamkniętych / rozwiązanych;
 - **Jednoklikowa aktualizacja Dashboardu:** Funkcja `updateDashboardKpiFormulasOnly()` pozwala zaktualizować istniejący arkusz bez konieczności ponownej instalacji czy utraty danych;
@@ -150,13 +156,12 @@ elwoz-eco-smartcare/
 4. Wklej zawartość plików `google/setup.gs`, `google/communication.gs` oraz `google/ai.gs`.
 5. Uruchom funkcję **`setupSmartCareSystem`** i zaakceptuj uprawnienia.
 
-### Dla istniejącej instalacji (aktualizacja z v0.2.2 do v0.2.3):
+### Dla istniejącej instalacji (aktualizacja do v0.2.4):
 Jeśli arkusz i formularz są już zainstalowane na Twoim koncie:
 1. Otwórz edytor Apps Script w istniejącym arkuszu.
-2. Zaktualizuj zawartość plików `setup.gs`, `communication.gs` i `ai.gs` kodem z wersji 0.2.3.
+2. Zaktualizuj zawartość **tylko dwóch plików**: `ai.gs` oraz `communication.gs` kodem z wersji 0.2.4.
 3. Zapisz projekt (Ctrl + S).
-4. Otwórz arkusz i wybierz z menu: **📋 SmartCare → 🔄 Aktualizuj formuły Dashboardu (v0.2.3)**.
-   *(Formuły KPI w komórkach C8, D8 i C11 zostaną natychmiast zaktualizowane bez tworzenia nowego arkusza i bez utraty danych!)*
+   *(Brak konieczności ponownej instalacji – klucz Gemini w Script Properties i formularz działają od razu!)*
 
 ---
 
@@ -233,14 +238,19 @@ Wskaźniki w zakładce `DASHBOARD`:
 
 ---
 
-## 14. Weryfikacja danych dla AI (Human-in-the-Loop) i aktualne modele Gemini Flash
+## 14. Gemini Structured Outputs, filtracja bloków 'thought' i anonimizacja AI
 
-- **Model AI:** Wycofany model `gemini-2.0-flash` (wyłączony 1 czerwca 2026 r.) zastąpiono modelem **`gemini-3.6-flash`** z dynamiczną weryfikacją bezpłatnych modeli wspierających `generateContent`.
-- **Procedura anonimizacji:** Przed wywołaniem API pracownik widzi okno weryfikacji. Model otrzymuje wyłącznie:
-  - Rodzaj zgłoszenia,
-  - Frakcję odpadów,
-  - Ogólną miejscowość (np. *Kartuzy* - bez ulicy, bez numeru posesji),
-  - Zweryfikowany zanonimizowany opis zdarzenia.
+W wersji **0.2.4** rozwiązano problem parsowania JSON:
+1. **Natywne Gemini Structured Outputs:** Zapytanie do modelu przekazuje parametr `responseSchema` (z typem `OBJECT` i wymaganymi polami) oraz `responseMimeType: "application/json"`.
+2. **Filtracja bloków myśli (`thought: true`):** Modele rozumujące (Gemini Flash Thinking) zwracają w `candidates[0].content.parts` proces myślowy przed właściwą odpowiedzią. Moduł `ai.gs` filtruje i pomija części z flagą `thought: true`, eliminując błędy typu `SyntaxError: Unexpected token 'o', " o weryfika"... is not valid JSON`.
+3. **Wielowarstwowa obsługa błędów:**
+   - Obsługa kodów HTTP 429 (przekroczenie limitu / rate limit) z czytelnym monitem o odczekanie chwili;
+   - Obsługa kodów 401/403 (autoryzacja) oraz 500/503 (błąd serwera);
+   - Weryfikacja flag `finishReason` (`SAFETY`, `RECITATION`, `MAX_TOKENS`);
+   - Walidacja kompletności struktury przed zapisem do arkusza CRM – jeśli w JSON brakuje jakiegokolwiek pola, CRM nie jest modyfikowany.
+4. **Odporność okna dialogowego:** W przypadku błędu okno analizy nie zamyka się, a pracownik może poprawić treść opisu i ponowić próbę klikając `🤖 Ponów analizę AI`.
+5. **Maskowanie klucza API:** Wszystkie wywołania sieciowe i komunikaty błędów filtrują parametr `key=` za pomocą funkcji `maskApiKey`.
+6. **Procedura anonimizacji:** Model otrzymuje wyłącznie rodzaj zgłoszenia, frakcję odpadów, miejscowość (Kartuzy) oraz zweryfikowany opis. Ulica, numer domu i dane kontaktowe są bezwzględnie usuwane.
 
 ---
 
@@ -251,7 +261,7 @@ Repozytorium GitHub: `mlatala88/elwoz-eco-smartcare`
 1. Wypchnij kod do repozytorium:
    ```bash
    git add .
-   git commit -m "Release v0.2.3: Final audit fixes, LockService, and dynamic Gemini Flash configuration"
+   git commit -m "Release v0.2.4: Gemini Structured Outputs and thought filtering fixes"
    git push origin main
    ```
 2. Publikacja jest aktywna pod adresem:

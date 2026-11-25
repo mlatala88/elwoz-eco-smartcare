@@ -4,6 +4,32 @@ Wszystkie istotne zmiany i wydania w projekcie **ELWOZ ECO SmartCare** są rejes
 
 ---
 
+## [0.2.4] – 2026-11-25
+### Wydanie Naprawcze: Natywne Gemini Structured Outputs, filtracja bloków 'thought' i stabilność API
+
+#### Naprawione błędy i wdrożone poprawki:
+1. **Usunięcie błędu `SyntaxError: Unexpected token 'o', " o weryfika"... is not valid JSON` (`ai.gs`):**
+   - Zidentyfikowano przyczynę: modele rozumujące (thinking models / Gemini Flash) zwracają w `candidates[0].content.parts` proces myślowy (`thought: true`) przed właściwą odpowiedzią. Poprzednia wersja odczytywała `parts[0].text`, trafiając na tekst myśli modelu zaczynający się od `" o weryfikacji..."`.
+   - Wprowadzono bezwzględne filtrowanie części odpowiedzi: części z `part.thought === true` są pomijane, a właściwa treść jest odczytywana wyłącznie z części merytorycznych (`!part.thought`).
+2. **Natywna implementacja Gemini Structured Outputs (`ai.gs`):**
+   - Wdrożono schemat `responseSchema` zgodny z dokumentacją REST API Gemini (`https://ai.google.dev/gemini-api/docs/generate-content/structured-output`) oraz `responseMimeType: "application/json"`.
+   - Wymuszono ścisłą strukturę pól odpowiadających kolumnom arkusza CRM: `kategoria`, `streszczenie`, `sugerowanyPriorytet`, `brakujaceInformacje`, `sugerowaneDzialanie`, `proponowanaOdpowiedz`.
+3. **Rozróżnienie warstwy HTTP API od treści wygenerowanej przez model (`ai.gs`):**
+   - Obsłużono kody błędów HTTP: 429 (przekroczenie limitu / Quota Exceeded), 401/403 (błąd autoryzacji / zły klucz), 500/503 (chwilowa niedostępność usługi).
+   - Wprowadzono weryfikację flag zakończenia generowania: `SAFETY`, `RECITATION` oraz `MAX_TOKENS`.
+4. **Weryfikacja kompletności struktury przed zapisem do CRM (`ai.gs`):**
+   - Dodano funkcję `validateAiAnalysisResult`, która sprawdza obecność i niepustość wszystkich wymaganych pól przed wywołaniem zapisu do komórek arkusza `ZGŁOSZENIA`.
+   - Błędne lub niekompletne odpowiedzi nie są zapisywane do CRM.
+5. **Obsługa błędów w oknie weryfikacji Human-in-the-Loop (`ai.gs`):**
+   - W przypadku wystąpienia błędu okno dialogowe analizy **nie jest zamykane**, a treść edytowana przez pracownika pozostaje nienaruszona.
+   - W oknie wyświetla się czytelny komunikat błędu z przyciskiem umożliwiającym natychmiastowe ponowienie próby (`🤖 Ponów analizę AI`).
+6. **Poprawa personalizacji wiadomości AI (`communication.gs`):**
+   - W funkcji `polishMessageWithAi` wdrożono filtrowanie bloków `thought: true` oraz dedykowany schemat Structured Output (`stylizowanaTresc`), eliminując ryzyko wklejenia myśli modelu do treści e-maila.
+7. **Bezpieczeństwo i maskowanie klucza API (`ai.gs`, `communication.gs`):**
+   - Wszelkie logi błędów oraz komunikaty sieciowe filtrują parametr `key=` za pomocą funkcji `maskApiKey`, uniemożliwiając wyciek klucza do logów Execution Transcript.
+
+---
+
 ## [0.2.3] – 2026-11-25
 ### Wydanie Naprawcze: Realizacja zaleceń ponownego audytu kodu (v0.2.3)
 

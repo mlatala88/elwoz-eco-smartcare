@@ -1025,9 +1025,11 @@ function processSendEmail(payload) {
 
 /**
  * Personalizacja wiadomości z użyciem zweryfikowanego modelu Gemini Flash
- * POPRAWKA v0.2.3:
- * 1. Zastąpiono wycofany model gemini-2.0-flash dynamiczną weryfikacją bezpłatnych modeli Flash.
- * 2. Ścisły zakaz wymyślania załóg, tras i ustaleń.
+ * POPRAWKA v0.2.4:
+ * 1. Zastosowano Structured Outputs oraz filtrację części 'thought: true'.
+ * 2. Pełna ochrona przed wyciekiem klucza API w błędach i logach.
+ * 3. Obsługa kodów HTTP 429, 401/403 oraz 500/503.
+ * 4. Ścisły zakaz wymyślania załóg, tras i ustaleń.
  */
 function polishMessageWithAi(ticketId, templateText) {
   const scriptProperties = PropertiesService.getScriptProperties();
@@ -1045,7 +1047,7 @@ function polishMessageWithAi(ticketId, templateText) {
   const cleanTemplate = anonymizeText(templateText);
 
   const systemPrompt = 
-    "Jesteś asystentem redakcyjnym w firmie komunalnej ELWOZ ECO w Kartuzach.\n" +
+    "Jesteś profesjonalnym asystentem redakcyjnym w firmie komunalnej ELWOZ ECO w Kartuzach.\n" +
     "Twoim celem jest wygładzenie stylu poniższej wiadomości, aby była profesjonalna, empatyczna i naturalna.\n" +
     "BEZWZGLĘDNE ZASADY PRAWDY I BEZPIECZEŃSTWA:\n" +
     "1. NIE wymyślaj żadnych działań logistycznych, tras śmieciarek ani załóg, których nie ma w podanym tekście.\n" +
@@ -1053,7 +1055,18 @@ function polishMessageWithAi(ticketId, templateText) {
     "3. NIE obiecuj terminów, których nie ma w szablonie.\n" +
     "4. NIE obiecuj zniżek ani odszkodowań.\n" +
     "5. Zachowaj numer zgłoszenia oraz dane kontaktowe bez zmian.\n" +
-    "6. Zwróć wyłącznie samą treść wygładzonej wiadomości bez komentarzy wstępnych i końcowych.";
+    "6. Odpowiedź zwróć w formacie JSON ze wskazanym kluczem stylizowanaTresc.";
+
+  const polishSchema = {
+    type: "OBJECT",
+    properties: {
+      stylizowanaTresc: {
+        type: "STRING",
+        description: "Profesjonalna, wygładzona stylistycznie, empatyczna treść wiadomości e-mail do mieszkańca po polsku"
+      }
+    },
+    required: ["stylizowanaTresc"]
+  };
 
   const payload = {
     contents: [
@@ -1065,7 +1078,9 @@ function polishMessageWithAi(ticketId, templateText) {
     ],
     generationConfig: {
       temperature: 0.2,
-      maxOutputTokens: 800
+      maxOutputTokens: 1000,
+      responseMimeType: "application/json",
+      responseSchema: polishSchema
     }
   };
 
@@ -1076,17 +1091,73 @@ function polishMessageWithAi(ticketId, templateText) {
     muteHttpExceptions: true
   };
 
-  const response = UrlFetchApp.fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(targetModel)}:generateContent?key=${apiKey}`, options);
-  if (response.getResponseCode() !== 200) {
-    throw new Error(`API Gemini (${targetModel}) zwróciło kod ${response.getResponseCode()}`);
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(targetModel)}:generateContent?key=${apiKey}`;
+  
+  let response;
+  try {
+    response = UrlFetchApp.fetch(endpoint, options);
+  } catch (netErr) {
+    const safeNetMsg = String(netErr).replace(/key=[a-zA-Z0-9_-]+/g, "key=[UKRYTY]");
+    throw new Error(`Błąd połączenia z Gemini API: ${safeNetMsg}`);
   }
 
-  const json = JSON.parse(response.getContentText());
-  if (!json.candidates || !json.candidates[0].content) {
+  const responseCode = response.getResponseCode();
+  const responseText = response.getContentText();
+
+  if (responseCode === 429) {
+    throw new Error("Przekroczono limit zapytań Gemini API. Odczekaj chwilę i spróbuj ponownie.");
+  }
+  if (responseCode === 401 || responseCode === 403) {
+    throw new Error("Błąd autoryzacji Gemini API (kod 401/403). Sprawdź klucz API.");
+  }
+  if (responseCode !== 200) {
+    let apiErrMsg = `Kod HTTP ${responseCode}`;
+    try {
+      const errJson = JSON.parse(responseText);
+      if (errJson.error && errJson.error.message) {
+        apiErrMsg += `: ${errJson.error.message}`;
+      }
+    } catch (_) {}
+    throw new Error(`API Gemini (${targetModel}) zwróciło błąd: ${apiErrMsg.replace(/key=[a-zA-Z0-9_-]+/g, "key=[UKRYTY]")}`);
+  }
+
+  let jsonResponse;
+  try {
+    jsonResponse = JSON.parse(responseText);
+  } catch (_) {
+    throw new Error("Nieprawidłowa odpowiedź serwera Gemini.");
+  }
+
+  if (!jsonResponse.candidates || !jsonResponse.candidates[0].content) {
     throw new Error("Nieprawidłowa odpowiedź z modelu Gemini.");
   }
 
-  return json.candidates[0].content.parts[0].text.trim();
+  const candidate = jsonResponse.candidates[0];
+  const parts = candidate.content.parts || [];
+
+  // KLUCZOWE: Filtrujemy części thought (thought: true)
+  const validParts = parts.filter(p => !p.thought && typeof p.text === "string" && p.text.trim() !== "");
+  if (validParts.length === 0) {
+    throw new Error("Model Gemini nie zwrócił treści wiadomości.");
+  }
+
+  const rawText = validParts.map(p => p.text).join("").trim();
+
+  // Próba odczytu ze structured output
+  try {
+    let cleanJson = rawText;
+    if (cleanJson.startsWith("```")) {
+      cleanJson = cleanJson.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+    }
+    const parsed = JSON.parse(cleanJson);
+    if (parsed && typeof parsed.stylizowanaTresc === "string" && parsed.stylizowanaTresc.trim() !== "") {
+      return parsed.stylizowanaTresc.trim();
+    }
+  } catch (_) {
+    // Fallback: jeśli model zwrócił czysty tekst
+  }
+
+  return rawText;
 }
 
 /**
