@@ -4,36 +4,42 @@ Wszystkie istotne zmiany i wydania w projekcie **ELWOZ ECO SmartCare** są rejes
 
 ---
 
+## [0.2.1] – 2026-11-25
+### Wydanie Bezpieczeństwa: Dedykowane Konto Testowe i Twarda Blokada Serwerowa
+
+#### Dodane zabezpieczenia i zmiany:
+- **Dedykowane konto ekosystemu Google:**
+  - Powiązano wszystkie usługi Google (Google Sheets CRM, Google Forms, Apps Script oraz Gemini API) z dedykowanym kontem projektowym: `wsb.student.tester@gmail.com`.
+  - Repozytorium GitHub pozostaje na dotychczasowym koncie użytkownika.
+- **Twarde zabezpieczenie serwerowe (Backend Whitelist Guard):**
+  - W module [google/communication.gs](google/communication.gs) wdrożono bezwzględną weryfikację po stronie serwera w funkcji `processSendEmail`.
+  - W trybie demonstracyjnym wysyłka na jakikolwiek inny adres niż `wsb.student.tester@gmail.com` jest natychmiast blokowana na poziomie backendu, logowana w `HISTORIA KOMUNIKACJI` jako błąd wysyłki i zgłaszana pracownikowi w alercie bezpieczeństwa.
+  - Ochrona jest całkowicie odporna na manipulacje parametrami w przeglądarce czy zmiany w arkuszu.
+- **Aktualizacja konfiguracji i procedur testowych:**
+  - W [google/setup.gs](google/setup.gs) ustawiono `wsb.student.tester@gmail.com` jako domyślny i wymuszany adres w zakładce `USTAWIENIA`.
+  - W [docs/testy.md](docs/testy.md) zaktualizowano scenariusze TEST-03 i TEST-11 pod kątem weryfikacji twardej blokady serwerowej.
+  - Zaktualizowano [README.md](README.md) ze szczegółowym podziałem ról (konto Google `wsb.student.tester@gmail.com` vs repozytorium GitHub na koncie użytkownika).
+
+---
+
 ## [0.2.0] – 2026-11-25
 ### Rozszerzenie: Moduł Komunikacji z Klientem i Zarządzania Reputacją
 
 #### Dodane funkcjonalności:
 - **Menu pracownika „SmartCare” w Google Sheets:**
-  - Utworzono niestandardowe menu `SmartCare` integrujące pełny cykl obsługi:
-    1. *Analizuj zgłoszenie przez AI* (automatyczna diagnoza problemu)
-    2. *Przygotuj potwierdzenie przyjęcia* (szablon A)
-    3. *Przygotuj informację o postępach* (szablon B)
-    4. *Przygotuj informację o rozwiązaniu* (szablon C)
-    5. *Przygotuj prośbę o opinię Google* (szablon D)
-    6. *Odnotuj kontakt telefoniczny* (rejestracja rozmowy w CRM)
-    7. *Wyświetl historię komunikacji* (podgląd korespondencji danej sprawy)
+  - Utworzono menu `SmartCare` (Analiza AI, Potwierdzenie, Postępy, Rozwiązanie, Opinia Google, Kontakt tel., Historia).
 - **Moduł przygotowywania i edycji wiadomości (`google/communication.gs`):**
-  - Obsługa okien dialogowych HTML (modal dialogs) z podglądem i edycją tematu oraz treści przed wysyłką.
-  - Opcjonalny asystent AI do wygładzania treści szablonu (z zachowaniem restrykcyjnych reguł zakazu wymyślania faktów).
-  - Walidacja wymagająca uzupełnienia pola `Sposób rozwiązania sprawy` przed przygotowaniem informacji o rozwiązaniu.
-  - Zabezpieczenie przed wielokrotnym wysłaniem prośby o opinię Google bez wyraźnej zgody pracownika.
+  - Obsługa okien dialogowych HTML z podglądem i edycją tematu oraz treści przed wysyłką.
+  - Opcjonalny asystent AI do wygładzania treści szablonu.
+  - Walidacja wymagająca uzupełnienia pola `Sposób rozwiązania sprawy` przed przygotowaniem wiadomości o rozwiązaniu.
+  - Zabezpieczenie przed wielokrotnym wysłaniem prośby o opinię Google.
 - **Zarządzanie Reputacją i Opinie Google:**
-  - Dodano dedykowaną zakładkę `USTAWIENIA` zawierającą oficjalne dane POK Kartuzy, zweryfikowany link do wystawienia recenzji Google, flagę trybu demonstracyjnego i testowy adres e-mail.
-  - Wdrożono zasady pełnej zgodności z polityką Google Reviews: neutralny ton prośby, brak zachęt finansowych, brak filtrowania (review gatingu) i brak automatycznego publikowania recenzji w imieniu mieszkańców.
+  - Zakładka `USTAWIENIA` z danymi POK Kartuzy i zweryfikowanym linkiem do Profilu Firmy Google.
+  - Pełna zgodność z polityką Google Reviews (brak review gatingu, brak zachęt finansowych, neutralność).
 - **Rejestr korespondencji (`HISTORIA KOMUNIKACJI`):**
-  - Utworzono nową zakładkę audytową przechowującą pełną historię każdego kontaktu (e-mail, telefon, inny) ze statusem operacji (`przygotowano`, `wysłano`, `odnotowano kontakt`, `anulowano`, `błąd wysyłki`).
-- **Rozszerzenie bazy `ZGŁOSZENIA`:**
-  - Dodano kolumny operacyjne: `Data potwierdzenia przyjęcia`, `Data ostatniego kontaktu`, `Wynik kontaktu z mieszkańcem`, `Uwagi mieszkańca`, `Prośba o opinię wysłana` oraz `Data wysłania prośby o opinię`.
-- **Rozszerzenie analityki w `DASHBOARD`:**
-  - Dodano wskaźniki: liczba spraw oczekujących na kontakt, odsetek zakończonych spraw, liczba zebranych ocen satysfakcji, liczba wysłanych próśb o opinię Google oraz odsetek spraw zakończonych z prośbą o opinię.
-- **Tryb demonstracyjny i bezpieczeństwo:**
-  - Automatyczne przekierowywanie całej korespondencji w trybie demo na skonfigurowany adres testowy.
-  - Wymuszony prefiks `[TEST]` w temacie oraz stopka studenckiego projektu WSB Merito.
+  - Dziennik audytowy każdego kontaktu ze statusem operacji.
+- **Rozszerzenie bazy `ZGŁOSZENIA` i wskaźników w `DASHBOARD`:**
+  - Nowe kolumny operacyjne i wskaźniki KPI (sprawy oczekujące na kontakt, odsetek zakończonych, wskaźniki satysfakcji i opinii).
 
 ---
 

@@ -1,8 +1,9 @@
 /**
  * ============================================================================
  * ELWOZ ECO SmartCare - Moduł Komunikacji i Zarządzania Reputacją (communication.gs)
- * Wersja: 0.2.0
+ * Wersja: 0.2.1
  * Projekt edukacyjny: Uniwersytet WSB Merito w Gdańsku
+ * Dedykowane konto testowe: wsb.student.tester@gmail.com
  * ============================================================================
  * 
  * Moduł realizuje:
@@ -10,10 +11,14 @@
  * 2. Przygotowywanie 4 edytowalnych szablonów wiadomości (Potwierdzenie, Postępy, Rozwiązanie, Opinia Google).
  * 3. Obsługę okien dialogowych podglądu i edycji wiadomości (HtmlService).
  * 4. Opcjonalną personalizację szablonu z użyciem Gemini AI (z poszanowaniem zakazu wymyślania faktów).
- * 5. Bezpieczną wysyłkę za pomocą MailApp w Trybie Demonstracyjnym (wyłącznie na adres testowy, prefiks [TEST]).
+ * 5. TWARDE ZABEZPIECZENIE SERWEROWE: W trybie demonstracyjnym wysyłka jest możliwa
+ *    WYŁĄCZNIE na zatwierdzony adres wsb.student.tester@gmail.com z prefiksem [TEST].
  * 6. Zapis pełnego audytu operacji w zakładce HISTORIA KOMUNIKACJI.
  * 7. Rejestrację rozmów telefonicznych i aktualizację dat kontaktu oraz statusów opinii w rejestrze ZGŁOSZENIA.
  */
+
+// Jedyny zatwierdzony serwerowo adres testowy
+const APPROVED_TEST_RECIPIENT = "wsb.student.tester@gmail.com";
 
 /**
  * Automatyczne utworzenie menu SmartCare po otwarciu arkusza
@@ -51,7 +56,7 @@ function getSmartCareSettings() {
     googleReviewUrl: "https://search.google.com/local/writereview?placeid=PLACEHOLDER_KARTUZY",
     senderName: "ELWOZ ECO SmartCare – POK Kartuzy",
     isDemoMode: true,
-    testEmail: "test@student.wsb.pl"
+    testEmail: APPROVED_TEST_RECIPIENT
   };
 
   if (!settingsSheet) return defaultSettings;
@@ -72,7 +77,7 @@ function getSmartCareSettings() {
       googleReviewUrl: settingsMap["Zweryfikowany link do opinii Google"] || defaultSettings.googleReviewUrl,
       senderName: settingsMap["Nazwa nadawcy wiadomości"] || defaultSettings.senderName,
       isDemoMode: (settingsMap["Ustawienie trybu demonstracyjnego"] || "TAK").toUpperCase() === "TAK",
-      testEmail: settingsMap["Testowy adres e-mail"] || defaultSettings.testEmail
+      testEmail: APPROVED_TEST_RECIPIENT // Zawsze wymuszany zatwierdzony adres testerski
     };
   } catch (err) {
     Logger.log("Błąd odczytu USTAWIENIA: " + err.toString());
@@ -584,7 +589,7 @@ function actionViewCommunicationHistory() {
  */
 function openEmailDialog(params) {
   const settings = getSmartCareSettings();
-  const actualTarget = settings.isDemoMode ? settings.testEmail : params.recipient;
+  const actualTarget = APPROVED_TEST_RECIPIENT; // Wymuszony zatwierdzony adres testowy
 
   const html = `
 <!DOCTYPE html>
@@ -615,20 +620,20 @@ function openEmailDialog(params) {
 <body>
   <h3>
     <span>Podgląd i wysyłka: ${params.actionType}</span>
-    ${settings.isDemoMode ? '<span class="badge badge-demo">TRYB DEMO</span>' : ''}
+    ${settings.isDemoMode ? '<span class="badge badge-demo">TRYB DEMO (ZABEZPIECZONY)</span>' : ''}
   </h3>
 
   ${settings.isDemoMode ? `
   <div class="demo-alert">
-    <strong>Zabezpieczenie demonstracji studenckiej:</strong> 
-    Wiadomość zostanie wysłana wyłącznie na zatwierdzony adres testowy: <strong>${actualTarget}</strong>. 
-    W temacie zostanie dodany prefiks <code>[TEST]</code>. Adres fikcyjnego mieszkańca (<em>${params.recipient}</em>) nie otrzyma wiadomości.
+    <strong>Twarde zabezpieczenie serwerowe WSB Merito:</strong><br>
+    Wiadomość zostanie wysłana WYŁĄCZNIE na zatwierdzony adres testowy: <strong>${actualTarget}</strong>.<br>
+    Temat otrzyma prefiks <code>[TEST]</code>. Adres fikcyjnego mieszkańca (<em>${params.recipient}</em>) nie otrzyma wiadomości.
   </div>` : ''}
 
   <form id="emailForm">
     <div class="form-group">
-      <label>Adresat (Odbiorca):</label>
-      <input type="text" value="${actualTarget} ${settings.isDemoMode ? '(Adres testowy)' : ''}" readonly style="background: #f1f5f9;">
+      <label>Adresat (Odbiorca testowy):</label>
+      <input type="text" value="${actualTarget} (Zatwierdzone konto testerskie)" readonly style="background: #f1f5f9; font-weight: 600; color: #1e40af;">
     </div>
 
     <div class="form-group">
@@ -724,7 +729,7 @@ function openEmailDialog(params) {
 }
 
 /**
- * Backend wysyłki e-mail przez MailApp
+ * Backend wysyłki e-mail przez MailApp z TWARDYM ZABEZPIECZENIEM SERWEROWYM
  */
 function processSendEmail(payload) {
   const settings = getSmartCareSettings();
@@ -734,8 +739,34 @@ function processSendEmail(payload) {
   const now = Utilities.formatDate(new Date(), "Europe/Warsaw", "yyyy-MM-dd HH:mm");
   const agent = Session.getActiveUser().getEmail().split('@')[0] || "Pracownik";
 
-  // Wyznaczenie docelowego adresu (w trybie demo: wyłącznie adres testowy)
-  const targetEmail = settings.isDemoMode ? settings.testEmail : payload.originalRecipient;
+  // W trybie demonstracyjnym docelowy adres jest twardo ustawiony na APPROVED_TEST_RECIPIENT
+  const targetEmail = settings.isDemoMode ? APPROVED_TEST_RECIPIENT : payload.originalRecipient;
+
+  // TWARDE ZABEZPIECZENIE PO STRONIE SERWERA (SERVER-SIDE SECURITY ENFORCEMENT):
+  // Jeśli system jest w trybie demonstracyjnym, dozwolona jest wysyłka WYŁĄCZNIE na APPROVED_TEST_RECIPIENT.
+  // Każda próba przekierowania na inny adres jest natychmiast blokowana na poziomie backendu.
+  if (settings.isDemoMode) {
+    if (!targetEmail || targetEmail.toLowerCase().trim() !== APPROVED_TEST_RECIPIENT.toLowerCase().trim()) {
+      const securityErr = `BLOKADA BEZPIECZEŃSTWA SERWERA: W trybie demonstracyjnym wysyłka na adres '${targetEmail}' jest zabroniona! Dozwolony odbiorca to wyłącznie: ${APPROVED_TEST_RECIPIENT}`;
+      Logger.log(securityErr);
+      if (histSheet) {
+        histSheet.appendRow([
+          payload.ticketId,
+          now,
+          payload.actionType,
+          "e-mail",
+          targetEmail || "NIEZNANY",
+          payload.subject || "BRAK TEMATU",
+          payload.body || "",
+          agent,
+          "błąd wysyłki",
+          securityErr
+        ]);
+      }
+      SpreadsheetApp.getUi().alert("Naruszenie Bezpieczeństwa", securityErr, SpreadsheetApp.getUi().ButtonSet.OK);
+      return;
+    }
+  }
 
   // Wymuszenie prefiksu [TEST] w trybie demonstracyjnym
   let finalSubject = payload.subject;
@@ -749,8 +780,8 @@ function processSendEmail(payload) {
     finalBody += `\n\n------------------------------------------------------------\n` +
       `[WIADOMOŚĆ TESTOWA – PROTOTYP WSB MERITO]\n` +
       `Wiadomość wygenerowana w ramach studenckiego projektu wdrożeniowego ELWOZ ECO SmartCare.\n` +
-      `Fikcyjny adresat: ${payload.originalRecipient}\n` +
-      `Rzeczywisty odbiorca testowy: ${settings.testEmail}`;
+      `Fikcyjny adresat zgłoszenia: ${payload.originalRecipient}\n` +
+      `Rzeczywisty zatwierdzony odbiorca testowy: ${APPROVED_TEST_RECIPIENT}`;
   }
 
   let sendStatus = "przygotowano";
@@ -837,7 +868,7 @@ function processSendEmail(payload) {
   }
 
   if (sendStatus === "wysłano") {
-    SpreadsheetApp.getActiveSpreadsheet().toast(`Wysłano: ${payload.actionType} (${payload.ticketId})`, "SmartCare Sukces", 5);
+    SpreadsheetApp.getActiveSpreadsheet().toast(`Wysłano: ${payload.actionType} na ${targetEmail}`, "SmartCare Sukces", 5);
   } else {
     SpreadsheetApp.getUi().alert("Błąd wysyłki", `Nie udało się wysłać wiadomości:\n${errorMessage}\n\nOperacja została odnotowana w HISTORIA KOMUNIKACJI jako 'błąd wysyłki'.`, SpreadsheetApp.getUi().ButtonSet.OK);
   }

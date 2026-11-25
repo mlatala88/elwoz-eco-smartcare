@@ -1,13 +1,14 @@
 /**
  * ELWOZ ECO SmartCare - Konfiguracja aplikacji
- * Wersja: 0.1.0
+ * Wersja: 0.2.1 (Zarządzanie reputacją, komunikacja i dedykowane konto testowe)
  * Projekt edukacyjny: Uniwersytet WSB Merito w Gdańsku
+ * Dedykowane konto testowe: wsb.student.tester@gmail.com
  */
 
 const SMARTCARE_CONFIG = {
   appName: "ELWOZ ECO SmartCare",
   appSubtitle: "Cyfrowy Punkt Obsługi Mieszkańca – Rejon Kartuzy",
-  version: "0.1.0",
+  version: "0.2.1",
   isEducationalPrototype: true,
 
   // Dane oficjalne ELWOZ ECO - Punkt Obsługi Klienta Kartuzy
@@ -21,7 +22,6 @@ const SMARTCARE_CONFIG = {
       email: "kartuzy@elwozeco.pl",
       workingHours: "Poniedziałek – Piątek: 07:00 – 16:00"
     },
-    // Zweryfikowane oficjalne odnośniki
     links: {
       schedule: "https://elwozeco.pl/harmonogram/",
       scheduleKartuzyPortal: "https://odpady.kartuzy.pl/",
@@ -31,14 +31,16 @@ const SMARTCARE_CONFIG = {
     }
   },
 
+  // Dedykowane konto testowe WSB Merito (jedyny zatwierdzony serwerowy odbiorca w trybie demo)
+  testing: {
+    testerAccount: "wsb.student.tester@gmail.com",
+    isServerRestricted: true
+  },
+
   // Konfiguracja formularza Google Forms
-  // Po uruchomieniu skryptu google/setup.gs wklej poniżej wygenerowane adresy URL:
   googleForm: {
-    // Bezpośredni link do formularza Google (do otwarcia w nowej karcie)
     directUrl: "https://docs.google.com/forms/d/e/1FAIpQLSc_PLACEHOLDER_FORM_ID/viewform",
-    // Link do osadzenia formularza w iframe (opcjonalny)
     embedUrl: "https://docs.google.com/forms/d/e/1FAIpQLSc_PLACEHOLDER_FORM_ID/viewform?embedded=true",
-    // Czy formularz Google został już podpięty (false = prezentuje gotowy formularz demonstracyjny z podglądem)
     isFormConfigured: false
   },
 
@@ -46,7 +48,7 @@ const SMARTCARE_CONFIG = {
   disclaimer: {
     title: "UWAGA: PROTOTYP TESTOWY",
     shortNotice: "Aplikacja stanowi studencki prototyp wdrożeniowy WSB Merito. Wprowadzaj WYŁĄCZNIE fikcyjne dane.",
-    fullNotice: "System służy do celów demonstracyjnych i testowych. Zgłoszenia złożone w tym systemie NIE są przekazywane do dyspozytorni ELWOZ ECO Sp. z o.o. W przypadku pilnych spraw lub rzeczywistych reklamacji prosimy o kontakt z oficjalnym Biurem Obsługi Klienta."
+    fullNotice: "System służy do celów demonstracyjnych i testowych. Zgłoszenia złożone w tym systemie NIE są przekazywane do dyspozytorni ELWOZ ECO Sp. z o.o. Korespondencja testowa w systemie jest kierowana wyłącznie na zatwierdzone konto: wsb.student.tester@gmail.com."
   }
 };
 

@@ -1,8 +1,9 @@
 /**
  * ============================================================================
  * ELWOZ ECO SmartCare - Skrypt konfiguracyjny Google Apps Script (setup.gs)
- * Wersja: 0.2.0 (Rozszerzenie: Moduł komunikacji i zarządzania reputacją)
+ * Wersja: 0.2.1 (Rozszerzenie: Moduł komunikacji, reputacji i dedykowane konto testowe)
  * Projekt edukacyjny: Uniwersytet WSB Merito w Gdańsku
+ * Dedykowane konto Google: wsb.student.tester@gmail.com
  * ============================================================================
  * 
  * Skrypt tworzy lub aktualizuje ekosystem:
@@ -10,9 +11,9 @@
  * 2. Arkusz: "ELWOZ ECO SmartCare – Centrum zgłoszeń".
  * 3. Zakładki:
  *    - DASHBOARD (rozszerzone KPI, czasy reakcji, statystyki opinii)
- *    - ZGŁOSZENIA (z nowymi polami komunikacji, satysfakcji i opinii)
+ *    - ZGŁOSZENIA (z polami komunikacji, satysfakcji i opinii)
  *    - HISTORIA KOMUNIKACJI (rejestr wysłanych wiadomości i rozmów)
- *    - USTAWIENIA (parametry placówki, link do opinii, tryb demonstracyjny)
+ *    - USTAWIENIA (parametry placówki, link do opinii, tryb demo, wsb.student.tester@gmail.com)
  *    - TESTY (rejestr scenariuszy testowych i pomiary efektywności)
  *    - INSTRUKCJA AI (zasady promptowania, anonimizacji i ograniczeń)
  * 4. Instaluje wyzwalacz onFormSubmit nadający ID i status "Nowe".
@@ -27,6 +28,7 @@ const SMARTCARE_SETUP_CONFIG = {
     "UWAGA: Formularz stanowi studencki prototyp WSB Merito. Wprowadzaj WYŁĄCZNIE fikcyjne dane testowe. " +
     "W przypadku rzeczywistych reklamacji prosimy o kontakt pod adresem: kartuzy@elwozeco.pl.",
   prefixId: "ELW-2026-",
+  dedicatedTesterEmail: "wsb.student.tester@gmail.com",
   sheetTabs: {
     dashboard: "DASHBOARD",
     tickets: "ZGŁOSZENIA",
@@ -61,7 +63,8 @@ const SMARTCARE_SETUP_CONFIG = {
  * Główna funkcja instalacyjna i aktualizująca
  */
 function setupSmartCareSystem() {
-  Logger.log("=== Rozpoczynanie konfiguracji/aktualizacji ELWOZ ECO SmartCare v0.2.0 ===");
+  Logger.log("=== Rozpoczynanie konfiguracji/aktualizacji ELWOZ ECO SmartCare v0.2.1 ===");
+  Logger.log("Dedykowane konto testowe: " + SMARTCARE_SETUP_CONFIG.dedicatedTesterEmail);
 
   // 1. Sprawdzenie lub utworzenie arkusza kalkulacyjnego
   let spreadsheet;
@@ -88,7 +91,7 @@ function setupSmartCareSystem() {
   }
   Utilities.sleep(1500);
 
-  // 4. Konfiguracja zakładki USTAWIENIA (tworzona jako pierwsza dla konfiguracji globalnej)
+  // 4. Konfiguracja zakładki USTAWIENIA
   setupSettingsSheet(spreadsheet);
 
   // 5. Konfiguracja zakładki HISTORIA KOMUNIKACJI
@@ -109,9 +112,10 @@ function setupSmartCareSystem() {
   // 10. Instalacja wyzwalacza onFormSubmit
   installFormSubmitTrigger(spreadsheet);
 
-  Logger.log("=== Konfiguracja v0.2.0 zakończona pomyślnie! ===");
+  Logger.log("=== Konfiguracja v0.2.1 zakończona pomyślnie! ===");
   Logger.log("Arkusz CRM: " + spreadsheet.getUrl());
   Logger.log("Formularz publiczny: " + form.getPublishedUrl());
+  Logger.log("Jedyny autoryzowany odbiorca testowy: " + SMARTCARE_SETUP_CONFIG.dedicatedTesterEmail);
 }
 
 /**
@@ -178,13 +182,33 @@ function createOrGetForm() {
 }
 
 /**
- * Konfiguruje zakładkę USTAWIENIA
+ * Konfiguruje zakładkę USTAWIENIA z zatwierdzonym adresem wsb.student.tester@gmail.com
  */
 function setupSettingsSheet(spreadsheet) {
   let sheet = spreadsheet.getSheetByName(SMARTCARE_SETUP_CONFIG.sheetTabs.settings);
   if (!sheet) {
     sheet = spreadsheet.insertSheet(SMARTCARE_SETUP_CONFIG.sheetTabs.settings);
   }
+
+  const settingsData = [
+    ["Nazwa przedsiębiorstwa", "ELWOZ ECO Sp. z o.o.", "Oficjalna nazwa podmiotu komunalnego"],
+    ["Nazwa placówki", "Punkt Obsługi Klienta w Kartuzach", "Jednostka terenowa odpowiedzialna za rejon Kartuz"],
+    ["Adres e-mail do kontaktu", "kartuzy@elwozeco.pl", "Oficjalny adres e-mail dyspozytorni POK"],
+    ["Numer telefonu", "58 681 22 99", "Telefon kontaktowy POK Kartuzy"],
+    ["Oficjalna strona internetowa", "https://elwozeco.pl/", "Główny portal spółki"],
+    [
+      "Zweryfikowany link do opinii Google",
+      "https://search.google.com/local/writereview?placeid=PLACEHOLDER_KARTUZY",
+      "Bezpośredni link do wystawienia recenzji z Profilu Firmy Google (do uzupełnienia po autoryzacji)"
+    ],
+    ["Nazwa nadawcy wiadomości", "ELWOZ ECO SmartCare – POK Kartuzy", "Nagłówek nadawcy w wysyłanych wiadomościach"],
+    ["Ustawienie trybu demonstracyjnego", "TAK", "TAK = wiadomości wysyłane WYŁĄCZNIE na adres testowy z tematem [TEST]; NIE = tryb produkcyjny"],
+    [
+      "Testowy adres e-mail",
+      SMARTCARE_SETUP_CONFIG.dedicatedTesterEmail,
+      "Jedyny autoryzowany odbiorca testowy (zabezpieczony twardą regułą po stronie serwera)"
+    ]
+  ];
 
   if (sheet.getLastRow() === 0) {
     sheet.getRange("A1:C1").merge()
@@ -201,36 +225,30 @@ function setupSettingsSheet(spreadsheet) {
       .setBackground("#e2e8f0")
       .setFontColor("#1e293b");
 
-    const settingsData = [
-      ["Nazwa przedsiębiorstwa", "ELWOZ ECO Sp. z o.o.", "Oficjalna nazwa podmiotu komunalnego"],
-      ["Nazwa placówki", "Punkt Obsługi Klienta w Kartuzach", "Jednostka terenowa odpowiedzialna za rejon Kartuz"],
-      ["Adres e-mail do kontaktu", "kartuzy@elwozeco.pl", "Oficjalny adres e-mail dyspozytorni POK"],
-      ["Numer telefonu", "58 681 22 99", "Telefon kontaktowy POK Kartuzy"],
-      ["Oficjalna strona internetowa", "https://elwozeco.pl/", "Główny portal spółki"],
-      [
-        "Zweryfikowany link do opinii Google",
-        "https://search.google.com/local/writereview?placeid=PLACEHOLDER_KARTUZY",
-        "Bezpośredni link do wystawienia recenzji z Profilu Firmy Google (do uzupełnienia po autoryzacji)"
-      ],
-      ["Nazwa nadawcy wiadomości", "ELWOZ ECO SmartCare – POK Kartuzy", "Nagłówek nadawcy w wysyłanych wiadomościach"],
-      ["Ustawienie trybu demonstracyjnego", "TAK", "TAK = wiadomości wysyłane WYŁĄCZNIE na adres testowy z tematem [TEST]; NIE = tryb produkcyjny"],
-      ["Testowy adres e-mail", "test@student.wsb.pl", "Adres, na który trafia cała korespondencja w trybie demonstracyjnym"]
-    ];
-
     sheet.getRange(3, 1, settingsData.length, 3).setValues(settingsData);
-
-    const demoRule = SpreadsheetApp.newDataValidation()
-      .requireValueInList(["TAK", "NIE"], false)
-      .setAllowInvalid(false)
-      .build();
-    sheet.getRange("B10").setDataValidation(demoRule);
-
-    sheet.setColumnWidth(1, 260);
-    sheet.setColumnWidth(2, 360);
-    sheet.setColumnWidth(3, 400);
+  } else {
+    // Aktualizacja wiersza testowego adresu e-mail, aby zawsze wskazywał wsb.student.tester@gmail.com
+    const data = sheet.getDataRange().getValues();
+    for (let i = 0; i < data.length; i++) {
+      if (data[i][0] === "Testowy adres e-mail") {
+        sheet.getRange(i + 1, 2).setValue(SMARTCARE_SETUP_CONFIG.dedicatedTesterEmail);
+        sheet.getRange(i + 1, 3).setValue("Jedyny autoryzowany odbiorca testowy (zabezpieczony twardą regułą po stronie serwera)");
+        break;
+      }
+    }
   }
 
-  Logger.log("Zakładka USTAWIENIA przygotowana.");
+  const demoRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(["TAK", "NIE"], false)
+    .setAllowInvalid(false)
+    .build();
+  sheet.getRange("B10").setDataValidation(demoRule);
+
+  sheet.setColumnWidth(1, 260);
+  sheet.setColumnWidth(2, 360);
+  sheet.setColumnWidth(3, 400);
+
+  Logger.log("Zakładka USTAWIENIA przygotowana z adresem " + SMARTCARE_SETUP_CONFIG.dedicatedTesterEmail);
 }
 
 /**
@@ -439,7 +457,6 @@ function setupDashboardSheet(spreadsheet) {
   dash.clear();
   dash.setGridlines(true);
 
-  // Nagłówek Dashboardu
   dash.getRange("A1:G1").merge()
     .setValue("ELWOZ ECO SmartCare – Panel Operacyjny i Zarządzanie Doświadczeniem Mieszkańca")
     .setFontSize(13)
@@ -459,7 +476,6 @@ function setupDashboardSheet(spreadsheet) {
     .setHorizontalAlignment("center");
   dash.setRowHeight(2, 22);
 
-  // SEKCJA 1: Główne wolumeny operacyjne (Wiersze 4-5)
   dash.getRange("B4:F4").setValues([[
     "Wszystkie zgłoszenia",
     "Nowe",
@@ -487,7 +503,6 @@ function setupDashboardSheet(spreadsheet) {
     .setBackground("#ffffff");
   dash.setRowHeight(5, 36);
 
-  // SEKCJA 2: Komunikacja, Czas reakcji i Rozwiązania (Wiersze 7-8)
   dash.getRange("B7:F7").setValues([[
     "Sprawy oczekujące na kontakt",
     "Śr. czas 1. reakcji (dni)",
@@ -529,7 +544,6 @@ function setupDashboardSheet(spreadsheet) {
     .setBackground("#ffffff");
   dash.setRowHeight(8, 34);
 
-  // SEKCJA 3: Zarządzanie Reputacją i Opinie Google (Wiersze 10-11)
   dash.getRange("B10:E10").setValues([[
     "Wysłane prośby o opinię Google",
     "Odsetek zakończonych z prośbą o opinię",
@@ -560,7 +574,6 @@ function setupDashboardSheet(spreadsheet) {
     .setBackground("#ffffff");
   dash.setRowHeight(11, 34);
 
-  // Tabele pomocnicze do kategorii i statusów (wiersze 13-23)
   dash.getRange("B13:C13").setValues([["Kategoria zgłoszenia", "Liczba"]])
     .setFontWeight("bold").setBackground("#1b7a3e").setFontColor("#ffffff");
 
@@ -607,7 +620,7 @@ function setupTestsSheet(spreadsheet) {
   testSheet.clear();
 
   testSheet.getRange("A1:J1").merge()
-    .setValue("ELWOZ ECO SmartCare – Rejestr Testów Systemowych (w tym modułu komunikacji i reputacji)")
+    .setValue("ELWOZ ECO SmartCare – Rejestr Testów Systemowych v0.2.1 (Odbiorca: wsb.student.tester@gmail.com)")
     .setFontSize(12)
     .setFontWeight("bold")
     .setBackground("#143d59")
@@ -640,7 +653,7 @@ function setupTestsSheet(spreadsheet) {
   const testScenarios = [
     ["TEST-01", "", "", "Przygotowanie potwierdzenia przyjęcia zgłoszenia", "W oknie dialogowym pojawia się uzupełniony szablon potwierdzenia z danymi zgłoszenia", "", "", "Do wykonania", "", ""],
     ["TEST-02", "", "", "Edycja wiadomości przed wysyłką", "Pracownik może zmienić temat i treść w oknie dialogowym; zmiany są uwzględniane w wysyłce", "", "", "Do wykonania", "", ""],
-    ["TEST-03", "", "", "Wysyłka na zatwierdzony adres testowy (Tryb Demo)", "Wiadomość trafia wyłącznie na adres testowy z USTAWIENIA, a w temacie dodano [TEST]", "", "", "Do wykonania", "", ""],
+    ["TEST-03", "", "", "Wysyłka na dedykowany adres testowy (wsb.student.tester@gmail.com)", "Wiadomość trafia WYŁĄCZNIE na wsb.student.tester@gmail.com; temat zawiera [TEST]", "", "", "Do wykonania", "", ""],
     ["TEST-04", "", "", "Zapis historii wysyłki w HISTORIA KOMUNIKACJI", "Po zatwierdzeniu wysyłki w arkuszu historii pojawia się kompletny wiersz ze statusem 'wysłano'", "", "", "Do wykonania", "", ""],
     ["TEST-05", "", "", "Obsługa zgłoszenia bez adresu e-mail", "System informuje pracownika o braku e-maila i proponuje odnotowanie kontaktu telefonicznego", "", "", "Do wykonania", "", ""],
     ["TEST-06", "", "", "Odnotowanie kontaktu telefonicznego", "Zapis notatki z rozmowy w historii komunikacji i aktualizacja daty ostatniego kontaktu w CRM", "", "", "Do wykonania", "", ""],
@@ -648,7 +661,7 @@ function setupTestsSheet(spreadsheet) {
     ["TEST-08", "", "", "Dodanie linku do opinii Google do wiadomości o rozwiązaniu", "Szablon zawiera neutralną prośbę i zweryfikowany link z USTAWIENIA; brak wymuszeń i ocen", "", "", "Do wykonania", "", ""],
     ["TEST-09", "", "", "Zapis oceny satysfakcji mieszkańca (1-5)", "Wpisanie oceny aktualizuje wskaźnik średniej satysfakcji w DASHBOARD; ocena nie jest wymagana do zamknięcia", "", "", "Do wykonania", "", ""],
     ["TEST-10", "", "", "Zabezpieczenie przed ponowną prośbą o opinię", "Gdy prośba była już wysłana, system wyświetla ostrzeżenie i żąda dodatkowego potwierdzenia", "", "", "Do wykonania", "", ""],
-    ["TEST-11", "", "", "Zabezpieczenie przed wysyłką do prawdziwego klienta w trybie demo", "Nawet jeśli w formularzu wpisano obcy e-mail, tryb demo przekierowuje na adres testowy", "", "", "Do wykonania", "", ""],
+    ["TEST-11", "", "", "Twarda blokada serwerowa wysyłki na inny adres niż wsb.student.tester@gmail.com", "Próba wysłania na jakikolwiek inny adres w trybie demo zostaje natychmiast zablokowana przez backend", "", "", "Do wykonania", "", ""],
     ["TEST-12", "", "", "Obsługa błędów wysyłki (MailApp)", "W razie błędu sieci/limitu status to 'błąd wysyłki', a wiersz nie jest oznaczany jako 'wysłano'", "", "", "Do wykonania", "", ""]
   ];
 
@@ -681,7 +694,7 @@ function setupAiInstructionSheet(spreadsheet) {
   aiSheet.clear();
 
   aiSheet.getRange("A1:D1").merge()
-    .setValue("ELWOZ ECO SmartCare – Instrukcja Obsługi Zgłoszeń i Komunikacji z AI")
+    .setValue("ELWOZ ECO SmartCare – Instrukcja Obsługi Zgłoszeń i Komunikacji z AI (v0.2.1)")
     .setFontSize(12)
     .setFontWeight("bold")
     .setBackground("#143d59")
@@ -694,8 +707,8 @@ function setupAiInstructionSheet(spreadsheet) {
     ["1. Zasada nadrzędna", "Sztuczna inteligencja pełni WYŁĄCZNIE rolę asystenta pracownika (Human-in-the-Loop). Pracownik weryfikuje i zatwierdza każdą wiadomość przed wysyłką."],
     ["2. Ograniczenia i zakazy dla AI", "AI KATEGORYCZNIE NIE WOLNO:\n• deklarować uznania reklamacji lub winy przedsiębiorstwa,\n• wymyślać wykonanych działań naprawczych (działania muszą pochodzić z notatek pracownika),\n• ustalać sztywnych terminów realizacji,\n• obiecywać jakichkolwiek odszkodowań finansowych,\n• generować opinii w imieniu mieszkańców ani sugerować liczby gwiazdek."],
     ["3. Anonimizacja danych", "Przed analizą w AI model otrzymuje wyłącznie zanonimizowany kontekst operacyjny (rodzaj problemu, frakcję, miejscowość, ulicę oraz treść zgłoszenia). Nazwiska, telefony i prywatne maile NIE są przesyłane do promptu."],
-    ["4. Menu 'SmartCare'", "Wszystkie działania wykonuje się z menu arkusza: 'SmartCare':\n• Analizuj zgłoszenie przez AI\n• Przygotuj potwierdzenie przyjęcia\n• Przygotuj informację o postępach\n• Przygotuj informację o rozwiązaniu\n• Przygotuj prośbę o opinię\n• Odnotuj kontakt telefoniczny\n• Wyświetl historię komunikacji."],
-    ["5. Tryb Demonstracyjny", "Domyślnie aktywny w USTAWIENIA (wartość TAK). Wszelka korespondencja mailowa jest kierowana na zatwierdzony adres testowy z prefiksem [TEST]."]
+    ["4. Dedykowane konto testowe", "Wszystkie usługi (Sheets, Forms, Apps Script, Gemini API) zarządzane są z dedykowanego konta: wsb.student.tester@gmail.com. Adres ten stanowi jedyny dopuszczalny cel wysyłki w trybie demonstracyjnym."],
+    ["5. Tryb Demonstracyjny", "Domyślnie aktywny w USTAWIENIA (wartość TAK). Wszelka korespondencja mailowa jest twardo kierowana na adres wsb.student.tester@gmail.com z prefiksem [TEST]."]
   ];
 
   for (let i = 0; i < instructions.length; i++) {
