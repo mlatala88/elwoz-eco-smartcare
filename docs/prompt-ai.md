@@ -1,5 +1,5 @@
 # ELWOZ ECO SmartCare – Instrukcja Obsługi Zgłoszeń przez Sztuczną Inteligencję
-**Wersja:** 0.2.4 (Natywne Gemini Structured Outputs, filtracja bloków 'thought', stabilność API)  
+**Wersja:** 0.2.5 (Rozwiązanie wyczerpania tokenów: 8192 max tokens, thinkingLevel MINIMAL, wczesna kontrola finishReason, diagnostyka)  
 **Projekt:** Studencki prototyp wdrożeniowy – Uniwersytet WSB Merito w Gdańsku  
 **Przedsiębiorstwo:** ELWOZ ECO Sp. z o.o. (Rejon Kartuzy)  
 **Dedykowane konto testowe:** `wsb.student.tester@gmail.com`

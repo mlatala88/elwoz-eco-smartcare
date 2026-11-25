@@ -1,20 +1,20 @@
 /**
  * ============================================================================
  * ELWOZ ECO SmartCare - Moduł Komunikacji i Zarządzania Reputacją (communication.gs)
- * Wersja: 0.2.3 (LockService, obsługa błędów dialogu, blokada placeholdera opinii)
+ * Wersja: 0.2.5 (8192 max tokens, thinkingLevel MINIMAL, wczesna kontrola finishReason, diagnostyka)
  * Projekt edukacyjny: Uniwersytet WSB Merito w Gdańsku
  * Dedykowane konto testowe: wsb.student.tester@gmail.com
  * ============================================================================
  * 
  * ZAKRES MODUŁU:
- * 1. Niestandardowe menu arkusza „SmartCare”.
+ * 1. Niestandardowe menu arkusza „SmartCare” (w tym test diagnostyczny Gemini API).
  * 2. Cztery edytowalne szablony wiadomości oparte WYŁĄCZNIE na zweryfikowanych faktach.
  * 3. Pełne zabezpieczenie okien dialogowych przed wstrzyknięciem HTML/JS (escapeHtml).
  * 4. BEZWARUNKOWA blokada wysyłki na serwerze: dozwolony odbiorca to WYŁĄCZNIE wsb.student.tester@gmail.com.
  * 5. Zabezpieczenie przed równoczesną wysyłką za pomocą LockService.
  * 6. Zabezpieczenie przed duplikatami wysyłek (kontrola 5-minutowego okna).
  * 7. Blokada placeholdera w prośbie o opinię – brak oznaczania jako wysłane bez zweryfikowanego linku.
- * 8. Bezpieczna stylizacja wiadomości przez zweryfikowany model Gemini Flash.
+ * 8. Bezpieczna stylizacja wiadomości przez zweryfikowany model Gemini Flash (8192 tokeny, filtr myśli).
  * 9. Zapis dat w arkuszu jako obiekty Date z poprawnym formatem dla formuł KPI w godzinach.
  */
 
@@ -37,6 +37,7 @@ function onOpen() {
     .addItem("6. 📞 Odnotuj kontakt telefoniczny", "actionLogPhoneCall")
     .addItem("7. 📜 Wyświetl historię komunikacji", "actionViewCommunicationHistory")
     .addSeparator()
+    .addItem("🔍 Test diagnostyczny Gemini API", "testGeminiApiIntegration")
     .addItem("🔄 Aktualizuj formuły Dashboardu (v0.2.3)", "updateDashboardKpiFormulasOnly")
     .addItem("⚙️ Ustawienia / Klucz Gemini API", "configureGeminiApiKeyFromComm")
     .addToUi();
@@ -1025,13 +1026,40 @@ function processSendEmail(payload) {
 
 /**
  * Personalizacja wiadomości z użyciem zweryfikowanego modelu Gemini Flash
- * POPRAWKA v0.2.4:
- * 1. Zastosowano Structured Outputs oraz filtrację części 'thought: true'.
- * 2. Pełna ochrona przed wyciekiem klucza API w błędach i logach.
- * 3. Obsługa kodów HTTP 429, 401/403 oraz 500/503.
- * 4. Ścisły zakaz wymyślania załóg, tras i ustaleń.
+ * POPRAWKA v0.2.5:
+ * 1. Zwiększono limit maxOutputTokens do 8192 oraz ustawiono temperature: 1.0.
+ * 2. Wymuszono konfigurację myślenia (thinkingConfig) minimalizującą zużycie tokenów.
+ * 3. Wczesna kontrola finishReason: MAX_TOKENS, SAFETY, RECITATION PRZED parsowaniem odpowiedzi.
+ * 4. Dodano jedną kontrolowaną próbę ponowienia (1 retry) przy błędzie transient.
+ * 5. Structured Outputs oraz filtracja części 'thought: true'.
+ * 6. Pełna ochrona przed wyciekiem klucza API w błędach i logach (key=[UKRYTY]).
+ * 7. Ścisły zakaz wymyślania załóg, tras i ustaleń.
  */
 function polishMessageWithAi(ticketId, templateText) {
+  let lastError = null;
+  for (let attempt = 0; attempt <= 1; attempt++) {
+    try {
+      if (attempt > 0) {
+        Logger.log(`Ponawianie stylizacji wiadomości przez Gemini API (próba 2/2)...`);
+        Utilities.sleep(1000);
+      }
+      return polishMessageWithAiDirect(ticketId, templateText);
+    } catch (err) {
+      lastError = err;
+      const errMsg = err.message || String(err);
+      if (errMsg.includes("401") || errMsg.includes("403") || errMsg.includes("SAFETY") || errMsg.includes("RECITATION")) {
+        throw err;
+      }
+      Logger.log(`Próba stylizacji ${attempt + 1} nie powiodła się: ${String(errMsg).replace(/key=[a-zA-Z0-9_-]+/g, "key=[UKRYTY]")}`);
+    }
+  }
+  throw lastError;
+}
+
+/**
+ * Bezpośrednie wywołanie Gemini API do stylizacji wiadomości (v0.2.5)
+ */
+function polishMessageWithAiDirect(ticketId, templateText) {
   const scriptProperties = PropertiesService.getScriptProperties();
   const apiKey = scriptProperties.getProperty("GEMINI_API_KEY");
   if (!apiKey) {
@@ -1042,6 +1070,11 @@ function polishMessageWithAi(ticketId, templateText) {
   const targetModel = (typeof getVerifiedGeminiModel === "function")
     ? getVerifiedGeminiModel(apiKey)
     : ((typeof SMARTCARE_AI_CONFIG !== "undefined" && SMARTCARE_AI_CONFIG.defaultModel) ? SMARTCARE_AI_CONFIG.defaultModel : "gemini-3.6-flash");
+
+  // Konfiguracja poziomu myślenia
+  const thinkingConfig = (typeof getThinkingConfigForModel === "function")
+    ? getThinkingConfigForModel(targetModel)
+    : (String(targetModel).includes("2.5") ? { thinkingBudget: 0 } : { thinkingLevel: "MINIMAL" });
 
   // Twarda anonimizacja treści wejściowej
   const cleanTemplate = anonymizeText(templateText);
@@ -1077,10 +1110,11 @@ function polishMessageWithAi(ticketId, templateText) {
       }
     ],
     generationConfig: {
-      temperature: 0.2,
-      maxOutputTokens: 1000,
+      temperature: 1.0,
+      maxOutputTokens: 8192,
       responseMimeType: "application/json",
-      responseSchema: polishSchema
+      responseSchema: polishSchema,
+      thinkingConfig: thinkingConfig
     }
   };
 
@@ -1133,9 +1167,21 @@ function polishMessageWithAi(ticketId, templateText) {
   }
 
   const candidate = jsonResponse.candidates[0];
+
+  // WCZESNA KONTROLA finishReason PRZED PARSOWANIEM
+  if (candidate.finishReason === "SAFETY") {
+    throw new Error("Generowanie odpowiedzi zostało zablokowane przez filtry bezpieczeństwa (SAFETY).");
+  }
+  if (candidate.finishReason === "RECITATION") {
+    throw new Error("Generowanie odpowiedzi zostało zablokowane (RECITATION).");
+  }
+  if (candidate.finishReason === "MAX_TOKENS") {
+    throw new Error("Model osiągnął limit tokenów (finishReason: MAX_TOKENS) przed ukończeniem wiadomości.");
+  }
+
   const parts = candidate.content.parts || [];
 
-  // KLUCZOWE: Filtrujemy części thought (thought: true)
+  // Filtrujemy części thought (thought: true)
   const validParts = parts.filter(p => !p.thought && typeof p.text === "string" && p.text.trim() !== "");
   if (validParts.length === 0) {
     throw new Error("Model Gemini nie zwrócił treści wiadomości.");

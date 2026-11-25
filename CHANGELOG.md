@@ -4,6 +4,32 @@ Wszystkie istotne zmiany i wydania w projekcie **ELWOZ ECO SmartCare** są rejes
 
 ---
 
+## [0.2.5] – 2026-11-25
+### Wydanie Naprawcze: Rozwiązanie wyczerpania tokenów (8192 max tokens), thinkingLevel MINIMAL, wczesna kontrola finishReason, diagnostyka
+
+#### Naprawione błędy i wdrożone poprawki:
+1. **Usunięcie błędu „Treść wygenerowana przez model nie zawiera struktury JSON (brak klamer)” (`ai.gs`):**
+   - Zidentyfikowano przyczynę: limit `maxOutputTokens: 1000` był wyczerpywany przez wewnętrzny łańcuch rozumowania (reasoning tokens) nowoczesnych modeli z rodziny Gemini Flash, przez co model osiągał `finishReason: MAX_TOKENS` i urywał wypowiedź zanim wygenerował klamry JSON.
+   - Zwiększono limit `maxOutputTokens` z 1000 do **8192**.
+2. **Wdrożenie konfiguracji poziomu myślenia `thinkingConfig` (`ai.gs`, `communication.gs`):**
+   - Wprowadzono `thinkingConfig.thinkingLevel: "MINIMAL"` dla modeli Gemini 3+ oraz `thinkingBudget: 0` dla Gemini 2.5, ograniczając zbędną konsumpcję tokenów na myśli wstępne i gwarantując natychmiastowe generowanie czystego JSON.
+3. **Optymalizacja temperatury modelu (`temperature: 1.0`):**
+   - Zastosowano oficjalne zalecenie Google dla modeli rozumujących Gemini ze Structured Outputs (temperatura 1.0 zapobiega zapętleniom, obcięciom i degradacji głębokości wnioskowania).
+4. **Wczesna kontrola `finishReason` przed próbą parsowania JSON (`ai.gs`, `communication.gs`):**
+   - Sprawdzanie flag `finishReason` (`MAX_TOKENS`, `SAFETY`, `RECITATION`) następuje BEZWZGLĘDNIE przed parsowaniem JSON. Przy ucięciu odpowiedzi natychmiast zgłaszana jest czytelna informacja o tokenach zamiast mylącego błędu składniowego.
+5. **Selekcja zweryfikowanych modeli generujących tekst (`ai.gs`):**
+   - Funkcja `getVerifiedGeminiModel` filtruje wyłącznie modele tekstowe obsługujące `generateContent` i Structured Outputs z bezpłatnej puli (`gemini-3.6-flash`, `gemini-3.5-flash`, `gemini-2.5-flash`), wykluczając modele specjalistyczne.
+6. **Pełna diagnostyka odpowiedzi i zużycia tokenów (`ai.gs`):**
+   - Do każdego wyniku dołączana jest pełna diagnostyka: aktywny model, kod HTTP, `finishReason`, liczba części odpowiedzi, liczba odfiltrowanych bloków myśli (`thought: true`), długość tekstu oraz zużycie tokenów z `usageMetadata` (`promptTokenCount`, `candidatesTokenCount`, `thinkingTokenCount`, `totalTokenCount`).
+7. **Kontrolowane ponowienie zapytania (1 retry) (`ai.gs`, `communication.gs`):**
+   - Zaimplementowano pojedyncze ponowienie próby (`callGeminiApiWithRetry` / `polishMessageWithAi`) z 1-sekundowym opóźnieniem przy ucięciu odpowiedzi lub przejściowym błędzie sieci.
+8. **Samodzielna funkcja diagnostyczna `testGeminiApiIntegration` (`ai.gs`, `communication.gs`):**
+   - Dodano funkcję testową i nową pozycję w menu arkusza: `📋 SmartCare -> 🔍 Test diagnostyczny Gemini API`, pozwalającą przetestować całe połączenie API na danych mockowych i wyświetlić sformatowane okno dialogowe z kompletem metadanych wykonania.
+9. **Twarde maskowanie danych i klucza API:**
+   - Wszelkie logi, powiadomienia i komunikaty błędów bezwzględnie maskują klucz API (`key=[UKRYTY]`), prompt oraz dane osobowe mieszkańców.
+
+---
+
 ## [0.2.4] – 2026-11-25
 ### Wydanie Naprawcze: Natywne Gemini Structured Outputs, filtracja bloków 'thought' i stabilność API
 

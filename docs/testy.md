@@ -1,5 +1,5 @@
 # ELWOZ ECO SmartCare – Procedura Testowa i Rejestr Weryfikacji
-**Wersja:** 0.2.4 (Natywne Gemini Structured Outputs, filtracja bloków 'thought', stabilność API)  
+**Wersja:** 0.2.5 (Rozwiązanie wyczerpania tokenów: 8192 max tokens, thinkingLevel MINIMAL, wczesna kontrola finishReason, diagnostyka)  
 **Projekt:** Studencki prototyp wdrożeniowy – Uniwersytet WSB Merito w Gdańsku  
 **Przedsiębiorstwo:** ELWOZ ECO Sp. z o.o. (Rejon Kartuzy)  
 **Dedykowane konto testowe:** `wsb.student.tester@gmail.com`
@@ -8,7 +8,7 @@
 
 ## 1. Cel i zasady przeprowadzania testów
 
-Niniejsza procedura służy do zweryfikowania poprawności działania aplikacji **ELWOZ ECO SmartCare** po wprowadzeniu poprawek v0.2.4:
+Niniejsza procedura służy do zweryfikowania poprawności działania aplikacji **ELWOZ ECO SmartCare** po wprowadzeniu poprawek v0.2.5:
 1. **Wyłącznie dane fikcyjne:** Żadne testowe zgłoszenie nie może zawierać rzeczywistych nazwisk, prywatnych adresów ani numerów telefonów mieszkańców Kartuz.
 2. **Brak zmyślonych rezultatów:** W tabelach poniżej pola dotyczące rzeczywistych rezultatów i pomiarów czasu pozostawiono do uzupełnienia w trakcie faktycznych sesji testowych przez zespół.
 3. **Twarde zabezpieczenie serwerowe (Backend Whitelist Guard):** Backend bezwzględnie blokuje wysyłkę na jakikolwiek inny adres niż `wsb.student.tester@gmail.com`, a temat wiadomości zawsze otrzymuje prefiks `[TEST]`.
@@ -39,6 +39,8 @@ Niniejsza procedura służy do zweryfikowania poprawności działania aplikacji 
 | **TEST-16** | **Interaktywna weryfikacja danych dla AI (Human-in-the-Loop)** | Wybór z menu: *SmartCare -> Analizuj zgłoszenie przez AI*. | Wyświetla się okno dialogowe z oczyszczonym opisem (brak ulicy, posesji, nazwiska); pracownik może zmodyfikować treść przed wysłaniem do modelu Gemini Flash. | *(do uzupełnienia po teście)* | `Do wykonania` | | |
 | **TEST-17** | **Natywne Structured Outputs i eliminacja błędu myśli (thought)** | Kliknięcie *Wyślij do AI (Przeanalizuj)* w oknie weryfikacji. | Część `thought` jest ignorowana; poprawny obiekt JSON trafia do walidacji; brak błędu `SyntaxError: Unexpected token 'o'`; CRM zostaje uzupełniony. | *(do uzupełnienia po teście)* | `Do wykonania` | | |
 | **TEST-18** | **Obsługa błędów analizy AI i brak zamykania okna** | Symulacja błędu sieci, limitu quota lub niepoprawnych danych. | Okno dialogowe weryfikacji AI pozostaje otwarte; wyświetla się czytelny komunikat; przycisk zmienia stan na `🤖 Ponów analizę AI`. | *(do uzupełnienia po teście)* | `Do wykonania` | | |
+| **TEST-19** | **Samodzielny test diagnostyczny Gemini API z menu SmartCare** | Wybór z menu: *SmartCare -> 🔍 Test diagnostyczny Gemini API*. | Wyświetla się okno modalne z pełną diagnostyką: nazwa modelu Flash, HTTP 200, finishReason: STOP, liczba części thought (odfiltrowane), zużycie tokenów (prompt, candidates, thinking) oraz podgląd sparsowanego JSON. | *(do uzupełnienia po teście)* | `Do wykonania` | | |
+| **TEST-20** | **Weryfikacja puli 8192 tokenów i eliminacja błędu braku klamer JSON** | Analiza zgłoszeń ELW-2026-0001 i ELW-2026-0002 przez Gemini Flash. | Brak błędu obcięcia tokenów; model generuje kompletny JSON ze wszystkimi wymaganymi polami; pola CRM w arkuszu ZGŁOSZENIA zostają poprawnie wypełnione. | *(do uzupełnienia po teście)* | `Do wykonania` | | |
 
 ---
 
