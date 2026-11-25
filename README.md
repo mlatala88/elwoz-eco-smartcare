@@ -163,23 +163,23 @@ elwoz-eco-smartcare/
 4. Wklej zawartość plików `google/setup.gs`, `google/communication.gs` oraz `google/ai.gs`.
 5. Uruchom funkcję **`setupSmartCareSystem`** i zaakceptuj uprawnienia.
 
-### Dla istniejącej instalacji (aktualizacja do v0.2.6 FINAL):
+### Dla istniejącej instalacji (aktualizacja i poprawka Dashboardu v0.2.6):
 Jeśli arkusz i formularz są już zainstalowane na koncie `wsb.student.tester@gmail.com`:
 1. Otwórz edytor Apps Script w istniejącym arkuszu Google Sheets (**Rozszerzenia → Apps Script**).
-2. Zaktualizuj zawartość **WYŁĄCZNIE DWÓCH PLIKÓW**:
-   - `setup.gs` – wklej zaktualizowaną zawartość z `google/setup.gs` (wersja 0.2.6);
-   - `communication.gs` – wklej zaktualizowaną zawartość z `google/communication.gs` (wersja 0.2.6).
-   *(Moduł `ai.gs` pozostaje bez zmian – wersja v0.2.5 działa stabilnie).*
+2. Zaktualizuj zawartość pliku:
+   - `setup.gs` – wklej kompletną, zaktualizowaną zawartość z `google/setup.gs` (wersja 0.2.6 z poprawką techniczną Dashboardu i autokalibracją regionalną);
+   *(Plik `communication.gs` jest już zaktualizowany do v0.2.6, a `ai.gs` pozostaje bez zmian).*
 3. Zapisz projekt (Ctrl + S).
 4. Przeładuj arkusz Google Sheets (F5) i z menu wybierz:
    **`📋 SmartCare -> 🚀 Aktualizuj system do v0.2.6`**.
 5. Funkcja automatycznie:
-   - Zaktualizuje formuły Dashboardu przy użyciu dynamicznego mapowania kolumn, eliminując `#ERROR!`;
-   - Wygeneruje dwa czytelne wykresy analityczne (rozkład kategorii i statusów) bez duplikacji;
-   - Wprowadzi zweryfikowany link do Profilu Google w `USTAWIENIA`;
-   - Skonfiguruje parametry automatycznych powiadomień wewnętrznych;
-   - Ustawi jednolitą wysokość wierszy (28px) oraz styl zawijania `CLIP` w arkuszu `ZGŁOSZENIA`;
-   - Wyświetli okno raportu z podsumowaniem wykonanych działań.
+   - Przeprowadzi autokalibrację składni formuł pod kątem ustawień regionalnych arkusza (średnik `;` dla `pl_PL`), eliminując błędy `#ERROR!`;
+   - W razie potrzeby zastosuje niezależny silnik analityczny Apps Script (Ground Truth Engine), zasilając Dashboard bezpośrednimi, czystymi danymi liczbowymi;
+   - Wykona `SpreadsheetApp.flush()` i przeprowadzi ścisłą weryfikację braku błędów formuł oraz zgodności liczby zgłoszeń w komórce B5 z CRM;
+   - Wygeneruje dwa czytelne wykresy analityczne (rozkład kategorii i statusów) bez duplikacji i bez pustych pól;
+   - Włączy pełne zawijanie tekstu nagłówków (wysokość 44–48px), eliminując ucięte napisy;
+   - Zaktualizuje nagłówek zakładki `INSTRUKCJA AI` do wersji v0.2.6;
+   - Wyświetli raport z wynikiem weryfikacji (blokując komunikat o sukcesie, jeśli wystąpiłby jakikolwiek błąd).
 
 ---
 

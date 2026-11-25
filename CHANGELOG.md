@@ -42,11 +42,23 @@ Wszystkie istotne zmiany i wydania w projekcie **ELWOZ ECO SmartCare** są rejes
      - Ścisły zakaz zmyślania faktów, tras i ustaleń niewynikających z dokumentacji,
      - Ścisły zakaz formalnego uznawania roszczeń finansowych lub odszkodowawczych spółki,
      - Automatyczne wycinanie pozostałości znaczników interfejsu (np. `[Opis]`, `ID Zgłoszenia:`).
-7. **Poprawa czytelności rejestru `ZGŁOSZENIA` (`google/setup.gs`):**
+7. **Poprawa czytelności rejestru `ZGŁOSZENIA` oraz zawijania nagłówków Dashboardu (`google/setup.gs`):**
    - Funkcja `formatTicketsSheetForReadability` ustawia stałą, ergonomiczną wysokość wierszy danych (28px) oraz strategię zawijania tekstu `SpreadsheetApp.WrapStrategy.CLIP` dla kolumn z długimi opisami i odpowiedziami AI.
-   - Zapobiega to rozciąganiu wierszy na kilkaset pikseli i drastycznie zwiększa przejrzystość arkusza, przy zachowaniu pełnej zawartości komórek.
-8. **Bezpieczna funkcja jednoklikowej aktualizacji (`updateSystemToV026`):**
-   - W menu `📋 SmartCare` dodano pozycję `🚀 Aktualizuj system do v0.2.6`, która w sposób idempotentny odświeża formuły Dashboardu, generuje wykresy, dopisuje nowe parametry do USTAWIENIA, formatuje arkusz ZGŁOSZENIA i wyświetla raport podsumowujący bez utraty jakichkolwiek istniejących danych.
+   - Włączono pełne zawijanie tekstu nagłówków (`setWrap(true)`) na Dashboardzie (wiersze 4, 7, 10, 13) oraz w arkuszu ZGŁOSZENIA (wiersz 1 z wysokością 48px), eliminując ucięte napisy.
+8. **Zgodność z polskimi ustawieniami regionalnymi (pl_PL) i autokalibracja formuł (`google/setup.gs`):**
+   - Wprowadzono dynamiczne wykrywanie separatora formuł przez `getFormulaSeparator(spreadsheet)` na podstawie `getSpreadsheetLocale()`. W arkuszach z polskim locale stosowany jest średnik (`;`), eliminujący konflikt z przecinkiem dziesiętnym i błędy `#ERROR!`.
+   - Zaimplementowano dwuetapową autokalibrację z próbą alternatywnego separatora w razie wykrycia problemów ze składnią.
+9. **Niezależny silnik analityczny Apps Script (Ground Truth Engine):**
+   - Funkcja `calculateDashboardMetrics(ticketSheet)` w czystym JavaScript przetwarza dane z CRM, obliczając wolumeny, czasy reakcji w godzinach, satysfakcję i rozkłady.
+   - W przypadku trudności z ewaluacją formuł w arkuszu klienta, dane są natychmiast uzupełniane czystymi wartościami liczbowymi bez błędów `#ERROR!`, co gwarantuje pełne i bezbłędne działanie obu wykresów.
+10. **Rzeczywista walidacja integralności i blokada fałszywego sukcesu (`validateDashboardIntegrity`):**
+    - Po aktualizacji skrypt wykonuje `SpreadsheetApp.flush()` i weryfikuje każdy wskaźnik pod kątem błędów `#ERROR!`, `#REF!`, `#VALUE!`, `#N/A`, `#NAME?`, `#DIV/0!`, `#NUM!`.
+    - Skrypt porównuje liczbę zgłoszeń wyświetlaną w B5 z faktyczną liczbą w CRM oraz sprawdza obecność 2 wykresów.
+    - W przypadku wykrycia jakichkolwiek błędów skrypt **nie wyświetla komunikatu o sukcesie**, lecz okno ostrzegawcze z dokładną listą nieprawidłowych komórek.
+11. **Aktualizacja zakładki `INSTRUKCJA AI`:**
+    - Zaktualizowano nagłówek zakładki do wersji `v0.2.6 (FINAL RELEASE)`.
+12. **Bezpieczna funkcja jednoklikowej aktualizacji (`updateSystemToV026`):**
+    - W menu `📋 SmartCare` dostępna jest pozycja `🚀 Aktualizuj system do v0.2.6`, która w sposób idempotentny odświeża formuły Dashboardu, kalibruje locale, weryfikuje wykresy, dopisuje nowe parametry do USTAWIENIA, formatuje arkusz ZGŁOSZENIA i wyświetla raport podsumowujący bez utraty danych.
 
 #### Naprawione błędy i wdrożone poprawki:
 1. **Usunięcie błędu „Treść wygenerowana przez model nie zawiera struktury JSON (brak klamer)” (`ai.gs`):**
