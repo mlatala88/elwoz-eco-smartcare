@@ -250,9 +250,11 @@ Każde zdarzenie kontaktowe jest rejestrowane w zakładce `HISTORIA KOMUNIKACJI`
 
 ## 13. Rozszerzony Dashboard i Rejestr Zgłoszeń (Kalkulacje KPI i Wykresy)
 
-W wersji **0.2.6 (FINAL RELEASE)** zakładka `DASHBOARD` została całkowicie zmodernizowana i naprawiona:
-- **Dynamiczne mapowanie kolumn po nagłówkach (`getTicketsColumnMap`):** Formuły nie korzystają już z podatnych na błędy, sztywnych liter kolumn (takich jak `B2:B`), lecz dynamicznie sprawdzają faktyczne położenie nagłówków (`Data zgłoszenia`, `Data pierwszego kontaktu`, `Data rozwiązania`, `Status`, `Kategoria`).
-- **Składnia US English z przecinkami w `setFormula()`:** Zastąpienie regionalnych średników standardowymi przecinkami wyeliminowało błąd `#ERROR!` w arkuszu.
+W wersji **0.2.6 (FINAL RELEASE)** zakładka `DASHBOARD` została całkowicie zmodernizowana i zabezpieczona:
+- **Obsługa polskiego locale Google Sheets (`pl_PL`):** Formuły automatycznie przyjmują separator średnika (`;`) na podstawie `getSpreadsheetLocale()`, eliminując konflikt z przecinkiem jako separatorem dziesiętnym.
+- **Niezależny silnik obliczeniowy Apps Script:** W razie błędu ewaluacji formuł funkcja `calculateDashboardMetrics` w czystym JavaScript odczytuje dane CRM i wpisuje obliczone wartości bezpośrednio do komórek, gwarantując brak błędów `#ERROR!` i niepuste wykresy.
+- **Dynamiczne mapowanie kolumn po nagłówkach (`getTicketsColumnMap`):** Formuły nie korzystają ze sztywnych liter kolumn, lecz dynamicznie sprawdzają faktyczne położenie nagłówków (`Data zgłoszenia`, `Data pierwszego kontaktu`, `Data rozwiązania`, `Status`, `Kategoria`).
+- **Ścisła weryfikacja integralności (`validateDashboardIntegrity`):** Sprawdzanie braku błędów `#ERROR!`, `#REF!`, `#VALUE!`, `#N/A` oraz zgodności liczby zgłoszeń z CRM; blokada okna sukcesu w przypadku wystąpienia nieprawidłowości.
 - **Prawidłowe zliczanie i wskaźniki operacyjne:**
   - **Łączna liczba zgłoszeń (C5):** `=COUNTIF(ZGŁOSZENIA!{id}2:{id}, "<>")`
   - **Zgłoszenia nowe (D5), w realizacji (E5), rozwiązane (F5):** Dynamiczne formuły `COUNTIF`
