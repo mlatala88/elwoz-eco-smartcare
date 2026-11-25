@@ -708,9 +708,10 @@ function openEmailDialog(params) {
     <div class="form-group">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
         <label for="emailBody" style="margin-bottom:0;">Treść wiadomości (edytowalna):</label>
-        <button type="button" class="btn-ai" onclick="personalizeWithAi()">✨ Usprawnij styl z AI (Gemini Flash)</button>
+        <button type="button" class="btn-ai" id="btnAi" onclick="personalizeWithAi()">✨ Usprawnij styl z AI (Gemini Flash)</button>
       </div>
       <textarea id="emailBody" required>${safeBody}</textarea>
+      <div id="aiStatusBox" style="display: none; padding: 8px 12px; border-radius: 6px; font-size: 0.825rem; margin-top: 6px; line-height: 1.4;"></div>
     </div>
 
     ${params.includeReviewOption ? (params.hasVerifiedReviewLink ? `
@@ -736,6 +737,16 @@ function openEmailDialog(params) {
   </form>
 
   <script>
+    function escapeHtmlClient(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
     function sendNow() {
       const subject = document.getElementById('emailSubject').value.trim();
       let body = document.getElementById('emailBody').value.trim();
@@ -756,7 +767,7 @@ function openEmailDialog(params) {
             google.script.host.close();
           } else {
             const errMsg = (res && res.error) ? res.error : 'Nieznany błąd podczas wysyłki wiadomości.';
-            alert('Błąd operacji:\n\n' + errMsg + '\n\nOkno wiadomości pozostaje otwarte. Popraw treść lub spróbuj ponownie.');
+            alert('Błąd operacji:\\n\\n' + errMsg + '\\n\\nOkno wiadomości pozostaje otwarte. Popraw treść lub spróbuj ponownie.');
             document.getElementById('btnSubmit').disabled = false;
             document.getElementById('btnSubmit').innerText = 'Zatwierdź i wyślij';
           }
@@ -778,17 +789,72 @@ function openEmailDialog(params) {
 
     function personalizeWithAi() {
       const bodyEl = document.getElementById('emailBody');
-      const currentText = bodyEl.value;
+      const btnAi = document.getElementById('btnAi');
+      const statusBox = document.getElementById('aiStatusBox');
+      const currentText = bodyEl.value.trim();
+
+      if (!currentText) {
+        alert('Treść wiadomości nie może być pusta.');
+        return;
+      }
+
       bodyEl.disabled = true;
+      if (btnAi) {
+        btnAi.disabled = true;
+        btnAi.innerText = 'AI przygotowuje odpowiedź…';
+      }
+
+      if (statusBox) {
+        statusBox.style.display = 'block';
+        statusBox.style.background = '#f3e8ff';
+        statusBox.style.color = '#6b21a8';
+        statusBox.style.border = '1px solid #d8b4fe';
+        statusBox.innerHTML = '⏳ <strong>AI przygotowuje odpowiedź…</strong> (Gemini Flash weryfikuje styl, gramatykę i zasady PR)';
+      }
 
       google.script.run
         .withSuccessHandler((polished) => {
           bodyEl.disabled = false;
-          if (polished) bodyEl.value = polished;
+          if (btnAi) {
+            btnAi.disabled = false;
+            btnAi.innerText = '✨ Usprawnij styl z AI (Gemini Flash)';
+          }
+
+          if (polished && typeof polished === 'string' && polished.trim() !== '') {
+            bodyEl.value = polished.trim();
+            if (statusBox) {
+              statusBox.style.display = 'block';
+              statusBox.style.background = '#ecfdf5';
+              statusBox.style.color = '#065f46';
+              statusBox.style.border = '1px solid #a7f3d0';
+              statusBox.innerHTML = '✓ <strong>Sukces:</strong> Styl wiadomości został pomyślnie zoptymalizowany przez AI.';
+            }
+          } else {
+            if (statusBox) {
+              statusBox.style.display = 'block';
+              statusBox.style.background = '#fef2f2';
+              statusBox.style.color = '#991b1b';
+              statusBox.style.border = '1px solid #fecaca';
+              statusBox.innerHTML = '⚠️ <strong>Uwaga:</strong> AI nie zwróciło nowej treści. Zachowano treść oryginalną.';
+            }
+          }
         })
         .withFailureHandler((err) => {
           bodyEl.disabled = false;
-          alert('AI niedostępne (skorzystaj ze standardowego szablonu): ' + err);
+          if (btnAi) {
+            btnAi.disabled = false;
+            btnAi.innerText = '✨ Usprawnij styl z AI (Gemini Flash)';
+          }
+          const safeErr = escapeHtmlClient(err ? (err.message || String(err)) : 'Nieznany błąd');
+          if (statusBox) {
+            statusBox.style.display = 'block';
+            statusBox.style.background = '#fef2f2';
+            statusBox.style.color = '#991b1b';
+            statusBox.style.border = '1px solid #fecaca';
+            statusBox.innerHTML = '✗ <strong>Błąd AI:</strong> ' + safeErr + '<br><small>Możesz wysłać treść w obecnej postaci lub spróbować ponownie.</small>';
+          } else {
+            alert('Błąd AI: ' + safeErr);
+          }
         })
         .polishMessageWithAi(${JSON.stringify(params.ticketId)}, currentText);
     }
@@ -796,7 +862,7 @@ function openEmailDialog(params) {
 </body>
 </html>`;
 
-  const uiOutput = HtmlService.createHtmlOutput(html).setWidth(640).setHeight(540);
+  const uiOutput = HtmlService.createHtmlOutput(html).setWidth(640).setHeight(560);
   SpreadsheetApp.getUi().showModalDialog(uiOutput, `SmartCare – Przygotowanie wiadomości e-mail`);
 }
 
@@ -1080,22 +1146,23 @@ function polishMessageWithAiDirect(ticketId, templateText) {
   const cleanTemplate = anonymizeText(templateText);
 
   const systemPrompt = 
-    "Jesteś profesjonalnym asystentem redakcyjnym w firmie komunalnej ELWOZ ECO w Kartuzach.\n" +
-    "Twoim celem jest wygładzenie stylu poniższej wiadomości, aby była profesjonalna, empatyczna i naturalna.\n" +
-    "BEZWZGLĘDNE ZASADY PRAWDY I BEZPIECZEŃSTWA:\n" +
-    "1. NIE wymyślaj żadnych działań logistycznych, tras śmieciarek ani załóg, których nie ma w podanym tekście.\n" +
-    "2. NIE deklaruj uznania winy ani reklamacji przedsiębiorstwa.\n" +
-    "3. NIE obiecuj terminów, których nie ma w szablonie.\n" +
-    "4. NIE obiecuj zniżek ani odszkodowań.\n" +
-    "5. Zachowaj numer zgłoszenia oraz dane kontaktowe bez zmian.\n" +
-    "6. Odpowiedź zwróć w formacie JSON ze wskazanym kluczem stylizowanaTresc.";
+    "Jesteś profesjonalnym asystentem redakcyjnym oraz ekspertem ds. komunikacji Customer Experience (CX) i PR w firmie komunalnej ELWOZ ECO w Kartuzach.\n" +
+    "Twoim celem jest wygładzenie stylu, korekta językowa i profesjonalna redakcja poniższej wiadomości roboczej do mieszkańca.\n\n" +
+    "ZASADY PROFESJONALNEJ KOMUNIKACJI CX, PR I BEZPIECZEŃSTWA:\n" +
+    "1. POPRAWIAJ GRAMATYKĘ, ORTOGRAFIĘ, INTERPUNKCJĘ I STYL: Dbaj o wysoki standard polszczyzny, uprzejmy, empatyczny, partnerski i rzeczowy ton.\n" +
+    "2. USUWAJ PRZYPADKOWO SKOPIOWANE ELEMENTY INTERFEJSU: Wytnij wszelkie techniczne pozostałości, znaczniki UI lub etykiety formularza (np. '[Opis]', 'ID Zgłoszenia:', 'Pole edytowalne:', 'Wiersz:', znaczniki pól itp.).\n" +
+    "3. OCHRONA WIZERUNKU PRZEDSIĘBIORSTWA I PRACOWNIKÓW (PR): BEZWZGLĘDNIE NIE UJAWNIAJ WEWNĘTRZNYCH KAR, REPRYMEND, NAGAN, ROZMÓW DYSCYPLINUJĄCYCH ANI KONSEKWENCJI SŁUŻBOWYCH PRACOWNIKÓW LUB ZAŁÓG ŚMIECIAREK. Zamiast kar komunikuj standardy jakościowe, procedury weryfikacyjne i podjęte działania systemowe.\n" +
+    "4. ZASADA PRAWDY: BEZWZGLĘDNIE NIE WYMYŚLAJ FAKTÓW ANI WYKONANYCH DZIAŁAŃ. Opieraj się wyłącznie na faktach i ustaleniach przekazanych w szablonie. Nie twórz fikcyjnych tras, podjazdów śmieciarek ani zmyślonych rozmów dyspozytorni.\n" +
+    "5. OCHRONA PRAWNA SPÓŁKI: NIGDY nie deklaruj formalnego uznania winy przedsiębiorstwa ani uznania roszczeń reklamacyjnych. NIGDY nie obiecuj rekompensat finansowych, bonifikat, zniżek ani sztywnych terminów, których nie ma w szablonie.\n" +
+    "6. ZACHOWAJ KLUCZOWE DANE: Zachowaj numer identyfikacyjny zgłoszenia (np. ELW-...) oraz oficjalne dane kontaktowe do POK w Kartuzach.\n" +
+    "7. Odpowiedź zwróć w formacie JSON ze wskazanym kluczem stylizowanaTresc.";
 
   const polishSchema = {
     type: "OBJECT",
     properties: {
       stylizowanaTresc: {
         type: "STRING",
-        description: "Profesjonalna, wygładzona stylistycznie, empatyczna treść wiadomości e-mail do mieszkańca po polsku"
+        description: "Profesjonalna, wygładzona stylistycznie, poprawna gramatycznie, empatyczna treść wiadomości e-mail do mieszkańca po polsku zgodna z zasadami CX i PR"
       }
     },
     required: ["stylizowanaTresc"]
@@ -1212,12 +1279,20 @@ function polishMessageWithAiDirect(ticketId, templateText) {
 function anonymizeText(text) {
   if (!text) return "";
   return String(text)
-    // 1. Usunięcie adresów e-mail
+    // 1. Zabezpieczenie oficjalnych danych kontaktowych spółki przed wycięciem
+    .replace(/kartuzy@elwozeco\.pl/gi, "___POK_EMAIL___")
+    .replace(/58\s*681\s*22\s*99/g, "___POK_PHONE1___")
+    .replace(/605\s*347\s*455/g, "___POK_PHONE2___")
+    // 2. Usunięcie prywatnych adresów e-mail mieszkańców
     .replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, "[E-MAIL USUNIĘTO]")
-    // 2. Usunięcie numerów PESEL (11 cyfr)
+    // 3. Usunięcie numerów PESEL (11 cyfr)
     .replace(/\b\d{11}\b/g, "[IDENTYFIKATOR USUNIĘTO]")
-    // 3. Usunięcie numerów telefonów (z prefiksem +48 lub 9 cyfr ze spacjami/myślnikami)
-    .replace(/(?:\+?48[\s-]?)?(?:\b\d{3}[\s-]?\d{3}[\s-]?\d{3}\b|\b\d{9}\b)/g, "[NUMER TELEFONU USUNIĘTO]");
+    // 4. Usunięcie numerów telefonów (z prefiksem +48 lub 9 cyfr ze spacjami/myślnikami)
+    .replace(/(?:\+?48[\s-]?)?(?:\b\d{3}[\s-]?\d{3}[\s-]?\d{3}\b|\b\d{9}\b)/g, "[NUMER TELEFONU USUNIĘTO]")
+    // 5. Przywrócenie oficjalnych danych POK Kartuzy
+    .replace(/___POK_EMAIL___/g, "kartuzy@elwozeco.pl")
+    .replace(/___POK_PHONE1___/g, "58 681 22 99")
+    .replace(/___POK_PHONE2___/g, "605 347 455");
 }
 
 /**
