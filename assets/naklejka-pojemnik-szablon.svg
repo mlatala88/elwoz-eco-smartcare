@@ -17,13 +17,10 @@
   <!-- Ramka na Kod QR -->
   <rect x="150" y="240" width="300" height="300" rx="16" fill="#f8faf9" stroke="#2e9b53" stroke-width="3" stroke-dasharray="6 6"/>
   
-  <!-- Podgląd / Placeholder na wygenerowany kod QR -->
+  <!-- Rzeczywisty wygenerowany kod QR (prowadzący do GitHub Pages) -->
   <g transform="translate(165, 255)">
     <rect width="270" height="270" fill="#ffffff" rx="10"/>
-    <!-- Centralny sygnet SmartCare w ramce QR -->
-    <circle cx="135" cy="135" r="40" fill="#e8f5e9" stroke="#1b7a3e" stroke-width="2"/>
-    <text x="135" y="130" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12" font-weight="700" fill="#1b7a3e" text-anchor="middle">MIEJSCE NA KOD QR</text>
-    <text x="135" y="148" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" font-weight="600" fill="#143d59" text-anchor="middle">GitHub Pages URL</text>
+    <image href="qr-code.png" x="5" y="5" width="260" height="260" preserveAspectRatio="xMidYMid meet"/>
   </g>
 
   <!-- Kafelki korzyści dla mieszkańca -->
