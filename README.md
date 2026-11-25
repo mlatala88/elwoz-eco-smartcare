@@ -1,5 +1,5 @@
 # ELWOZ ECO SmartCare – Cyfrowy Punkt Obsługi Mieszkańca
-**Wersja:** 0.1.0  
+**Wersja:** 0.2.0 (w tym Moduł Komunikacji i Zarządzania Reputacją)  
 **Projekt zaliczeniowy:** *Nowoczesne technologie w marketingu i sprzedaży* – Uniwersytet WSB Merito w Gdańsku  
 **Przedsiębiorstwo:** ELWOZ ECO Sp. z o.o.  
 **Obszar wdrożenia:** Rejon Kartuz i okoliczne sołectwa  
@@ -13,66 +13,50 @@
 3. [Wykorzystane technologie](#3-wykorzystane-technologie)
 4. [Struktura repozytorium](#4-struktura-repozytorium)
 5. [Instrukcja konfiguracji usług Google (Krok po kroku)](#5-instrukcja-konfiguracji-usług-google-krok-po-kroku)
-6. [Instrukcja publikacji na GitHub Pages](#6-instrukcja-publikacji-na-github-pages)
-7. [Generowanie Kodu QR (Dla pojemników i prezentacji)](#7-generowanie-kodu-qr-dla-pojemników-i-prezentacji)
-8. [Instrukcja obsługi zgłoszeń (Prosty CRM w Google Sheets)](#8-instrukcja-obsługi-zgłoszeń-prosty-crm-w-google-sheets)
-9. [Instrukcja wykorzystania AI (Dwa warianty)](#9-instrukcja-wykorzystania-ai-dwa-warianty)
-10. [Procedura testowania i weryfikacja](#10-procedura-testowania-i-weryfikacja)
-11. [Zasady ochrony danych i anonimizacji](#11-zasady-ochrony-danych-i-anonimizacji)
-12. [Znane ograniczenia](#12-znane-ograniczenia)
-13. [Koszty, limity i wymagania licencyjne](#13-koszty-limity-i-wymagania-licencyjne)
-14. [Wykaz działań wymagających ręcznej autoryzacji](#14-wykaz-działań-wymagających-ręcznej-autoryzacji)
+6. [Menu pracownika „SmartCare” w Google Sheets](#6-menu-pracownika-smartcare-w-google-sheets)
+7. [Szablony wiadomości i procedura komunikacji](#7-szablony-wiadomości-i-procedura-komunikacji)
+8. [Zarządzanie reputacją i Opinie Google](#8-zarządzanie-reputacją-i-opinie-google)
+9. [Dziennik audytu (HISTORIA KOMUNIKACJI)](#9-dziennik-audytu-historia-komunikacji)
+10. [Rozszerzony Dashboard i Rejestr Zgłoszeń](#10-rozszerzony-dashboard-i-rejestr-zgłoszeń)
+11. [Tryb demonstracyjny i zasady bezpieczeństwa](#11-tryb-demonstracyjny-i-zasady-bezpieczeństwa)
+12. [Instrukcja publikacji na GitHub Pages](#12-instrukcja-publikacji-na-github-pages)
+13. [Generowanie Kodu QR (Dla pojemników i prezentacji)](#13-generowanie-kodu-qr-dla-pojemników-i-prezentacji)
+14. [Procedura testowania i weryfikacja](#14-procedura-testowania-i-weryfikacja)
+15. [Koszty, limity i wymagania licencyjne](#15-koszty-limity-i-wymagania-licencyjne)
+16. [Wykaz działań wymagających ręcznej autoryzacji](#16-wykaz-działań-wymagających-ręcznej-autoryzacji)
 
 ---
 
 ## 1. Kontekst i cel projektu
 
-Projekt **ELWOZ ECO SmartCare** powstał w odpowiedzi na wyzwania operacyjne związane z obsługą mieszkańców w sektorze gospodarki odpadami komunalnymi w rejonie Kartuz.
+Projekt **ELWOZ ECO SmartCare** realizowany jest na Uniwersytecie WSB Merito w Gdańsku jako studencki projekt wdrożeniowy dedykowany spółce **ELWOZ ECO Sp. z o.o.**, odpowiedzialnej za odbiór odpadów komunalnych w rejonie Kartuz.
 
-Celem aplikacji jest:
-- **Uproszczenie ścieżki zgłaszania nieprawidłowości:** Mieszkaniec po zeskanowaniu kodu QR z naklejki na pojemniku może w 30 sekund zgłosić brak odbioru, pęknięty kubeł czy brak worków – bez instalowania aplikacji i bez logowania.
-- **Uporządkowanie obsługi wewnątrz przedsiębiorstwa:** Zgłoszenia trafiają do prywatnego arkusza Google Sheets pełniącego rolę prostego CRM z automatycznym nadawaniem numerów spraw i kontrolą statusów.
-- **Wsparcie pracowników za pomocą AI:** Sztuczna inteligencja pomaga w kategoryzacji spraw, weryfikacji brakujących informacji i przygotowaniu empatycznych szkiców odpowiedzi, nie zastępując człowieka w podejmowaniu decyzji.
-- **Wykorzystanie istniejącej infrastruktury:** Spółka ELWOZ ECO posiada już asystenta internetowego na stronie głównej – SmartCare nie powiela funkcji chatbota, skupiając się wyłącznie na procesie reklamacyjno-obsługowym.
+Wersja **0.2.0** rozszerza pierwotny rejestr zgłoszeń o **kompletny obieg obsługi klienta i zarządzania reputacją**:
+- **Przyjęcie zgłoszenia** bez konieczności logowania i instalacji aplikacji przez mieszkańca;
+- **Wstępna analiza AI** odciążająca dyspozytora w diagnozie problemu;
+- **Potwierdzenie rozpoczęcia obsługi** i stała informacja zwrotna o postępach;
+- **Rozwiązanie problemu** z udokumentowanym opisem podjętych działań naprawczych;
+- **Badanie satysfakcji mieszkańca** (skala 1–5);
+- **Zaproszenie do wystawienia autentycznej recenzji w Profilu Firmy Google**, budującej wiarygodną reputację przedsiębiorstwa w oparciu o rzeczywistą jakość obsługi.
 
 ---
 
 ## 2. Główne założenia i architektura
 
-- **Maksymalna prostota:** Brak baz danych SQL/NoSQL wymagających płatnego hostingu, brak frameworków SPA.
-- **Prywatność i bezpieczeństwo:** Formularz zgłoszeniowy jest publiczny (zbiera wyłącznie zgłoszenia testowe), natomiast rejestr zgłoszeń (CRM w Google Sheets) pozostaje prywatny, dostępny wyłącznie dla uprawnionych pracowników.
-- **Odporność na awarie AI:** System działa w pełni poprawnie nawet przy braku połączenia z API sztucznej inteligencji (dostępny wariant manualny).
-- **Zasada Human-in-the-Loop:** AI nie podejmuje wiążących decyzji, nie obiecuje odszkodowań, nie ustala terminów odbioru i nie wysyła wiadomości bez autoryzacji pracownika.
-
-```
-[Mieszkaniec] ---> Skanuje Kod QR z kubła
-       │
-       ▼
-[GitHub Pages: index.html] ---> Wypełnia prosty formularz (dane fikcyjne)
-       │
-       ▼
-[Google Forms / Apps Script] ---> onFormSubmit (nadanie ID, status: "Nowe")
-       │
-       ▼
-[Google Sheets CRM: ZGŁOSZENIA] <--- Pracownik analizuje zgłoszenie
-       │
-       ├──> Wariant A: Kopiuje opis do promptu (ChatGPT / Gemini Web)
-       └──> Wariant B: Menu "SmartCare AI" -> "Analizuj zaznaczone zgłoszenie" (Gemini API)
-       │
-       ▼
-[DASHBOARD] ---> Dynamiczne wskaźniki KPI, czasy reakcji, wykresy statusów
-```
+- **Pełna kompatybilność i brak zbędnych frameworków:** Rozwiązanie bazuje na czystym HTML5, CSS3, JavaScript, Google Forms, Google Sheets, Apps Script i MailApp.
+- **Zasada Human-in-the-Loop:** Sztuczna inteligencja nie podejmuje wiążących decyzji prawnych, nie wymyśla terminów odbioru, nie deklaruje uznania reklamacji i nie wysyła wiadomości bez wyraźnej autoryzacji pracownika.
+- **Bezpieczeństwo danych (Tryb demonstracyjny):** W fazie akademickiej cała komunikacja e-mail kierowana jest wyłącznie na zatwierdzony adres testowy z prefiksem `[TEST]`. Żadne dane fikcyjne nie trafiają do prawdziwych mieszkańców.
+- **Etyka pozyskiwania opinii Google:** Prośby o opinię są w pełni neutralne, nie stosują tzw. *review gatingu* (selekcjonowania wyłącznie zadowolonych klientów) i nie oferują korzyści majątkowych za recenzje.
 
 ---
 
 ## 3. Wykorzystane technologie
 
-- **Frontend:** Czysty HTML5 (semantyka, dostępność WCAG), CSS3 (zmienne CSS, mobile-first, elastyczny grid/flexbox), czysty Vanilla JavaScript (ES6+).
-- **Hosting strony:** GitHub Pages (darmowy, stabilny hosting statyczny, SSL/HTTPS).
-- **Rejestracja danych:** Google Forms (natywne połączenie z arkuszem, wysoka niezawodność, brak konieczności logowania przez mieszkańców).
-- **Baza danych / CRM:** Google Sheets (rejestr zgłoszeń, widok CRM, formatowanie warunkowe, listy rozwijane, dynamiczny dashboard ze wskaźnikami KPI).
-- **Automatyzacja backendowa:** Google Apps Script (konfigurator `setup.gs`, instalowalny trigger `onFormSubmit`, obsługa AI w `ai.gs`).
-- **Sztuczna inteligencja:** Model Google Gemini (`gemini-1.5-flash` przez bezpłatne Google AI Studio API) oraz gotowy prompt manualny dla ChatGPT / Gemini.
+- **Frontend:** HTML5, CSS3 (Mobile-First, barwy ELWOZ ECO: zieleń `#1b7a3e`, granat `#143d59`), Vanilla JavaScript (ES6+).
+- **Hosting:** GitHub Pages (darmowy hosting statyczny z szyfrowaniem SSL).
+- **Rejestracja i Baza CRM:** Google Forms & Google Sheets (*ELWOZ ECO SmartCare – Centrum zgłoszeń*).
+- **Backend i Automatyzacja:** Google Apps Script (`setup.gs`, `communication.gs`, `ai.gs`), Google MailApp.
+- **Sztuczna Inteligencja:** Google Gemini API (`gemini-1.5-flash`) oraz bezpłatny wariant manualny z gotowym promptem dla ChatGPT / Gemini.
 
 ---
 
@@ -80,223 +64,191 @@ Celem aplikacji jest:
 
 ```
 elwoz-eco-smartcare/
-├── index.html                   # Główna strona aplikacji (mobile-first)
+├── index.html                   # Strona główna Cyfrowego Punktu Obsługi (mobile-first)
 ├── css/
-│   └── style.css                # Style wizualne inspirowane marką ELWOZ ECO
+│   └── style.css                # Style wizualne inspirowane ELWOZ ECO Sp. z o.o.
 ├── js/
-│   ├── config.js                # Konfiguracja linków, adresów formularza i ostrzeżeń
-│   └── app.js                   # Obsługa walidacji, generator ID, nawigacja
+│   ├── config.js                # Konfiguracja linków, adresów Google Forms i alertów
+│   └── app.js                   # Obsługa formularza, walidacja i generator ID spraw
 ├── assets/
-│   ├── logo.svg                 # Wektorowy logotyp ELWOZ ECO SmartCare
-│   ├── favicon.svg              # Ikona strony
-│   ├── naklejka-pojemnik-szablon.svg # Gotowy projekt naklejki na pojemnik z miejscem na QR
-│   └── generate_qr.js           # Skrypt Node.js generujący QR dla docelowego adresu URL
+│   ├── logo.svg                 # Wektorowe logo ELWOZ ECO SmartCare
+│   ├── favicon.svg              # Favicon strony
+│   ├── naklejka-pojemnik-szablon.svg # Gotowy projekt naklejki na pojemnik komunalny
+│   └── generate_qr.js           # Skrypt Node.js generujący QR dla opublikowanego URL
 ├── google/
-│   ├── setup.gs                 # Automatyczny skrypt instalacyjny arkusza i formularza
-│   └── ai.gs                    # Integracja Gemini AI z poziomu arkusza Google Sheets
+│   ├── setup.gs                 # Automatyczny instalator/aktualizator arkusza i zakładek
+│   ├── communication.gs         # Moduł komunikacji, szablony, okna dialogowe, MailApp
+│   └── ai.gs                    # Integracja analityczna Gemini API z menu SmartCare
 ├── docs/
-│   ├── prompt-ai.md             # Gotowy prompt systemowy i procedura obsługi manualnej
-│   └── testy.md                 # 10 scenariuszy testowych i matryca efektywności AI
-├── CHANGELOG.md                 # Historia wydań projektu
-└── README.md                    # Niniejsza dokumentacja
+│   ├── prompt-ai.md             # Szablon promptu manualnego, anonimizacja i zasady AI
+│   └── testy.md                 # Procedura testowa, 12 scenariuszy i matryca efektywności
+├── CHANGELOG.md                 # Historia wydań projektu (v0.1.0 -> v0.2.0)
+└── README.md                    # Kompletna dokumentacja wdrożeniowa
 ```
 
 ---
 
 ## 5. Instrukcja konfiguracji usług Google (Krok po kroku)
 
-Automatyczny skrypt `google/setup.gs` tworzy i konfiguruje cały ekosystem za Ciebie.
+### Krok 1: Otwórz projekt w Google Apps Script
+1. Zaloguj się na konto Google i przejdź pod adres: [https://script.google.com/](https://script.google.com/).
+2. Utwórz **Nowy projekt** i nazwij go: **„ELWOZ ECO SmartCare”**.
 
-### Krok 1: Otwórz Google Apps Script
-1. Zaloguj się na swoje konto Google i przejdź do: [https://script.google.com/](https://script.google.com/).
-2. Kliknij przycisk **„Nowy projekt”** (lewy górny róg).
-3. Zmień nazwę projektu z *Projekt bez tytułu* na **„ELWOZ ECO SmartCare Setup”**.
+### Krok 2: Wklejenie plików skryptu
+1. W pliku domyślnym `Kod.gs` (lub zmieniając jego nazwę na `setup.gs`) wklej zawartość [google/setup.gs](google/setup.gs).
+2. Kliknij ikonę **+** (Dodaj plik) -> **Skrypt**, nazwij plik `communication.gs` i wklej zawartość [google/communication.gs](google/communication.gs).
+3. Kliknij ikonę **+** -> **Skrypt**, nazwij plik `ai.gs` i wklej zawartość [google/ai.gs](google/ai.gs).
+4. Zapisz projekt (Ctrl + S).
 
-### Krok 2: Wklejenie kodu instalacyjnego
-1. W edytorze kodu zaznacz cały domyślny tekst i usuń go.
-2. Otwórz plik [google/setup.gs](google/setup.gs), skopiuj całą jego zawartość i wklej do edytora.
-3. Jeśli chcesz korzystać również z wariantu automatycznego AI:
-   - Kliknij ikonkę **+** obok sekcji *Pliki* i wybierz **Skrypt**.
-   - Nazwij plik `ai.gs`.
-   - Skopiuj zawartość pliku [google/ai.gs](google/ai.gs) i wklej do nowo utworzonego pliku.
-4. Kliknij ikonę dyskietki **„Zapisz projekt”** (Ctrl + S).
-
-### Krok 3: Uruchomienie i autoryzacja
-1. Na górnym pasku narzędzi upewnij się, że w polu wyboru funkcji wybrana jest: **`setupSmartCareSystem`**.
-2. Kliknij przycisk **„Uruchom”** (Run).
-3. Pojawi się okno autoryzacji:
-   - Kliknij **„Sprawdź uprawnienia”**.
-   - Wybierz swoje konto Google.
-   - Jeśli pojawi się komunikat *„Aplikacja nie została zweryfikowana przez Google”*, kliknij **Zaawansowane** (na dole), a następnie **Otwórz: ELWOZ ECO SmartCare Setup (niebezpieczne)**.
-   - Kliknij **„Zezwól”**.
-
-### Krok 4: Odczytanie linków z Dziennika
-1. W dolnej części ekranu (Dziennik wykonania) pojawią się komunikaty:
-   ```
-   === Konfiguracja zakończona pomyślnie! ===
-   1. Arkusz CRM (Prywatny): https://docs.google.com/spreadsheets/d/...
-   2. Publiczny link do wypełniania: https://docs.google.com/forms/d/e/.../viewform
-   ```
-2. Skopiuj link formularza i wklej go w pliku [js/config.js](js/config.js):
-   ```javascript
-   googleForm: {
-     directUrl: "TUTAJ_WKLEJ_LINK_DO_FORMULARZA",
-     embedUrl: "TUTAJ_WKLEJ_LINK_DO_FORMULARZA?embedded=true",
-     isFormConfigured: true
-   }
-   ```
+### Krok 3: Uruchomienie instalatora
+1. Z listy funkcji wybierz: **`setupSmartCareSystem`** i kliknij **„Uruchom”**.
+2. Zaakceptuj uprawnienia do tworzenia Arkuszy, Formularzy i wysyłki poczty przez Twoje konto Google.
+3. W Dzienniku wykonania otrzymasz linki do prywatnego arkusza CRM oraz publicznego formularza.
 
 ---
 
-## 6. Instrukcja publikacji na GitHub Pages
+## 6. Menu pracownika „SmartCare” w Google Sheets
 
-Aplikacja jest statyczną stroną WWW, co pozwala na jej bezpłatne i błyskawiczne wdrożenie na GitHub Pages.
+Po otwarciu arkusza w górnym pasku narzędzi pojawi się dedykowane menu: **📋 SmartCare**:
 
-1. **Utwórz nowe repozytorium na GitHub:**
-   - Przejdź do [github.com/new](https://github.com/new).
-   - Nazwij repozytorium: `elwoz-eco-smartcare`.
-   - Ustaw widoczność jako **Public**.
-   - Nie dodawaj automatycznego README ani pliku .gitignore (są już w projekcie).
-2. **Prześlij pliki do repozytorium:**
+| Opcja menu | Rola i działanie |
+|---|---|
+| **1. 🤖 Analizuj zgłoszenie przez AI** | Błyskawiczna analiza zaznaczonego zgłoszenia przez Gemini API (streszczenie, braki, kategoria, sugerowane działanie). |
+| **2. ✉️ Przygotuj potwierdzenie przyjęcia** | Otwiera okno dialogowe z uzupełnionym szablonem A z danymi sprawy i lokalizacji. |
+| **3. ✉️ Przygotuj informację o postępach** | Otwiera okno dialogowe z szablonem B informującym o trwającej weryfikacji w terenie. |
+| **4. ✉️ Przygotuj informację o rozwiązaniu** | Weryfikuje uzupełnienie pola *Sposób rozwiązania sprawy*, generuje szablon C z opcją dołączenia linku do opinii Google. |
+| **5. ⭐ Przygotuj prośbę o opinię Google** | Otwiera szablon D z neutralnym zaproszeniem do Profilu Firmy Google (ostrzega przy ponownej wysyłce). |
+| **6. 📞 Odnotuj kontakt telefoniczny** | Umożliwia rejestrację notatki z rozmowy telefonicznej, wyniku kontaktu i aktualizację daty kontaktu. |
+| **7. 📜 Wyświetl historię komunikacji** | Prezentuje pełną tabelę dotychczasowej korespondencji dla zaznaczonego ID zgłoszenia. |
+| **⚙️ Ustawienia / Klucz Gemini API** | Bezpieczny konfigurator klucza API zapisywanego w `ScriptProperties`. |
+
+---
+
+## 7. Szablony wiadomości i procedura komunikacji
+
+System posiada 4 edytowalne szablony wiadomości działające natywnie bez konieczności połączenia z zewnętrznym API:
+
+1. **Szablon A (Potwierdzenie przyjęcia):** Informuje mieszkańca o zarejestrowaniu sprawy, nadanym identyfikatorze (`ELW-2026-XXXX`) i przekazaniu do dyspozytorni w Kartuzach.
+2. **Szablon B (Informacja o postępach):** Raportuje o weryfikacji zgłoszenia przez zespół logistyczny i załogę rejonową.
+3. **Szablon C (Informacja o rozwiązaniu):** Pobiera wpisany przez pracownika rzeczywisty sposób rozwiązania sprawy (np. *„Zastępczy odbiór bioodpadów zrealizowany w dniu 25.11 przez brygadę nr 2”*). Posiada opcję dołączenia zaproszenia do opinii Google.
+4. **Szablon D (Neutralna prośba o opinię):** Samodzielna wiadomość z podziękowaniem za kontakt i odnośnikiem do Profilu Firmy Google.
+
+Pracownik w oknie dialogowym może:
+- Wprowadzić własne modyfikacje w temacie i treści;
+- Skorzystać z przycisku *„✨ Usprawnij treść z AI”* (wygładzenie stylistyczne);
+- Świadomie kliknąć *„Zatwierdź i wyślij”*.
+
+---
+
+## 8. Zarządzanie reputacją i Opinie Google
+
+W zakładce `USTAWIENIA` znajduje się pole **„Zweryfikowany link do opinii Google”**.
+
+### Etyczne standardy zbierania recenzji:
+- **Brak review gatingu:** Zaproszenie do opinii nie jest uzależnione od uprzednio wystawionej oceny satysfakcji.
+- **Brak zachęt:** Nie oferuje się nagród, bonifikat ani zniżek za wystawienie recenzji.
+- **Neutralność:** Treść prośby nie sugeruje liczby gwiazdek ani pozytywnego wydźwięku.
+- **Brak fałszywych profili:** W szablonie umieszczono bezpieczny placeholder linku do uzupełnienia po autoryzacji rzeczywistej wizytówki Google ELWOZ ECO w Kartuzach.
+- **Ochrona przed spamem:** System blokuje ponowne wysłanie prośby do tego samego zgłoszenia bez wyraźnego potwierdzenia pracownika.
+
+---
+
+## 9. Dziennik audytu (HISTORIA KOMUNIKACJI)
+
+Każda operacja wysyłki mailowej lub odnotowania rozmowy telefonicznej jest trwale zapisywana w dedykowanej zakładce `HISTORIA KOMUNIKACJI`:
+- Numer zgłoszenia;
+- Data i godzina operacji;
+- Rodzaj działania (np. *Potwierdzenie przyjęcia*, *Kontakt telefoniczny*);
+- Kanał (*e-mail*, *telefon*, *inny*);
+- Rzeczywisty adres odbiorcy;
+- Temat i pełna treść wysłanej wiadomości lub notatka z rozmowy;
+- Login pracownika odpowiedzialnego;
+- Status operacji: `wysłano`, `odnotowano kontakt`, `błąd wysyłki`, `anulowano`;
+- Informacja o błędzie (jeśli wystąpił).
+
+---
+
+## 10. Rozszerzony Dashboard i Rejestr Zgłoszeń
+
+### Wskaźniki w zakładce `DASHBOARD`:
+- **Wszystkie zgłoszenia, Nowe, W realizacji, Zakończone;**
+- **Odsetek zakończonych zgłoszeń;**
+- **Liczba spraw oczekujących na kontakt** (zgłoszenia z zaznaczoną prośbą o kontakt będące w statusie *Nowe* lub *Do weryfikacji*);
+- **Średni czas pierwszej reakcji** (wyliczany **wyłącznie** dla wierszy z uzupełnioną datą kontaktu);
+- **Średni czas rozwiązania sprawy** (wyliczany **wyłącznie** dla spraw z uzupełnioną datą rozwiązania);
+- **Średnia ocena satysfakcji (1–5)** oraz łączna liczba zebranych ocen;
+- **Liczba wysłanych próśb o opinię Google** oraz **odsetek zakończonych spraw z wysłaną prośbą** (*wyraźne rozróżnienie: liczba próśb ≠ liczba wystawionych opinii*).
+
+---
+
+## 11. Tryb demonstracyjny i zasady bezpieczeństwa
+
+Domyślnie system działa w **Trybie Demonstracyjnym** (`USTAWIENIA: TAK`):
+1. **Poczta testowa:** Wszelka korespondencja mailowa wysyłana z poziomu arkusza trafia **wyłącznie** na adres zdefiniowany w polu *Testowy adres e-mail* (np. adres studenta / zespołu). Fikcyjne adresy wpisane w zgłoszeniach nie otrzymują żadnych wiadomości.
+2. **Prefiks [TEST]:** Każdy temat wiadomości automatycznie otrzymuje oznaczenie `[TEST]`.
+3. **Stopka akademicka:** Do każdej wiadomości dołączana jest nota informująca o studenckim charakterze prototypu realizowanego dla Uniwersytetu WSB Merito w Gdańsku.
+4. **Przejście na tryb produkcyjny:** Wymaga zmiany parametru w zakładce `USTAWIENIA` na `NIE` po uprzednim formalnym uzgodnieniu z dyrekcją ELWOZ ECO Sp. z o.o.
+
+---
+
+## 12. Instrukcja publikacji na GitHub Pages
+
+1. Zainicjuj repozytorium na GitHub o nazwie `elwoz-eco-smartcare`.
+2. Wypchnij pliki:
    ```bash
-   git init
    git add .
-   git commit -m "Wydanie 0.1.0: ELWOZ ECO SmartCare"
+   git commit -m "Wydanie v0.2.0: Moduł komunikacji i reputacji"
    git branch -M main
    git remote add origin https://github.com/TWOJ_LOGIN/elwoz-eco-smartcare.git
    git push -u origin main
    ```
-3. **Aktywuj GitHub Pages:**
-   - W repozytorium na GitHub wejdź w **Settings** -> zakładka **Pages** (w menu po lewej).
-   - W sekcji *Build and deployment* -> *Branch*: wybierz gałąź **main** oraz katalog **/(root)**.
-   - Kliknij **Save**.
-4. Po około 1–2 minutach strona będzie dostępna pod adresem:  
-   `https://TWOJ_LOGIN.github.io/elwoz-eco-smartcare/`
+3. W ustawieniach repozytorium (*Settings -> Pages*) włącz publikację z gałęzi **main** i katalogu **/(root)**.
+4. Strona będzie dostępna pod adresem: `https://TWOJ_LOGIN.github.io/elwoz-eco-smartcare/`.
 
 ---
 
-## 7. Generowanie Kodu QR (Dla pojemników i prezentacji)
+## 13. Generowanie Kodu QR (Dla pojemników i prezentacji)
 
-Zgodnie z wymaganiami projektowymi kod QR musi prowadzić do **rzeczywistego, działającego adresu URL**.
-
-Po opublikowaniu strony na GitHub Pages uruchom przygotowany skrypt w Node.js:
+Uruchom generator Node.js ze swoim opublikowanym adresem GitHub Pages:
 
 ```bash
 node assets/generate_qr.js https://TWOJ_LOGIN.github.io/elwoz-eco-smartcare/
 ```
 
-Skrypt automatycznie:
-1. Pobierze i wygeneruje wektorowy plik `assets/qr-code.svg` w kolorystyce firmowej ELWOZ ECO (`#1b7a3e`).
-2. Pobierze i wygeneruje plik rastrowy wysokiej rozdzielczości `assets/qr-code.png` (1000×1000 px), idealny do druku naklejek i wklejenia do prezentacji na uczelni.
-3. Zaktualizuje szablon naklejki na pojemnik: [assets/naklejka-pojemnik-szablon.svg](assets/naklejka-pojemnik-szablon.svg).
+Skrypt wygeneruje wektorowy plik `assets/qr-code.svg` oraz plik rastrowy `assets/qr-code.png` (1000×1000 px), gotowy do wklejenia do prezentacji oraz do szablonu [assets/naklejka-pojemnik-szablon.svg](assets/naklejka-pojemnik-szablon.svg).
 
 ---
 
-## 8. Instrukcja obsługi zgłoszeń (Prosty CRM w Google Sheets)
+## 14. Procedura testowania i weryfikacja
 
-Po uruchomieniu skryptu `setup.gs` arkusz **ELWOZ ECO SmartCare – Centrum zgłoszeń** zawiera 4 zakładki:
-
-### 1. Zakładka `DASHBOARD`
-- Zapewnia podgląd kluczowych wskaźników operacyjnych w czasie rzeczywistym:
-  - Łączna liczba zgłoszeń, liczba spraw nowych, w realizacji i rozwiązanych;
-  - Średni czas pierwszej reakcji oraz średni czas rozwiązania sprawy (formuły obliczają średnią wyłącznie dla spraw, które mają uzupełnione daty);
-  - Średnia satysfakcja mieszkańców (w skali 1–5);
-  - Zliczenia spraw według kategorii i statusu.
-
-### 2. Zakładka `ZGŁOSZENIA` (Rejestr operacyjny)
-- **Dane z formularza:** Sygnatura czasowa, rodzaj zgłoszenia, frakcja, miejscowość, ulica, numer posesji, data zdarzenia, opis, dane kontaktowe.
-- **Kolumny operacyjne pracownika:**
-  - `ID Zgłoszenia` – unikalny identyfikator sprawy (np. `ELW-2026-0001`);
-  - `Status` – lista rozwijana: *Nowe* (niebieski), *Do weryfikacji* (fiolet), *W realizacji* (żółty), *Oczekuje na informacje* (szary), *Rozwiązane* (zielony), *Zamknięte* (grafit);
-  - `Priorytet` – lista rozwijana: *Standardowy*, *Niski*, *Wysoki*;
-  - `Pracownik odpowiedzialny`, `Następne działanie`, `Termin następnego działania`, `Notatka pracownika`;
-  - `Data pierwszego kontaktu` oraz `Data rozwiązania` – wpisywane po podjęciu działań;
-  - `Sposób rozwiązania sprawy`;
-  - `Ocena satysfakcji (1-5)` – ocena odnotowana przez pracownika po kontakcie z mieszkańcem;
-  - Kolumny analizy AI: `Kategoria AI`, `Streszczenie AI`, `Brakujące informacje AI`, `Sugerowane działanie AI`, `Proponowana odpowiedź AI`.
-
-### 3. Zakładka `TESTY`
-- Zawiera rejestr 10 scenariuszy testowych oraz tabelę pomiaru oszczędności czasu pracy pracownika.
-
-### 4. Zakładka `INSTRUKCJA AI`
-- Zawiera podręcznik procedury anonimizacji oraz gotowy prompt do wklejenia w ChatGPT / Gemini.
+Przed prezentacją zaliczeniową członkowie zespołu realizują 12 scenariuszy testowych opisanych w dokumencie [docs/testy.md](docs/testy.md):
+- Przygotowanie i edycja szablonów A, B, C i D;
+- Wysyłka e-mail na adres testowy w trybie demo;
+- Weryfikacja zapisu w historii komunikacji;
+- Rejestracja kontaktu telefonicznego;
+- Walidacja wymogu wpisania sposobu rozwiązania sprawy;
+- Dołączenie linku do opinii Google;
+- Ostrzeżenie przed ponowną prośbą o opinię;
+- Zabezpieczenie przed wysyłką do obcych osób;
+- Obsługa błędów wysyłki `MailApp`.
 
 ---
 
-## 9. Instrukcja wykorzystania AI (Dwa warianty)
+## 15. Koszty, limity i wymagania licencyjne
 
-### Wariant A: Manualny (Podstawowy, 100% bezpłatny, bez API)
-1. Pracownik zaznacza wiersz ze zgłoszeniem w arkuszu.
-2. Zgodnie z zasadami ochrony danych kopiuje wyłącznie: rodzaj zgłoszenia, frakcję, miejscowość, ulicę oraz treść opisu zdarzenia (bez nazwiska i telefonu).
-3. Otwiera [ChatGPT](https://chatgpt.com/) lub [Google Gemini](https://gemini.google.com/) i wkleja gotowy prompt z pliku [docs/prompt-ai.md](docs/prompt-ai.md).
-4. Otrzymane 6 pól wynikowych wkleja do odpowiednich kolumn CRM w arkuszu.
-
-### Wariant B: Automatyczny (Apps Script + Gemini API)
-1. Pracownik pobiera bezpłatny klucz API z [Google AI Studio](https://aistudio.google.com/).
-2. W arkuszu Google Sheets klika w menu: **🤖 SmartCare AI -> Ustaw / sprawdź klucz Gemini API** i wkleja swój klucz. Klucz zapisuje się we właściwościach projektu (`ScriptProperties`), niewidocznych publicznie.
-3. Pracownik zaznacza wiersz ze zgłoszeniem i klika: **🤖 SmartCare AI -> Analizuj zaznaczone zgłoszenie**.
-4. Skrypt przesyła zanonimizowane dane, odbiera ustrukturyzowany format JSON i automatycznie wypełnia kolumny AI w wybranym wierszu.
+- **Koszty infrastruktury:** **0,00 zł** (wszystkie narzędzia mieszczą się w bezpłatnych limitach GitHub Pages, Google Workspace i Google AI Studio).
+- **Limity wysyłki Google MailApp:** 100 wiadomości/dzień dla kont darmowych (@gmail.com) lub 1500 wiadomości/dzień dla kont Google Workspace uczelni / firmy.
+- **Limit Gemini API (Free Tier):** 15 zapytań/min (RPM), w zupełności wystarczający do jednostkowej pracy dyspozytora.
 
 ---
 
-## 10. Procedura testowania i weryfikacja
+## 16. Wykaz działań wymagających ręcznej autoryzacji
 
-Przed prezentacją końcową członkowie zespołu przeprowadzają testy zgodnie z plikiem [docs/testy.md](docs/testy.md).
-
-Procedura obejmuje 10 kluczowych scenariuszy:
-1. Brak odbioru odpadów BIO.
-2. Uszkodzenie pojemnika (zgłoszenie wymiany).
-3. Bałagan na posesji po odbiorze.
-4. Zgłoszenie anonimowe (brak danych kontaktowych).
-5. Zgłoszenie z fikcyjnym numerem telefonu.
-6. Próba wysłania formularza bez wypełnienia pól obowiązkowych (walidacja).
-7. Zgłoszenie pochwały dla załogi.
-8. Weryfikacja prywatności arkusza Google Sheets (próba otwarcia w trybie incognito).
-9. Analiza zgłoszenia przez sztuczną inteligencję.
-10. Sprawdzenie odporności AI na halucynacje (brak obietnic odszkodowań i zmyślonych dat).
-
-Wyniki pomiarów czasu (bez AI vs z AI) są wpisywane bezpośrednio przez testerów do tabeli w zakładce `TESTY`.
+W celu zachowania bezpieczeństwa Twojego konta Google i GitHub:
+1. **Autoryzacja uprawnień Apps Script:** Uruchomienie funkcji instalacyjnej w Google Apps Script wymaga jednorazowego zatwierdzenia uprawnień do zarządzania Arkuszami, Formularzami i usługą `MailApp` (wysyłka poczty w imieniu użytkownika).
+2. **Publikacja na Twoim GitHubie:** Samodzielne utworzenie repozytorium i uruchomienie Pages w menu konta GitHub.
+3. **Konfiguracja adresu testowego:** Wpisanie własnego adresu e-mail w komórce `B11` zakładki `USTAWIENIA`, aby odbierać testowe wiadomości generowane przez system.
 
 ---
 
-## 11. Zasady ochrony danych i anonimizacji
-
-- **Etap prototypu:** Wszystkie zgłoszenia na etapie testów studenckich muszą zawierać **wyłącznie dane fikcyjne**.
-- **Ostrzeżenia w interfejsie:** Strona WWW oraz formularz zawierają wyraźne alerty o prototypowym charakterze i zakazie podawania prawdziwych danych wrażliwych.
-- **Odpowiedzialność:** Zgłoszenia testowe nie są przekazywane do dyspozytorni rzeczywistego przedsiębiorstwa. W sprawach pilnych aplikacja kieruje do oficjalnych numerów POK Kartuzy (58 681 22 99).
-- **Zasada minimalizacji danych:** Formularz nie wymaga numeru PESEL, załączania zdjęć ani zakładania konta.
-
----
-
-## 12. Znane ograniczenia
-
-- **Brak załączania zdjęć:** Zgodnie z założeniami minimalizmu i braku konieczności logowania do konta Google przez mieszkańców wyłączono przesyłanie plików (Google Forms wymaga logowania, jeśli formularz zawiera pole przesyłania plików).
-- **Czas odświeżania dashboardu:** Formuły arkusza przeliczają się natychmiast, jednak przy dużej liczbie zgłoszeń wykresy mogą wymagać odświeżenia strony arkusza.
-- **Limit zapytań bezpłatnego Gemini API:** Darmowy limit w Google AI Studio wynosi 15 zapytań na minutę (RPM), co w zupełności wystarcza do jednostkowej analizy zgłoszeń przez pracownika.
-
----
-
-## 13. Koszty, limity i wymagania licencyjne
-
-| Komponent | Wykorzystana usługa | Koszt | Limity bezpłatne |
-|---|---|---|---|
-| Hosting strony WWW | GitHub Pages | **0 zł** | 100 GB transferu/mc, 1 GB przestrzeni |
-| Formularz i CRM | Google Forms & Google Sheets | **0 zł** | W ramach darmowego konta Google (15 GB) |
-| Automatyzacja | Google Apps Script | **0 zł** | 90 min czasu wykonania/dzień, do 20 000 wywołań |
-| Sztuczna Inteligencja | Google AI Studio (Gemini 1.5 Flash) | **0 zł** | Bezpłatna warstwa (Free Tier: 15 RPM, 1M TPM) |
-| Alternatywa AI | ChatGPT / Gemini Web (manualnie) | **0 zł** | Bezpłatne wersje przeglądarkowe |
-| **ŁĄCZNY KOSZT UTRZYMANIA:** | | **0,00 zł** | **Rozwiązanie bezkosztowe** |
-
----
-
-## 14. Wykaz działań wymagających ręcznej autoryzacji
-
-W celu zachowania pełnego bezpieczeństwa i zgodności z uprawnieniami właściciela konta, poniższe kroki wymagają jednorazowej, ręcznej akceptacji przez użytkownika:
-
-1. **Autoryzacja skryptu Apps Script:** Pierwsze uruchomienie funkcji `setupSmartCareSystem` w Google Apps Script wymaga potwierdzenia uprawnień do zarządzania Arkuszami i Formularzami na Twoim koncie Google.
-2. **Utworzenie repozytorium GitHub:** Publikacja kodu na Twoim koncie GitHub i aktywacja GitHub Pages w menu *Settings -> Pages*.
-3. **Pobranie klucza Gemini API (opcjonalnie):** Jeśli chcesz korzystać z analizy bezpośrednio w arkuszu, pobierz bezpłatny klucz z [aistudio.google.com](https://aistudio.google.com/) i wklej go przez menu arkusza.
-
----
-
-*ELWOZ ECO SmartCare v0.1.0 – Projekt zrealizowany w celach edukacyjnych dla Uniwersytetu WSB Merito w Gdańsku.*
+*ELWOZ ECO SmartCare v0.2.0 – Projekt wdrożeniowy Uniwersytetu WSB Merito w Gdańsku.*

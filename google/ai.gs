@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  * ELWOZ ECO SmartCare - Integracja Gemini AI w Google Sheets (ai.gs)
- * Wersja: 0.1.0 (Wariant automatyczny na życzenie pracownika)
+ * Wersja: 0.2.0 (Zintegrowana z menu SmartCare)
  * Projekt edukacyjny: Uniwersytet WSB Merito w Gdańsku
  * ============================================================================
  * 
@@ -20,18 +20,6 @@ const GEMINI_CONFIG = {
   temperature: 0.2,
   maxOutputTokens: 800
 };
-
-/**
- * Automatyczne dodanie menu do Google Sheets po otwarciu arkusza
- */
-function onOpen() {
-  const ui = SpreadsheetApp.getUi();
-  ui.createMenu("🤖 SmartCare AI")
-    .addItem("Analizuj zaznaczone zgłoszenie", "analyzeSelectedTicket")
-    .addSeparator()
-    .addItem("Ustaw / sprawdź klucz Gemini API", "configureGeminiApiKey")
-    .addToUi();
-}
 
 /**
  * Konfigurator klucza API zapisywanego bezpiecznie w ScriptProperties
