@@ -1,6 +1,6 @@
 /**
  * ELWOZ ECO SmartCare - Konfiguracja aplikacji
- * Wersja: 0.2.6 (FINAL RELEASE - Naprawiony Dashboard, powiadomienia e-mail, link Google, standardy CX/PR)
+ * Wersja: 0.2.7 (Customer Service Intelligence - Centrum Obsługi, Kolejka Spraw, Alerty SLA, Gotowe odpowiedzi)
  * Projekt edukacyjny: Uniwersytet WSB Merito w Gdańsku
  * Dedykowane konto testowe: wsb.student.tester@gmail.com
  */
@@ -8,7 +8,7 @@
 const SMARTCARE_CONFIG = {
   appName: "ELWOZ ECO SmartCare",
   appSubtitle: "Cyfrowy Punkt Obsługi Mieszkańca – Rejon Kartuzy",
-  version: "0.2.6",
+  version: "0.2.7",
   isEducationalPrototype: true,
 
   // Dane oficjalne ELWOZ ECO - Punkt Obsługi Klienta Kartuzy

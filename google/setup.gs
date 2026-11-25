@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  * ELWOZ ECO SmartCare - Skrypt konfiguracyjny Google Apps Script (setup.gs)
- * Wersja: 0.2.6 (FINAL RELEASE – Poprawka Dashboardu: obsługa locale pl_PL, autokalibracja, brak błędów #ERROR!)
+ * Wersja: 0.2.7 (Customer Service Intelligence – Automatyczna analiza AI, SLA, Panel Obsługi)
  * Projekt edukacyjny: Uniwersytet WSB Merito w Gdańsku
  * Dedykowane konto Google: wsb.student.tester@gmail.com
  * ============================================================================
@@ -10,33 +10,28 @@
  * Niniejszy skrypt MUSI być uruchamiany w projekcie Apps Script bezpośrednio
  * powiązanym z arkuszem Google Sheets poprzez: Rozszerzenia → Apps Script.
  * 
- * GŁÓWNE USPRAWNIENIA WERSJI v0.2.6 (POPRAWKA TECHNICZNA DASHBOARDU):
- * 1. ZGODNOŚĆ Z POLSKIMI USTAWIENIAMI REGIONALNYMI (pl_PL):
- *    - Dynamiczne wykrywanie separatora formuł przez getSpreadsheetLocale().
- *    - Obsługa średnika (;) dla arkuszy polskich/europejskich oraz przecinka (,) dla angielskich.
- * 2. NIEZALEŻNY MECHANIZM OBLICZEŃ (APPS SCRIPT GROUND TRUTH):
- *    - calculateDashboardMetrics(): niezależny od formuł silnik analityczny w JavaScript,
- *      obliczający wolumeny, czasy reakcji w godzinach, satysfakcję i rozkłady.
- *    - W przypadku problemów z ewaluacją formuł w arkuszu klienta, dane są natychmiast
- *      uzupełniane czystymi wartościami liczbowymi bez błędów #ERROR!, co gwarantuje pełne
- *      działanie wykresów.
- * 3. WALIDACJA INTEGRALNOŚCI DASHBOARDU (validateDashboardIntegrity):
- *    - Sprawdzanie obecności błędów #ERROR!, #REF!, #VALUE!, #N/A, #NAME?, #DIV/0!, #NUM!.
- *    - Porównanie liczby zgłoszeń na dashboardzie (B5) z faktyczną liczbą w CRM (ZGŁOSZENIA).
- *    - Weryfikacja obecności obu wykresów (kategorii i statusów).
- *    - Blokada wyświetlania komunikatu o sukcesie w przypadku wystąpienia jakichkolwiek błędów.
- * 4. ERGONOMIA I CZYTELNOŚĆ (BRAK UCIĘTYCH NAPISÓW):
- *    - Pełne zawijanie tekstu nagłówków (setWrap(true)) oraz zwiększone wysokości wierszy (44-48px).
- *    - Zwiększone szerokości kolumn na Dashboardzie i w arkuszu ZGŁOSZENIA.
- * 5. AKTUALIZACJA ZAKŁADKI INSTRUKCJA AI:
- *    - Zaktualizowany nagłówek zakładki do wersji v0.2.6.
- * 6. ZACHOWANIE WSZYSTKICH DOTYCHCZASOWYCH DANYCH I FUNKCJONALNOŚCI:
- *    - Zero zmian w Gemini AI, powiadomieniach e-mail, autentycznym linku do opinii Google,
- *      formularzu Google Forms i blokadzie serwerowej dla wsb.student.tester@gmail.com.
+ * GŁÓWNE USPRAWNIENIA WERSJI v0.2.7 (CUSTOMER SERVICE INTELLIGENCE):
+ * 1. AUTOMATYCZNA ANALIZA NOWYCH ZGŁOSZEŃ PRZEZ AI:
+ *    - Nowe zgłoszenia są automatycznie analizowane przez Gemini Flash w tle.
+ *    - Stan analizy AI: Oczekuje, W trakcie, Gotowa, Wymaga weryfikacji, Błąd.
+ * 2. LOKALNA KONTROLA DANYCH PRZED WYSŁANIEM DO AI:
+ *    - Weryfikacja braków adresowych zależna od kategorii (adres niewymagany dla pochwał/sugestii).
+ *    - Wykrywanie sprzeczności, odpowiedzi zastępczych, potencjalnych zagrożeń i filtr PII.
+ * 3. 4-POZIOMOWA PRIORYTETYZACJA (PILNY, WYSOKI, STANDARDOWY, NISKI):
+ *    - Rozróżnienie sugerowanego priorytetu AI i zatwierdzonego priorytetu pracownika.
+ * 4. ZARZĄDZANIE KOLEJNYMI KROKAMI I KONTROLA TERMINÓW SLA:
+ *    - Przypisanie strony odpowiedzialnej (Przedsiębiorstwo vs Mieszkaniec).
+ *    - Konfigurowalne cele czasowe pierwszej reakcji (SLA: Pilny 15m, Wysoki 1h, Standardowy 4h, Niski 24h).
+ * 5. ROZSZERZONY DASHBOARD CUSTOMER SERVICE INTELLIGENCE:
+ *    - Nowe wskaźniki: sprawy przeterminowane SLA, bez 1. odpowiedzi, bez kolejnego kroku,
+ *      podział zadań (firma / mieszkaniec), autokalibracja dla locale pl_PL i niezależny silnik.
+ * 6. CENTRALNY PANEL OBSŁUGI ZGŁOSZENIA (Centrum Obsługi w communication.gs).
+ * 7. ZACHOWANIE KOMPATYBILNOŚCI I PUNKTU PRZYWRACANIA DLA v0.2.6:
+ *    - Wszystkie istniejące zgłoszenia, ustawienia, powiadomienia i linki do opinii są zachowane.
  */
 
 const SMARTCARE_SETUP_CONFIG = {
-  version: "0.2.6",
+  version: "0.2.7",
   sheetName: "ELWOZ ECO SmartCare – Centrum zgłoszeń",
   formTitle: "ELWOZ ECO SmartCare – Zgłoszenie Mieszkańca (Prototyp Testowy)",
   formDescription: "Cyfrowy Punkt Obsługi Mieszkańca – Rejon Kartuzy.\n" +
@@ -62,10 +57,28 @@ const SMARTCARE_SETUP_CONFIG = {
     "Zamknięte"
   ],
   priorities: [
-    "Standardowy",
-    "Niski",
-    "Wysoki"
+    "PILNY",
+    "WYSOKI",
+    "STANDARDOWY",
+    "NISKI"
   ],
+  analysisStates: [
+    "Oczekuje",
+    "W trakcie",
+    "Gotowa",
+    "Wymaga weryfikacji",
+    "Błąd"
+  ],
+  responsibleSides: [
+    "Przedsiębiorstwo",
+    "Mieszkaniec"
+  ],
+  slaMinutes: {
+    "PILNY": 15,
+    "WYSOKI": 60,
+    "STANDARDOWY": 240,
+    "NISKI": 1440
+  },
   categories: [
     "brak odbioru odpadów",
     "niepełny odbiór odpadów",
@@ -87,7 +100,7 @@ const SMARTCARE_SETUP_CONFIG = {
 };
 
 /**
- * Sanityzacja HTML w komunikatach dialogowych setup.gs
+ * Sanityzacja tekstu dla okien dialogowych
  */
 function escapeHtmlSetup(str) {
   if (str === null || str === undefined) return "";
@@ -100,7 +113,7 @@ function escapeHtmlSetup(str) {
 }
 
 /**
- * Pomocnicza funkcja zamieniająca 1-bazowy indeks kolumny na literę (np. 1 -> A, 27 -> AA)
+ * Zamiana indeksu kolumny na literę (np. 1 -> A, 27 -> AA)
  */
 function colIndexToLetter(colIndex) {
   let temp, letter = '';
@@ -113,42 +126,35 @@ function colIndexToLetter(colIndex) {
 }
 
 /**
- * Dynamiczne wyszukiwanie litery kolumny na podstawie listy możliwych nazw nagłówka
- * (dopasowanie ścisłe -> dopasowanie prefiksowe -> dopasowanie częściowe)
+ * Dynamiczne wyszukiwanie litery kolumny na podstawie możliwych nazw nagłówka
  */
 function findColumnLetterByHeaders(headers, possibleNames, defaultLetter) {
   if (!headers || !Array.isArray(headers)) return defaultLetter;
 
-  // Przebieg 1: Dopasowanie dokładne (exact match)
+  // 1. Dokładne dopasowanie
   for (let name of possibleNames) {
     const target = name.toLowerCase().trim();
     for (let i = 0; i < headers.length; i++) {
       const h = String(headers[i] || "").toLowerCase().trim();
-      if (h === target) {
-        return colIndexToLetter(i + 1);
-      }
+      if (h === target) return colIndexToLetter(i + 1);
     }
   }
 
-  // Przebieg 2: Dopasowanie prefiksowe (startsWith)
+  // 2. Prefiksowe dopasowanie
   for (let name of possibleNames) {
     const target = name.toLowerCase().trim();
     for (let i = 0; i < headers.length; i++) {
       const h = String(headers[i] || "").toLowerCase().trim();
-      if (h.startsWith(target)) {
-        return colIndexToLetter(i + 1);
-      }
+      if (h.startsWith(target)) return colIndexToLetter(i + 1);
     }
   }
 
-  // Przebieg 3: Dopasowanie częściowe (contains)
+  // 3. Częściowe dopasowanie
   for (let name of possibleNames) {
     const target = name.toLowerCase().trim();
     for (let i = 0; i < headers.length; i++) {
       const h = String(headers[i] || "").toLowerCase().trim();
-      if (h.includes(target)) {
-        return colIndexToLetter(i + 1);
-      }
+      if (h.includes(target)) return colIndexToLetter(i + 1);
     }
   }
 
@@ -156,10 +162,10 @@ function findColumnLetterByHeaders(headers, possibleNames, defaultLetter) {
 }
 
 /**
- * Pobiera mapę liter kluczowych kolumn z arkusza ZGŁOSZENIA
+ * Mapa liter kluczowych kolumn arkusza ZGŁOSZENIA (wzbogacona o pola v0.2.7)
  */
 function getTicketsColumnMap(ticketSheet) {
-  const lastCol = ticketSheet.getLastColumn();
+  const lastCol = ticketSheet ? ticketSheet.getLastColumn() : 0;
   const headers = lastCol > 0 
     ? ticketSheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim())
     : [];
@@ -169,22 +175,40 @@ function getTicketsColumnMap(ticketSheet) {
     type: findColumnLetterByHeaders(headers, ["Rodzaj zgłoszenia", "Kategoria problemu", "Kategoria"], "B"),
     fraction: findColumnLetterByHeaders(headers, ["Rodzaj odpadów", "Frakcja"], "C"),
     city: findColumnLetterByHeaders(headers, ["Miejscowość"], "D"),
+    street: findColumnLetterByHeaders(headers, ["Ulica lub lokalizacja", "Ulica"], "E"),
+    houseNumber: findColumnLetterByHeaders(headers, ["Numer posesji lub identyfikator miejsca", "Numer posesji"], "F"),
     timestamp: findColumnLetterByHeaders(headers, ["Sygnatura czasowa", "Timestamp", "Data zgłoszenia"], "A"),
     contactRequest: findColumnLetterByHeaders(headers, ["Prośba o kontakt ze strony pracownika", "Prośba o kontakt"], "L"),
     status: findColumnLetterByHeaders(headers, ["Status", "Status sprawy"], "N"),
     priority: findColumnLetterByHeaders(headers, ["Priorytet"], "O"),
-    firstContact: findColumnLetterByHeaders(headers, ["Data pierwszego kontaktu", "Pierwszy kontakt", "Data potwierdzenia przyjęcia"], "U"),
-    resolutionDate: findColumnLetterByHeaders(headers, ["Data rozwiązania", "Rozwiązanie"], "W"),
-    satisfaction: findColumnLetterByHeaders(headers, ["Ocena satysfakcji (1-5)", "Ocena satysfakcji", "Satysfakcja"], "Z"),
-    reviewSent: findColumnLetterByHeaders(headers, ["Prośba o opinię wysłana", "Opinia wysłana"], "X"),
-    reviewDate: findColumnLetterByHeaders(headers, ["Data wysłania prośby o opinię"], "Y")
+    suggestedPriority: findColumnLetterByHeaders(headers, ["Sugerowany priorytet AI", "Rekomendowany priorytet AI"], "P"),
+    priorityRationale: findColumnLetterByHeaders(headers, ["Uzasadnienie priorytetu AI"], "Q"),
+    aiState: findColumnLetterByHeaders(headers, ["Stan analizy AI", "Status AI"], "R"),
+    localValidation: findColumnLetterByHeaders(headers, ["Lokalna kontrola danych", "Walidacja lokalna"], "S"),
+    contradictions: findColumnLetterByHeaders(headers, ["Wykryte sprzeczności AI", "Sprzeczności AI"], "T"),
+    assignee: findColumnLetterByHeaders(headers, ["Pracownik odpowiedzialny", "Opiekun"], "U"),
+    nextAction: findColumnLetterByHeaders(headers, ["Następne działanie", "Kolejny krok"], "V"),
+    responsibleSide: findColumnLetterByHeaders(headers, ["Strona odpowiedzialna", "Kto wykonuje"], "W"),
+    nextActionDeadline: findColumnLetterByHeaders(headers, ["Termin następnego działania", "Termin kolejnego kroku"], "X"),
+    slaDeadline: findColumnLetterByHeaders(headers, ["Termin SLA 1. reakcji", "Termin SLA"], "Y"),
+    slaOverdue: findColumnLetterByHeaders(headers, ["Przekroczenie SLA", "Status SLA"], "Z"),
+    firstContact: findColumnLetterByHeaders(headers, ["Data pierwszego kontaktu", "Pierwszy kontakt", "Data potwierdzenia przyjęcia"], "AC"),
+    lastContact: findColumnLetterByHeaders(headers, ["Data ostatniego kontaktu"], "AD"),
+    resolutionDate: findColumnLetterByHeaders(headers, ["Data rozwiązania", "Rozwiązanie"], "AE"),
+    resolutionMethod: findColumnLetterByHeaders(headers, ["Sposób rozwiązania sprawy"], "AF"),
+    satisfaction: findColumnLetterByHeaders(headers, ["Ocena satysfakcji (1-5)", "Ocena satysfakcji", "Satysfakcja"], "AH"),
+    reviewSent: findColumnLetterByHeaders(headers, ["Prośba o opinię wysłana", "Opinia wysłana"], "AJ"),
+    reviewDate: findColumnLetterByHeaders(headers, ["Data wysłania prośby o opinię"], "AK"),
+    aiSummary: findColumnLetterByHeaders(headers, ["Streszczenie AI"], "AM"),
+    aiGaps: findColumnLetterByHeaders(headers, ["Brakujące informacje AI"], "AN"),
+    aiAction: findColumnLetterByHeaders(headers, ["Sugerowane działanie AI"], "AO"),
+    aiNextStep: findColumnLetterByHeaders(headers, ["Rekomendowany kolejny krok AI"], "AP"),
+    aiResponse: findColumnLetterByHeaders(headers, ["Proponowana odpowiedź AI"], "AQ")
   };
 }
 
 /**
- * Sprawdza ustawienia regionalne arkusza i zwraca właściwy separator argumentów formuł:
- * W arkuszach polskich/europejskich (pl_PL) przecinek jest separatorem dziesiętnym,
- * a argumenty funkcji rozdziela średnik (;). W arkuszach US (en_US) separatorem jest przecinek (,).
+ * Pobiera właściwy separator formuł na podstawie ustawień regionalnych arkusza
  */
 function getFormulaSeparator(spreadsheet) {
   let locale = "pl_PL";
@@ -197,10 +221,10 @@ function getFormulaSeparator(spreadsheet) {
   }
 
   const locLower = String(locale).toLowerCase();
-  const commaSeparatedLocales = [
+  const commaSeparated = [
     "en_us", "en_gb", "en_ca", "en_au", "en", "ja_jp", "ja", "zh_cn", "zh_tw", "zh", "ko_kr", "ko"
   ];
-  for (let cl of commaSeparatedLocales) {
+  for (let cl of commaSeparated) {
     if (locLower === cl || locLower.startsWith(cl + "_") || locLower.startsWith(cl + "-")) {
       return ",";
     }
@@ -209,13 +233,12 @@ function getFormulaSeparator(spreadsheet) {
 }
 
 /**
- * Niezawodny parser daty obsługujący instancje Date, numeryczne wartości seryjne oraz stringi
+ * Parser dat obsługujący instancje Date, numery seryjne oraz stringi (YYYY-MM-DD i DD.MM.YYYY)
  */
 function parseDateValue(val) {
   if (val === null || val === undefined || val === "") return null;
   if (val instanceof Date) return isNaN(val.getTime()) ? null : val.getTime();
   if (typeof val === "number" && val > 1000) {
-    // Numer seryjny daty Google Sheets (dni od 1899-12-30)
     return (val - 25569) * 86400 * 1000;
   }
   if (typeof val === "string") {
@@ -223,13 +246,11 @@ function parseDateValue(val) {
     if (!s) return null;
     let d = new Date(s);
     if (!isNaN(d.getTime())) return d.getTime();
-    // Format YYYY-MM-DD HH:mm
     const m1 = s.match(/^(\d{4})-(\d{2})-(\d{2})[\sT](\d{2}):(\d{2})(?::(\d{2}))?$/);
     if (m1) {
       d = new Date(Number(m1[1]), Number(m1[2]) - 1, Number(m1[3]), Number(m1[4]), Number(m1[5]), Number(m1[6] || 0));
       if (!isNaN(d.getTime())) return d.getTime();
     }
-    // Format DD.MM.YYYY HH:mm
     const m2 = s.match(/^(\d{2})\.(\d{2})\.(\d{4})[\sT](\d{2}):(\d{2})(?::(\d{2}))?$/);
     if (m2) {
       d = new Date(Number(m2[3]), Number(m2[2]) - 1, Number(m2[1]), Number(m2[4]), Number(m2[5]), Number(m2[6] || 0));
@@ -248,7 +269,7 @@ function countActualCrmTickets(ticketSheet) {
   const headers = ticketSheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim());
   let idColIdx = headers.indexOf("ID Zgłoszenia");
   if (idColIdx === -1) idColIdx = headers.indexOf("Numer zgłoszenia");
-  if (idColIdx === -1) idColIdx = 12; // domyślnie kolumna M
+  if (idColIdx === -1) idColIdx = 12;
 
   const rows = ticketSheet.getRange(2, idColIdx + 1, ticketSheet.getLastRow() - 1, 1).getValues();
   let count = 0;
@@ -259,12 +280,12 @@ function countActualCrmTickets(ticketSheet) {
 }
 
 /**
- * Niezależny silnik analityczny Apps Script obliczający wszystkie metryki w czystym JavaScript.
- * Gwarantuje poprawność danych niezależnie od wersji językowej Google Sheets i ustawień regionalnych.
+ * Niezależny silnik analityczny Apps Script obliczający metryki Customer Service Intelligence
  */
 function calculateDashboardMetrics(ticketSheet) {
   const categories = SMARTCARE_SETUP_CONFIG.categories;
   const statuses = SMARTCARE_SETUP_CONFIG.statuses;
+  const priorities = SMARTCARE_SETUP_CONFIG.priorities;
 
   const metrics = {
     totalTickets: 0,
@@ -280,12 +301,24 @@ function calculateDashboardMetrics(ticketSheet) {
     reviewsSentCount: 0,
     reviewRate: 0,
     satisfactionRate: 0,
+    // Rozszerzone metryki CSI (v0.2.7):
+    urgentHighCount: 0,
+    overdueSlaCount: 0,
+    missingFirstResponseCount: 0,
+    missingNextStepCount: 0,
+    waitingResidentCount: 0,
+    waitingCompanyCount: 0,
+    dueTodayCount: 0,
     categoryCounts: {},
-    statusCounts: {}
+    statusCounts: {},
+    priorityCounts: {},
+    aiStateCounts: {}
   };
 
   for (let c of categories) metrics.categoryCounts[c] = 0;
   for (let s of statuses) metrics.statusCounts[s] = 0;
+  for (let p of priorities) metrics.priorityCounts[p] = 0;
+  for (let a of SMARTCARE_SETUP_CONFIG.analysisStates) metrics.aiStateCounts[a] = 0;
 
   if (!ticketSheet || ticketSheet.getLastRow() <= 1) return metrics;
 
@@ -311,17 +344,26 @@ function calculateDashboardMetrics(ticketSheet) {
   const idIdx = getIdx(["ID Zgłoszenia", "Numer zgłoszenia", "ID"]);
   const statusIdx = getIdx(["Status", "Status sprawy"]);
   const typeIdx = getIdx(["Rodzaj zgłoszenia", "Kategoria problemu", "Kategoria"]);
+  const priorityIdx = getIdx(["Priorytet"]);
   const timeIdx = getIdx(["Sygnatura czasowa", "Data zgłoszenia", "Timestamp"]);
   const firstContactIdx = getIdx(["Data pierwszego kontaktu", "Pierwszy kontakt", "Data potwierdzenia przyjęcia"]);
   const resolutionIdx = getIdx(["Data rozwiązania", "Rozwiązanie"]);
   const contactReqIdx = getIdx(["Prośba o kontakt ze strony pracownika", "Prośba o kontakt"]);
   const satisfactionIdx = getIdx(["Ocena satysfakcji (1-5)", "Ocena satysfakcji", "Satysfakcja"]);
   const reviewSentIdx = getIdx(["Prośba o opinię wysłana", "Opinia wysłana"]);
+  const aiStateIdx = getIdx(["Stan analizy AI", "Status AI"]);
+  const nextActionIdx = getIdx(["Następne działanie", "Kolejny krok"]);
+  const sideIdx = getIdx(["Strona odpowiedzialna", "Kto wykonuje"]);
+  const actionDeadlineIdx = getIdx(["Termin następnego działania", "Termin kolejnego kroku"]);
+  const slaDeadlineIdx = getIdx(["Termin SLA 1. reakcji", "Termin SLA"]);
 
   const firstContactDiffs = [];
   const resolutionDiffs = [];
   const satisfactionRatings = [];
   let resolvedWithReviewCount = 0;
+
+  const now = new Date();
+  const todayStr = Utilities.formatDate(now, "Europe/Warsaw", "yyyy-MM-dd");
 
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
@@ -332,10 +374,11 @@ function calculateDashboardMetrics(ticketSheet) {
 
     const statusVal = statusIdx !== -1 ? String(row[statusIdx] || "").trim() : "";
     const statusLower = statusVal.toLowerCase();
+    const isClosed = statusLower === "rozwiązane" || statusLower === "zamknięte";
 
     if (statusLower === "nowe") metrics.newTickets++;
     else if (statusLower === "w realizacji" || statusLower === "do weryfikacji") metrics.inProgressTickets++;
-    else if (statusLower === "rozwiązane" || statusLower === "zamknięte") metrics.resolvedTickets++;
+    else if (isClosed) metrics.resolvedTickets++;
 
     for (let s of statuses) {
       if (s.toLowerCase() === statusLower) metrics.statusCounts[s]++;
@@ -348,19 +391,35 @@ function calculateDashboardMetrics(ticketSheet) {
       }
     }
 
+    // Priorytety
+    let prioVal = priorityIdx !== -1 ? String(row[priorityIdx] || "").toUpperCase().trim() : "STANDARDOWY";
+    if (prioVal === "WYSOKI" || prioVal === "PILNY") metrics.urgentHighCount++;
+    if (metrics.priorityCounts[prioVal] !== undefined) {
+      metrics.priorityCounts[prioVal]++;
+    } else {
+      metrics.priorityCounts["STANDARDOWY"]++;
+    }
+
+    // Stan analizy AI
+    const aiState = aiStateIdx !== -1 ? String(row[aiStateIdx] || "").trim() : "";
+    if (metrics.aiStateCounts[aiState] !== undefined) {
+      metrics.aiStateCounts[aiState]++;
+    }
+
+    // Prośba o kontakt
     const contactReqVal = contactReqIdx !== -1 ? String(row[contactReqIdx] || "").toLowerCase() : "";
-    if (contactReqVal.includes("tak") && (statusLower === "nowe" || statusLower === "do weryfikacji")) {
+    if (contactReqVal.includes("tak") && !isClosed) {
       metrics.waitingContactTickets++;
     }
 
+    // Opinia Google
     const reviewSentVal = reviewSentIdx !== -1 ? String(row[reviewSentIdx] || "").toUpperCase().trim() : "";
     if (reviewSentVal === "TAK") {
       metrics.reviewsSentCount++;
-      if (statusLower === "rozwiązane" || statusLower === "zamknięte") {
-        resolvedWithReviewCount++;
-      }
+      if (isClosed) resolvedWithReviewCount++;
     }
 
+    // Czasy reakcji i rozwiązania
     const createdTime = timeIdx !== -1 ? parseDateValue(row[timeIdx]) : null;
     const firstContactTime = firstContactIdx !== -1 ? parseDateValue(row[firstContactIdx]) : null;
     if (createdTime && firstContactTime && firstContactTime >= createdTime) {
@@ -372,10 +431,46 @@ function calculateDashboardMetrics(ticketSheet) {
       resolutionDiffs.push((resolutionTime - createdTime) / (1000 * 3600));
     }
 
+    // Oceny satysfakcji
     if (satisfactionIdx !== -1) {
       const satVal = Number(row[satisfactionIdx]);
       if (!isNaN(satVal) && satVal >= 1 && satVal <= 5) {
         satisfactionRatings.push(satVal);
+      }
+    }
+
+    // Metryki operacyjne otwartych spraw (CSI v0.2.7):
+    if (!isClosed) {
+      // Brak pierwszej odpowiedzi
+      if (!firstContactTime) {
+        metrics.missingFirstResponseCount++;
+      }
+
+      // Kontrola SLA
+      const slaTime = slaDeadlineIdx !== -1 ? parseDateValue(row[slaDeadlineIdx]) : null;
+      if (slaTime && now.getTime() > slaTime && !firstContactTime) {
+        metrics.overdueSlaCount++;
+      }
+
+      // Brak kolejnego kroku
+      const nextAct = nextActionIdx !== -1 ? String(row[nextActionIdx] || "").trim() : "";
+      if (!nextAct) {
+        metrics.missingNextStepCount++;
+      }
+
+      // Strona odpowiedzialna
+      const side = sideIdx !== -1 ? String(row[sideIdx] || "").trim() : "";
+      if (side.toLowerCase().includes("mieszkaniec")) {
+        metrics.waitingResidentCount++;
+      } else {
+        metrics.waitingCompanyCount++;
+      }
+
+      // Zaplanowane na dzisiaj
+      const actDeadline = actionDeadlineIdx !== -1 ? parseDateValue(row[actionDeadlineIdx]) : null;
+      if (actDeadline) {
+        const dStr = Utilities.formatDate(new Date(actDeadline), "Europe/Warsaw", "yyyy-MM-dd");
+        if (dStr === todayStr) metrics.dueTodayCount++;
       }
     }
   }
@@ -398,88 +493,7 @@ function calculateDashboardMetrics(ticketSheet) {
 }
 
 /**
- * Główna funkcja instalacyjna i aktualizująca (Container-bound)
- */
-function setupSmartCareSystem() {
-  Logger.log("=== Rozpoczynanie konfiguracji ELWOZ ECO SmartCare v0.2.6 (FINAL RELEASE) ===");
-
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  if (!spreadsheet) {
-    throw new Error(
-      "BŁĄD INSTALACJI: Skrypt nie jest uruchomiony w arkuszu Google Sheets!\n" +
-      "Otwórz arkusz kalkulacyjny na koncie wsb.student.tester@gmail.com, przejdź do 'Rozszerzenia -> Apps Script' i wklej kod."
-    );
-  }
-
-  try {
-    spreadsheet.rename(SMARTCARE_SETUP_CONFIG.sheetName);
-  } catch (e) {
-    Logger.log("Nazwa arkusza pozostaje bez zmian: " + e.toString());
-  }
-
-  const form = createOrGetForm(spreadsheet);
-  Logger.log("Formularz Google przygotowany: " + form.getPublishedUrl());
-
-  setupSettingsSheet(spreadsheet);
-  setupCommunicationHistorySheet(spreadsheet);
-  setupTicketsSheet(spreadsheet, form);
-  setupDashboardSheet(spreadsheet);
-  setupTestsSheet(spreadsheet);
-  setupAiInstructionSheet(spreadsheet);
-  installFormSubmitTrigger(spreadsheet);
-
-  Logger.log("=== Instalacja v0.2.6 zakończona pomyślnie. ===");
-}
-
-/**
- * Tworzy lub pobiera formularz powiązany z arkuszem
- */
-function createOrGetForm(spreadsheet) {
-  let formUrl = spreadsheet.getFormUrl();
-  let form;
-
-  if (formUrl) {
-    form = FormApp.openByUrl(formUrl);
-  } else {
-    form = FormApp.create(SMARTCARE_SETUP_CONFIG.formTitle);
-    form.setDescription(SMARTCARE_SETUP_CONFIG.formDescription);
-    form.setDestination(FormApp.DestinationType.SPREADSHEET, spreadsheet.getId());
-    form.setProgressBar(true);
-    form.setConfirmationMessage(
-      "Dziękujemy za przesłanie zgłoszenia testowego do ELWOZ ECO SmartCare.\n" +
-      "Wersja demonstracyjna WSB Merito. Zgłoszenie zostało zarejestrowane pod dedykowanym numerem sprawy."
-    );
-
-    form.addMultipleChoiceItem()
-      .setTitle("Rodzaj zgłoszenia")
-      .setChoiceValues(SMARTCARE_SETUP_CONFIG.categories)
-      .setRequired(true);
-
-    form.addListItem()
-      .setTitle("Rodzaj odpadów")
-      .setChoiceValues(["BIO", "Papier", "Szkło", "Metale i tworzywa sztuczne", "Zmieszane", "Wielkogabarytowe", "Inne"])
-      .setRequired(true);
-
-    form.addTextItem().setTitle("Miejscowość").setRequired(true);
-    form.addTextItem().setTitle("Ulica lub lokalizacja").setRequired(true);
-    form.addTextItem().setTitle("Numer posesji lub identyfikator miejsca").setRequired(false);
-    form.addDateItem().setTitle("Data wystąpienia problemu").setRequired(false);
-    form.addParagraphTextItem().setTitle("Opis zgłoszenia").setRequired(true);
-
-    form.addTextItem().setTitle("Imię i nazwisko").setRequired(false);
-    form.addTextItem().setTitle("Numer telefonu").setRequired(false);
-    form.addTextItem().setTitle("Adres e-mail").setRequired(false);
-
-    form.addCheckboxItem()
-      .setTitle("Prośba o kontakt ze strony pracownika")
-      .setChoiceValues(["Tak, proszę o kontakt telefoniczny lub e-mail"]);
-  }
-
-  return form;
-}
-
-/**
- * Konfiguruje zakładkę USTAWIENIA z autentycznym linkiem do opinii Google
+ * Konfiguruje zakładkę USTAWIENIA z autentycznym linkiem do opinii Google i regułami SLA
  */
 function setupSettingsSheet(spreadsheet) {
   let settingsSheet = spreadsheet.getSheetByName(SMARTCARE_SETUP_CONFIG.sheetTabs.settings);
@@ -499,12 +513,18 @@ function setupSettingsSheet(spreadsheet) {
     ["Tryb demonstracyjny / testowy", "TAK"],
     ["Zatwierdzony odbiorca testowy", SMARTCARE_SETUP_CONFIG.dedicatedTesterEmail],
     ["Automatyczne powiadomienia o nowych zgłoszeniach", "WŁĄCZONE"],
-    ["Adres odbiorcy powiadomień", SMARTCARE_SETUP_CONFIG.dedicatedTesterEmail]
+    ["Adres odbiorcy powiadomień", SMARTCARE_SETUP_CONFIG.dedicatedTesterEmail],
+    ["Automatyczna analiza AI nowych zgłoszeń", "WŁĄCZONE"],
+    ["SLA - Czas 1. reakcji PILNY (min)", "15"],
+    ["SLA - Czas 1. reakcji WYSOKI (min)", "60"],
+    ["SLA - Czas 1. reakcji STANDARDOWY (godz.)", "4"],
+    ["SLA - Czas 1. reakcji NISKI (godz.)", "24"],
+    ["Godziny pracy POK", "07:00 - 16:00 (Pn - Pt)"]
   ];
 
   if (settingsSheet.getLastRow() === 0) {
     settingsSheet.getRange("A1:B1").merge()
-      .setValue("ELWOZ ECO SmartCare – Konfiguracja Systemu (v0.2.6)")
+      .setValue("ELWOZ ECO SmartCare – Konfiguracja Systemu (v0.2.7)")
       .setFontSize(12).setFontWeight("bold").setBackground("#143d59").setFontColor("#ffffff")
       .setHorizontalAlignment("center").setVerticalAlignment("middle");
     settingsSheet.setRowHeight(1, 35);
@@ -530,10 +550,10 @@ function setupSettingsSheet(spreadsheet) {
     }
   }
 
-  settingsSheet.setColumnWidth(1, 280);
+  settingsSheet.setColumnWidth(1, 320);
   settingsSheet.setColumnWidth(2, 420);
 
-  Logger.log("Zakładka USTAWIENIA przygotowana poprawnie.");
+  Logger.log("Zakładka USTAWIENIA zaktualizowana dla v0.2.7.");
 }
 
 /**
@@ -547,7 +567,7 @@ function setupCommunicationHistorySheet(spreadsheet) {
 
   if (sheet.getLastRow() === 0) {
     sheet.getRange("A1:J1").merge()
-      .setValue("ELWOZ ECO SmartCare – Rejestr Korespondencji i Działań Reputacyjnych (v0.2.6)")
+      .setValue("ELWOZ ECO SmartCare – Rejestr Korespondencji i Działań Reputacyjnych (v0.2.7)")
       .setFontSize(12).setFontWeight("bold").setBackground("#143d59").setFontColor("#ffffff")
       .setHorizontalAlignment("center").setVerticalAlignment("middle");
     sheet.setRowHeight(1, 35);
@@ -587,7 +607,7 @@ function setupCommunicationHistorySheet(spreadsheet) {
 }
 
 /**
- * Konfiguruje zakładkę ZGŁOSZENIA w oparciu o natywny arkusz odpowiedzi formularza
+ * Konfiguruje zakładkę ZGŁOSZENIA z kompletnym modelem danych Customer Service Intelligence (v0.2.7)
  */
 function setupTicketsSheet(spreadsheet, form) {
   let ticketSheet = null;
@@ -608,13 +628,22 @@ function setupTicketsSheet(spreadsheet, form) {
     }
   }
 
+  // Kompletny zestaw kolumn operacyjnych v0.2.7
   const operationalHeaders = [
     "ID Zgłoszenia",
     "Status",
     "Priorytet",
+    "Sugerowany priorytet AI",
+    "Uzasadnienie priorytetu AI",
+    "Stan analizy AI",
+    "Lokalna kontrola danych",
+    "Wykryte sprzeczności AI",
     "Pracownik odpowiedzialny",
     "Następne działanie",
+    "Strona odpowiedzialna",
     "Termin następnego działania",
+    "Termin SLA 1. reakcji",
+    "Przekroczenie SLA",
     "Notatka pracownika",
     "Data potwierdzenia przyjęcia",
     "Data pierwszego kontaktu",
@@ -630,6 +659,7 @@ function setupTicketsSheet(spreadsheet, form) {
     "Streszczenie AI",
     "Brakujące informacje AI",
     "Sugerowane działanie AI",
+    "Rekomendowany kolejny krok AI",
     "Proponowana odpowiedź AI"
   ];
 
@@ -658,7 +688,7 @@ function setupTicketsSheet(spreadsheet, form) {
     
     if (missingHeaders.length > 0) {
       ticketSheet.getRange(1, lastCol + 1, 1, missingHeaders.length).setValues([missingHeaders]);
-      Logger.log("Dopisano brakujące kolumny CRM: " + missingHeaders.join(", "));
+      Logger.log("Dopisano nowe kolumny CSI v0.2.7: " + missingHeaders.join(", "));
     }
   }
 
@@ -689,20 +719,24 @@ function setupTicketsSheet(spreadsheet, form) {
 
   setupColValidation("Status", SMARTCARE_SETUP_CONFIG.statuses);
   setupColValidation("Priorytet", SMARTCARE_SETUP_CONFIG.priorities);
+  setupColValidation("Sugerowany priorytet AI", SMARTCARE_SETUP_CONFIG.priorities, true);
+  setupColValidation("Stan analizy AI", SMARTCARE_SETUP_CONFIG.analysisStates, true);
+  setupColValidation("Strona odpowiedzialna", SMARTCARE_SETUP_CONFIG.responsibleSides, true);
+  setupColValidation("Przekroczenie SLA", ["TAK", "NIE"], true);
   setupColValidation("Ocena satysfakcji (1-5)", ["1", "2", "3", "4", "5"], true);
   setupColValidation("Prośba o opinię wysłana", ["TAK", "NIE"], false);
   setupColValidation("Wynik kontaktu z mieszkańcem", SMARTCARE_SETUP_CONFIG.contactResults, true);
 
   const statusCol = headers.indexOf("Status") + 1;
   const priorityCol = headers.indexOf("Priorytet") + 1;
-  setupConditionalFormatting(ticketSheet, statusCol, priorityCol, maxRows);
+  const aiStateCol = headers.indexOf("Stan analizy AI") + 1;
+  setupConditionalFormatting(ticketSheet, statusCol, priorityCol, aiStateCol, maxRows);
 
-  Logger.log("Zakładka ZGŁOSZENIA skonfigurowana poprawnie.");
+  Logger.log("Zakładka ZGŁOSZENIA skonfigurowana dla v0.2.7.");
 }
 
 /**
  * Poprawia czytelność zakładki ZGŁOSZENIA (kompaktowa wysokość wierszy, zawijanie CLIP dla długich pól)
- * Zapobiega rozszerzaniu wierszy przez długie opisy AI bez ucinania ani utraty danych.
  */
 function formatTicketsSheetForReadability(ticketSheet) {
   const lastRow = ticketSheet.getLastRow();
@@ -711,23 +745,22 @@ function formatTicketsSheetForReadability(ticketSheet) {
 
   const headers = ticketSheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim());
 
-  // Wysokość nagłówka: 48px z pełnym zawijaniem (brak uciętych napisów)
   ticketSheet.setRowHeight(1, 48);
   ticketSheet.getRange(1, 1, 1, lastCol).setWrap(true).setVerticalAlignment("middle");
 
-  // Ustawienie jednolitej, czytelnej wysokości wierszy danych (28px)
   if (lastRow > 1) {
     ticketSheet.setRowHeights(2, lastRow - 1, 28);
   }
 
-  // Kolumny zawierające długi tekst ustawiamy w tryb zwijania CLIP (widok kompaktowy)
   const longTextColNames = [
     "Opis zgłoszenia",
     "Notatka pracownika",
     "Sposób rozwiązania sprawy",
     "Streszczenie AI",
     "Brakujące informacje AI",
+    "Wykryte sprzeczności AI",
     "Sugerowane działanie AI",
+    "Rekomendowany kolejny krok AI",
     "Proponowana odpowiedź AI"
   ];
 
@@ -739,7 +772,6 @@ function formatTicketsSheetForReadability(ticketSheet) {
     }
   }
 
-  // Odpowiednie szerokości kolumn (zapobieganie obcinaniu nagłówków)
   const setWidthByHeader = (hName, width) => {
     const idx = headers.indexOf(hName) + 1;
     if (idx > 0) ticketSheet.setColumnWidth(idx, width);
@@ -749,6 +781,9 @@ function formatTicketsSheetForReadability(ticketSheet) {
   setWidthByHeader("Sygnatura czasowa", 140);
   setWidthByHeader("Status", 120);
   setWidthByHeader("Priorytet", 110);
+  setWidthByHeader("Sugerowany priorytet AI", 120);
+  setWidthByHeader("Stan analizy AI", 120);
+  setWidthByHeader("Lokalna kontrola danych", 160);
   setWidthByHeader("Rodzaj zgłoszenia", 180);
   setWidthByHeader("Rodzaj odpadów", 140);
   setWidthByHeader("Miejscowość", 120);
@@ -759,6 +794,11 @@ function formatTicketsSheetForReadability(ticketSheet) {
   setWidthByHeader("Numer telefonu", 130);
   setWidthByHeader("Prośba o kontakt ze strony pracownika", 200);
   setWidthByHeader("Pracownik odpowiedzialny", 150);
+  setWidthByHeader("Następne działanie", 200);
+  setWidthByHeader("Strona odpowiedzialna", 140);
+  setWidthByHeader("Termin następnego działania", 150);
+  setWidthByHeader("Termin SLA 1. reakcji", 150);
+  setWidthByHeader("Przekroczenie SLA", 120);
   setWidthByHeader("Sposób rozwiązania sprawy", 220);
   setWidthByHeader("Notatka pracownika", 200);
   setWidthByHeader("Wynik kontaktu z mieszkańcem", 180);
@@ -773,35 +813,45 @@ function formatTicketsSheetForReadability(ticketSheet) {
 }
 
 /**
- * Formatowanie warunkowe statusów i priorytetów
+ * Formatowanie warunkowe dla statusów, priorytetów i stanów AI
  */
-function setupConditionalFormatting(sheet, statusCol, priorityCol, maxRows) {
-  if (statusCol <= 0) return;
-
-  const statusRange = sheet.getRange(2, statusCol, maxRows - 1, 1);
+function setupConditionalFormatting(sheet, statusCol, priorityCol, aiStateCol, maxRows) {
   const rules = [];
 
-  rules.push(SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo("Nowe").setBackground("#e3f2fd").setFontColor("#0d47a1").setRanges([statusRange]).build());
-  rules.push(SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo("Do weryfikacji").setBackground("#f3e8ff").setFontColor("#6b21a8").setRanges([statusRange]).build());
-  rules.push(SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo("W realizacji").setBackground("#fef3c7").setFontColor("#92400e").setRanges([statusRange]).build());
-  rules.push(SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo("Oczekuje na informacje").setBackground("#f1f5f9").setFontColor("#475569").setRanges([statusRange]).build());
-  rules.push(SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo("Rozwiązane").setBackground("#e8f5e9").setFontColor("#1b5e20").setRanges([statusRange]).build());
-  rules.push(SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo("Zamknięte").setBackground("#cfd8dc").setFontColor("#263238").setRanges([statusRange]).build());
+  // 1. Statusy
+  if (statusCol > 0) {
+    const statusRange = sheet.getRange(2, statusCol, maxRows - 1, 1);
+    rules.push(SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo("Nowe").setBackground("#e3f2fd").setFontColor("#0d47a1").setRanges([statusRange]).build());
+    rules.push(SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo("Do weryfikacji").setBackground("#f3e8ff").setFontColor("#6b21a8").setRanges([statusRange]).build());
+    rules.push(SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo("W realizacji").setBackground("#fef3c7").setFontColor("#92400e").setRanges([statusRange]).build());
+    rules.push(SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo("Oczekuje na informacje").setBackground("#f1f5f9").setFontColor("#475569").setRanges([statusRange]).build());
+    rules.push(SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo("Rozwiązane").setBackground("#e8f5e9").setFontColor("#1b5e20").setRanges([statusRange]).build());
+    rules.push(SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo("Zamknięte").setBackground("#cfd8dc").setFontColor("#263238").setRanges([statusRange]).build());
+  }
 
+  // 2. Czteropoziomowe Priorytety (PILNY, WYSOKI, STANDARDOWY, NISKI)
   if (priorityCol > 0) {
     const priorityRange = sheet.getRange(2, priorityCol, maxRows - 1, 1);
-    rules.push(SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo("Wysoki").setBackground("#ffebee").setFontColor("#b71c1c").setRanges([priorityRange]).build());
+    rules.push(SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo("PILNY").setBackground("#fee2e2").setFontColor("#991b1b").setBold(true).setRanges([priorityRange]).build());
+    rules.push(SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo("WYSOKI").setBackground("#ffedd5").setFontColor("#9a3412").setRanges([priorityRange]).build());
+    rules.push(SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo("STANDARDOWY").setBackground("#dbeafe").setFontColor("#1e40af").setRanges([priorityRange]).build());
+    rules.push(SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo("NISKI").setBackground("#dcfce7").setFontColor("#166534").setRanges([priorityRange]).build());
+  }
+
+  // 3. Stany analizy AI
+  if (aiStateCol > 0) {
+    const aiRange = sheet.getRange(2, aiStateCol, maxRows - 1, 1);
+    rules.push(SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo("Gotowa").setBackground("#ecfdf5").setFontColor("#065f46").setRanges([aiRange]).build());
+    rules.push(SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo("Wymaga weryfikacji").setBackground("#fef3c7").setFontColor("#92400e").setRanges([aiRange]).build());
+    rules.push(SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo("W trakcie").setBackground("#f3e8ff").setFontColor("#6b21a8").setRanges([aiRange]).build());
+    rules.push(SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo("Błąd").setBackground("#fee2e2").setFontColor("#991b1b").setRanges([aiRange]).build());
   }
 
   sheet.setConditionalFormatRules(rules);
 }
 
 /**
- * Konfiguruje i naprawia zakładkę DASHBOARD (v0.2.6)
- * - Autokalibracja separatora formuł pod kątem ustawień regionalnych (pl_PL vs en_US).
- * - Niezależny silnik analityczny Apps Script eliminujący błędy #ERROR!.
- * - Pełne zawijanie nagłówków zapobiegające obcinaniu tekstu.
- * - Bezpieczne generowanie 2 wykresów analitycznych.
+ * Konfiguruje rozszerzoną zakładkę DASHBOARD (Customer Service Intelligence v0.2.7)
  */
 function setupDashboardSheet(spreadsheet) {
   let dash = spreadsheet.getSheetByName(SMARTCARE_SETUP_CONFIG.sheetTabs.dashboard);
@@ -814,18 +864,18 @@ function setupDashboardSheet(spreadsheet) {
 
   // Nagłówek Dashboardu
   dash.getRange("A1:G1").merge()
-    .setValue("ELWOZ ECO SmartCare – Panel Operacyjny i Wskaźniki Obsługi Mieszkańca (v0.2.6)")
+    .setValue("ELWOZ ECO SmartCare – Panel Operacyjny Customer Service Intelligence (v0.2.7)")
     .setFontSize(13).setFontWeight("bold").setBackground("#143d59").setFontColor("#ffffff")
     .setHorizontalAlignment("center").setVerticalAlignment("middle");
   dash.setRowHeight(1, 44);
 
   dash.getRange("A2:G2").merge()
-    .setValue("Rejon Kartuzy • Statystyki operacyjne przeliczane dynamicznie z bazy CRM • Aktualizacja automatyczna")
+    .setValue("Rejon Kartuzy • Analityka zgłoszeń, monitoring SLA i zarządzanie kolejkiem spraw w czasie rzeczywistym")
     .setFontSize(9).setFontStyle("italic").setBackground("#f8fafc").setFontColor("#64748b")
     .setHorizontalAlignment("center").setVerticalAlignment("middle");
   dash.setRowHeight(2, 24);
 
-  // SEKCJA 1: Główne wolumeny operacyjne (Wiersze 4-5)
+  // SEKCJA 1: Wolumeny operacyjne (Wiersze 4-5)
   dash.getRange("B4:F4").setValues([[
     "Wszystkie zgłoszenia",
     "Nowe",
@@ -842,7 +892,7 @@ function setupDashboardSheet(spreadsheet) {
     .setVerticalAlignment("middle").setBackground("#ffffff");
   dash.setRowHeight(5, 36);
 
-  // SEKCJA 2: Komunikacja, Czas reakcji i Satysfakcja (Wiersze 7-8)
+  // SEKCJA 2: Czas & Standardy SLA (Wiersze 7-8)
   dash.getRange("B7:F7").setValues([[
     "Sprawy oczekujące na kontakt",
     "Śr. czas 1. reakcji (godz.)",
@@ -859,23 +909,21 @@ function setupDashboardSheet(spreadsheet) {
     .setVerticalAlignment("middle").setBackground("#ffffff");
   dash.setRowHeight(8, 36);
 
-  // SEKCJA 3: Zarządzanie Reputacją i Opinie Google (Wiersze 10-11)
-  dash.getRange("B10:E10").setValues([[
-    "Wysłane prośby o opinię Google",
-    "Odsetek zakończonych z prośbą o opinię",
-    "Wskaźnik zebranych ocen satysfakcji",
-    "Uwaga interpretacyjna"
+  // SEKCJA 3: Kontrola Jakości i CSI (Wiersze 10-11)
+  dash.getRange("B10:F10").setValues([[
+    "Sprawy PILNE i WYSOKIE",
+    "Przekroczone terminy SLA",
+    "Brak pierwszej odpowiedzi",
+    "Sprawy bez kolejnego kroku",
+    "Wysłane prośby o opinię"
   ]])
     .setFontWeight("bold").setFontSize(9).setBackground("#dbeafe").setFontColor("#1e40af")
     .setHorizontalAlignment("center").setVerticalAlignment("middle").setWrap(true);
   dash.setRowHeight(10, 44);
 
-  dash.getRange("B11:D11")
-    .setFontSize(14).setFontWeight("bold").setFontColor("#1e40af").setHorizontalAlignment("center")
+  dash.getRange("B11:F11")
+    .setFontSize(14).setFontWeight("bold").setFontColor("#b91c1c").setHorizontalAlignment("center")
     .setVerticalAlignment("middle").setBackground("#ffffff");
-
-  dash.getRange("E11").setValue("Liczba próśb ≠ liczba opinii. Oceny wystawia dobrowolnie mieszkaniec na profilu Google.")
-    .setFontSize(8).setFontStyle("italic").setFontColor("#64748b").setWrap(true).setVerticalAlignment("middle");
   dash.setRowHeight(11, 36);
 
   // Tabele pomocnicze do kategorii i statusów (wiersze 13-23)
@@ -888,50 +936,48 @@ function setupDashboardSheet(spreadsheet) {
     .setHorizontalAlignment("center").setVerticalAlignment("middle").setWrap(true);
   dash.setRowHeight(13, 32);
 
-  // Szerokości kolumn Dashboardu (zapewniające pełną widoczność napisów)
+  // Szerokości kolumn Dashboardu
   dash.setColumnWidth(1, 15);
   dash.setColumnWidth(2, 180);
   dash.setColumnWidth(3, 160);
   dash.setColumnWidth(4, 160);
   dash.setColumnWidth(5, 200);
-  dash.setColumnWidth(6, 140);
+  dash.setColumnWidth(6, 160);
   dash.setColumnWidth(7, 30);
   dash.setColumnWidth(8, 480);
 
-  // Pobranie arkusza ZGŁOSZENIA i aplikacja formuł / wartości z autokalibracją
   const ticketSheet = spreadsheet.getSheetByName(SMARTCARE_SETUP_CONFIG.sheetTabs.tickets);
   applyDashboardMetricsAndFormulas(dash, ticketSheet, spreadsheet);
 
-  // Utworzenie / odświeżenie wykresów operacyjnych
   setupDashboardCharts(dash);
 
-  Logger.log("Rozszerzona zakładka DASHBOARD przygotowana i przeliczona dynamicznie (v0.2.6).");
+  Logger.log("Rozszerzona zakładka DASHBOARD (v0.2.7) przygotowana.");
 }
 
 /**
- * Zastosowanie formuł lub niezależnych wartości liczbowych z autokalibracją
+ * Aplikacja metryk na Dashboardzie z autokalibracją regionalną (pl_PL / en_US)
  */
 function applyDashboardMetricsAndFormulas(dash, ticketSheet, spreadsheet) {
   const cols = ticketSheet ? getTicketsColumnMap(ticketSheet) : {
     id: "M", type: "B", fraction: "C", city: "D", timestamp: "A", contactRequest: "L",
-    status: "N", priority: "O", firstContact: "U", resolutionDate: "W", satisfaction: "Z",
-    reviewSent: "X", reviewDate: "Y"
+    status: "N", priority: "O", firstContact: "AC", resolutionDate: "AE", satisfaction: "AH",
+    reviewSent: "AJ", reviewDate: "AK"
   };
 
   const metrics = calculateDashboardMetrics(ticketSheet);
-  const preferredSep = getFormulaSeparator(spreadsheet); // e.g. ';' dla pl_PL
+  const preferredSep = getFormulaSeparator(spreadsheet);
   const alternateSep = preferredSep === ";" ? "," : ";";
 
   function setFormulasWithSeparator(sep) {
-    // Sekcja 1
+    // Sekcja 1: Wolumeny
     dash.getRange("B5").setFormula(`=IFERROR(COUNTIF(ZGŁOSZENIA!${cols.id}2:${cols.id}${sep} "<>")${sep} 0)`);
     dash.getRange("C5").setFormula(`=IFERROR(COUNTIF(ZGŁOSZENIA!${cols.status}2:${cols.status}${sep} "Nowe")${sep} 0)`);
-    dash.getRange("D5").setFormula(`=IFERROR(COUNTIF(ZGŁOSZENIA!${cols.status}2:${cols.status}${sep} "W realizacji")${sep} 0)`);
+    dash.getRange("D5").setFormula(`=IFERROR(COUNTIF(ZGŁOSZENIA!${cols.status}2:${cols.status}${sep} "W realizacji") + COUNTIF(ZGŁOSZENIA!${cols.status}2:${cols.status}${sep} "Do weryfikacji")${sep} 0)`);
     dash.getRange("E5").setFormula(`=IFERROR(COUNTIF(ZGŁOSZENIA!${cols.status}2:${cols.status}${sep} "Rozwiązane") + COUNTIF(ZGŁOSZENIA!${cols.status}2:${cols.status}${sep} "Zamknięte")${sep} 0)`);
     dash.getRange("F5").setFormula(`=IF(B5>0${sep} E5/B5${sep} 0)`);
     dash.getRange("F5").setNumberFormat("0.0%");
 
-    // Sekcja 2
+    // Sekcja 2: Czas & Satysfakcja
     dash.getRange("B8").setFormula(
       `=IFERROR(COUNTIFS(ZGŁOSZENIA!${cols.contactRequest}2:${cols.contactRequest}${sep} "*Tak*"${sep} ZGŁOSZENIA!${cols.status}2:${cols.status}${sep} "Nowe") + COUNTIFS(ZGŁOSZENIA!${cols.contactRequest}2:${cols.contactRequest}${sep} "*Tak*"${sep} ZGŁOSZENIA!${cols.status}2:${cols.status}${sep} "Do weryfikacji")${sep} 0)`
     );
@@ -948,23 +994,21 @@ function applyDashboardMetricsAndFormulas(dash, ticketSheet, spreadsheet) {
       `=IFERROR(COUNT(FILTER(ZGŁOSZENIA!${cols.satisfaction}2:${cols.satisfaction}${sep} ISNUMBER(ZGŁOSZENIA!${cols.satisfaction}2:${cols.satisfaction})${sep} ZGŁOSZENIA!${cols.satisfaction}2:${cols.satisfaction}>=1${sep} ZGŁOSZENIA!${cols.satisfaction}2:${cols.satisfaction}<=5))${sep} 0)`
     );
 
-    // Sekcja 3
-    dash.getRange("B11").setFormula(`=IFERROR(COUNTIF(ZGŁOSZENIA!${cols.reviewSent}2:${cols.reviewSent}${sep} "TAK")${sep} 0)`);
-    dash.getRange("C11").setFormula(
-      `=IF(E5>0${sep} (COUNTIFS(ZGŁOSZENIA!${cols.reviewSent}2:${cols.reviewSent}${sep} "TAK"${sep} ZGŁOSZENIA!${cols.status}2:${cols.status}${sep} "Rozwiązane") + COUNTIFS(ZGŁOSZENIA!${cols.reviewSent}2:${cols.reviewSent}${sep} "TAK"${sep} ZGŁOSZENIA!${cols.status}2:${cols.status}${sep} "Zamknięte")) / E5${sep} 0)`
-    );
-    dash.getRange("C11").setNumberFormat("0.0%");
-    dash.getRange("D11").setFormula(`=IF(E5>0${sep} F8/E5${sep} 0)`);
-    dash.getRange("D11").setNumberFormat("0.0%");
+    // Sekcja 3: CSI & Kontrola jakości (v0.2.7)
+    dash.getRange("B11").setValue(metrics.urgentHighCount);
+    dash.getRange("C11").setValue(metrics.overdueSlaCount);
+    dash.getRange("D11").setValue(metrics.missingFirstResponseCount);
+    dash.getRange("E11").setValue(metrics.missingNextStepCount);
+    dash.getRange("F11").setValue(metrics.reviewsSentCount);
 
-    // Tabela kategorii
+    // Tabele kategorii
     for (let i = 0; i < SMARTCARE_SETUP_CONFIG.categories.length; i++) {
       const row = 14 + i;
       dash.getRange(row, 2).setValue(SMARTCARE_SETUP_CONFIG.categories[i]);
       dash.getRange(row, 3).setFormula(`=COUNTIF(ZGŁOSZENIA!${cols.type}2:${cols.type}${sep} "*" & B${row} & "*")`);
     }
 
-    // Tabela statusów
+    // Tabele statusów
     for (let j = 0; j < SMARTCARE_SETUP_CONFIG.statuses.length; j++) {
       const r = 14 + j;
       dash.getRange(r, 5).setValue(SMARTCARE_SETUP_CONFIG.statuses[j]);
@@ -973,11 +1017,7 @@ function applyDashboardMetricsAndFormulas(dash, ticketSheet, spreadsheet) {
   }
 
   function hasAnyFormulaError() {
-    const checkCells = [
-      "B5", "C5", "D5", "E5", "F5",
-      "B8", "C8", "D8", "E8", "F8",
-      "B11", "C11", "D11"
-    ];
+    const checkCells = ["B5", "C5", "D5", "E5", "F5", "B8", "C8", "D8", "E8", "F8"];
     for (let a of checkCells) {
       const val = String(dash.getRange(a).getValue() || "");
       if (val.startsWith("#")) return true;
@@ -993,25 +1033,21 @@ function applyDashboardMetricsAndFormulas(dash, ticketSheet, spreadsheet) {
     return false;
   }
 
-  // Próba 1: Użycie preferowanego separatora regionalnego (np. ; dla pl_PL)
   setFormulasWithSeparator(preferredSep);
   SpreadsheetApp.flush();
 
-  // Jeśli preferowany separator wywołał błędy, spróbuj separatora alternatywnego
   if (hasAnyFormulaError()) {
-    Logger.log(`Wykryto błąd formuł przy separatorze '${preferredSep}'. Próba z separatorem '${alternateSep}'...`);
+    Logger.log(`Próba z separatorem alternatywnym '${alternateSep}'...`);
     setFormulasWithSeparator(alternateSep);
     SpreadsheetApp.flush();
   }
 
-  // Jeśli formuły nadal zawierają błędy lub liczba B5 nie zgadza się z CRM:
-  // Zastosuj bezpośrednie wartości z niezależnego silnika analitycznego Apps Script
+  // W przypadku problemów z formułami zasil bezpośrednimi danymi z Apps Script
   const displayedCount = Number(dash.getRange("B5").getValue());
   const needsDirectOverride = hasAnyFormulaError() || isNaN(displayedCount) || (displayedCount !== metrics.totalTickets && metrics.totalTickets > 0);
 
   if (needsDirectOverride) {
-    Logger.log("Zastosowano niezależny silnik analityczny Apps Script (bezpośrednie wartości liczbowe).");
-    
+    Logger.log("Zastosowano bezpośrednie zasilenie liczbami z silnika Apps Script.");
     dash.getRange("B5").setValue(metrics.totalTickets);
     dash.getRange("C5").setValue(metrics.newTickets);
     dash.getRange("D5").setValue(metrics.inProgressTickets);
@@ -1024,9 +1060,11 @@ function applyDashboardMetricsAndFormulas(dash, ticketSheet, spreadsheet) {
     dash.getRange("E8").setValue(metrics.avgSatisfaction);
     dash.getRange("F8").setValue(metrics.satisfactionCount);
 
-    dash.getRange("B11").setValue(metrics.reviewsSentCount);
-    dash.getRange("C11").setValue(metrics.reviewRate).setNumberFormat("0.0%");
-    dash.getRange("D11").setValue(metrics.satisfactionRate).setNumberFormat("0.0%");
+    dash.getRange("B11").setValue(metrics.urgentHighCount);
+    dash.getRange("C11").setValue(metrics.overdueSlaCount);
+    dash.getRange("D11").setValue(metrics.missingFirstResponseCount);
+    dash.getRange("E11").setValue(metrics.missingNextStepCount);
+    dash.getRange("F11").setValue(metrics.reviewsSentCount);
 
     for (let i = 0; i < SMARTCARE_SETUP_CONFIG.categories.length; i++) {
       const row = 14 + i;
@@ -1045,10 +1083,9 @@ function applyDashboardMetricsAndFormulas(dash, ticketSheet, spreadsheet) {
 }
 
 /**
- * Tworzy lub aktualizuje 2 wykresy na Dashboardzie bez ich powielania
+ * Tworzy 2 wykresy analityczne bez duplikowania
  */
 function setupDashboardCharts(dash) {
-  // Usunięcie starych wykresów SmartCare, aby zapobiec dublowaniu
   const existingCharts = dash.getCharts();
   for (let c of existingCharts) {
     const opts = c.getOptions();
@@ -1058,7 +1095,7 @@ function setupDashboardCharts(dash) {
     }
   }
 
-  // Wykres 1: Zgłoszenia według kategorii (Wykres słupkowy)
+  // Wykres 1: Kategorie (Bar)
   const categoryRange = dash.getRange("B13:C22");
   const chart1 = dash.newChart()
     .setChartType(Charts.ChartType.BAR)
@@ -1072,7 +1109,7 @@ function setupDashboardCharts(dash) {
     .build();
   dash.insertChart(chart1);
 
-  // Wykres 2: Zgłoszenia według statusów (Wykres kolumnowy)
+  // Wykres 2: Statusy (Column)
   const statusRange = dash.getRange("E13:F19");
   const chart2 = dash.newChart()
     .setChartType(Charts.ChartType.COLUMN)
@@ -1090,7 +1127,7 @@ function setupDashboardCharts(dash) {
 }
 
 /**
- * Weryfikuje integralność Dashboardu (brak błędów formuł, zgodność liczby zgłoszeń, wykresy)
+ * Weryfikuje integralność Dashboardu
  */
 function validateDashboardIntegrity(spreadsheet) {
   const ss = spreadsheet || SpreadsheetApp.getActiveSpreadsheet();
@@ -1109,9 +1146,11 @@ function validateDashboardIntegrity(spreadsheet) {
     { cell: "D8", label: "Śr. czas rozwiązania" },
     { cell: "E8", label: "Średnia satysfakcja" },
     { cell: "F8", label: "Liczba zebranych ocen" },
-    { cell: "B11", label: "Wysłane prośby o opinię" },
-    { cell: "C11", label: "Odsetek z prośbą o opinię" },
-    { cell: "D11", label: "Wskaźnik zebranych ocen" }
+    { cell: "B11", label: "Sprawy PILNE i WYSOKIE" },
+    { cell: "C11", label: "Przekroczone SLA" },
+    { cell: "D11", label: "Brak 1. odpowiedzi" },
+    { cell: "E11", label: "Brak kolejnego kroku" },
+    { cell: "F11", label: "Wysłane prośby o opinię" }
   ];
 
   if (!dash) {
@@ -1125,17 +1164,15 @@ function validateDashboardIntegrity(spreadsheet) {
     };
   }
 
-  // 1. Sprawdzenie błędów formuł w kluczowych wskaźnikach
   for (let item of checkedCells) {
     const range = dash.getRange(item.cell);
     const valStr = String(range.getValue() || "").trim();
     const dispStr = String(range.getDisplayValue() || "").trim();
     if (valStr.startsWith("#") || dispStr.startsWith("#")) {
-      errors.push(`Komórka ${item.cell} (${item.label}) zawiera błąd formuły: ${dispStr || valStr}`);
+      errors.push(`Komórka ${item.cell} (${item.label}) zawiera błąd: ${dispStr || valStr}`);
     }
   }
 
-  // 2. Sprawdzenie tabeli kategorii (C14:C22)
   for (let i = 0; i < SMARTCARE_SETUP_CONFIG.categories.length; i++) {
     const row = 14 + i;
     const cat = SMARTCARE_SETUP_CONFIG.categories[i];
@@ -1145,7 +1182,6 @@ function validateDashboardIntegrity(spreadsheet) {
     }
   }
 
-  // 3. Sprawdzenie tabeli statusów (F14:F19)
   for (let j = 0; j < SMARTCARE_SETUP_CONFIG.statuses.length; j++) {
     const r = 14 + j;
     const stat = SMARTCARE_SETUP_CONFIG.statuses[j];
@@ -1155,18 +1191,16 @@ function validateDashboardIntegrity(spreadsheet) {
     }
   }
 
-  // 4. Porównanie liczby zgłoszeń w B5 z faktyczną liczbą w CRM
   const actualTickets = countActualCrmTickets(ticketSheet);
   const displayedVal = dash.getRange("B5").getValue();
   const displayedTickets = Number(displayedVal);
 
   if (isNaN(displayedTickets)) {
-    errors.push(`Komórka B5 nie zawiera poprawnej liczby zgłoszeń (wartość: '${displayedVal}').`);
+    errors.push(`Komórka B5 nie zawiera liczby zgłoszeń: '${displayedVal}'.`);
   } else if (displayedTickets !== actualTickets) {
-    errors.push(`Niezgodność liczby zgłoszeń: Dashboard pokazuje ${displayedTickets}, a w CRM (ZGŁOSZENIA) znajduje się ${actualTickets}.`);
+    errors.push(`Niezgodność liczby zgłoszeń: Dashboard pokazuje ${displayedTickets}, a w CRM znajduje się ${actualTickets}.`);
   }
 
-  // 5. Sprawdzenie wykresów
   const charts = dash.getCharts();
   if (charts.length < 2) {
     errors.push(`Na Dashboardzie znaleziono tylko ${charts.length} wykres(y), oczekiwano 2.`);
@@ -1183,7 +1217,7 @@ function validateDashboardIntegrity(spreadsheet) {
 }
 
 /**
- * Automatyczne odświeżenie formuł i statystyk Dashboardu (funkcja pomocnicza)
+ * Automatyczne odświeżenie formuł i statystyk Dashboardu
  */
 function refreshDashboardStats(spreadsheet) {
   try {
@@ -1200,14 +1234,7 @@ function refreshDashboardStats(spreadsheet) {
 }
 
 /**
- * Aktualizacja wyłącznie formuł Dashboardu (kompatybilność z poprzednimi wersjami)
- */
-function updateDashboardKpiFormulasOnly() {
-  updateSystemToV026();
-}
-
-/**
- * Konfiguruje zakładkę TESTY z ZACHOWANIEM dotychczasowych wpisów zespołu!
+ * Konfiguruje zakładkę TESTY z uwzględnieniem scenariuszy A-J (v0.2.7)
  */
 function setupTestsSheet(spreadsheet) {
   let testSheet = spreadsheet.getSheetByName(SMARTCARE_SETUP_CONFIG.sheetTabs.tests);
@@ -1241,12 +1268,23 @@ function setupTestsSheet(spreadsheet) {
     ["TEST-10", "", "", "Zabezpieczenie przed ponowną prośbą o opinię", "Gdy prośba była już wysłana, system wyświetla ostrzeżenie i żąda dodatkowego potwierdzenia", "", "", "Do wykonania", "", ""],
     ["TEST-11", "", "", "Twarda blokada serwerowa wysyłki na inny adres niż wsb.student.tester@gmail.com", "Próba wysłania na jakikolwiek inny adres zostaje bezwarunkowo zablokowana przez backend", "", "", "Do wykonania", "", ""],
     ["TEST-12", "", "", "Automatyczne powiadomienie o nowym zgłoszeniu", "Po wypełnieniu formularza dyspozytor natychmiast otrzymuje e-mail z powiadomieniem na wsb.student.tester@gmail.com", "", "", "Do wykonania", "", ""],
-    ["TEST-13", "", "", "Dynamiczny Dashboard z 2 wykresami", "Dashboard automatycznie przelicza zgłoszenia testowe oraz odzwierciedla dane na wykresach kategorii i statusów", "", "", "Do wykonania", "", ""]
+    ["TEST-13", "", "", "Dynamiczny Dashboard z 2 wykresami", "Dashboard automatycznie przelicza zgłoszenia testowe oraz odzwierciedla dane na wykresach kategorii i statusów", "", "", "Do wykonania", "", ""],
+    // Nowe scenariusze akceptacyjne v0.2.7 (A - J):
+    ["TEST-26", "", "", "Scenariusz A: Niekompletny adres i rozbieżność frakcji", "Lokalna kontrola danych wykrywa brak numeru posesji oraz rozbieżność frakcji; AI przygotowuje pytania uzupełniające", "", "", "Do wykonania", "", ""],
+    ["TEST-27", "", "", "Scenariusz B: Powtarzający się problem (rekomendacja PILNY)", "AI wykrywa powtarzalność problemu, rekomenduje priorytet PILNY z uzasadnieniem i ustawia termin reakcji 15 min", "", "", "Do wykonania", "", ""],
+    ["TEST-28", "", "", "Scenariusz C: Zwykła pochwała lub sugestia", "Lokalna kontrola nie wymaga numeru posesji; AI proponuje podziękowanie i zamyka sprawę bez zbędnych pytań", "", "", "Do wykonania", "", ""],
+    ["TEST-29", "", "", "Scenariusz D: Zgłoszenie kompletne z pierwszą odpowiedzią", "AI natychmiast generuje kompletną odpowiedź; pracownik jednym kliknięciem otwiera i zatwierdza treść", "", "", "Do wykonania", "", ""],
+    ["TEST-30", "", "", "Scenariusz E: Zaplanowane działanie na jutro (nie zakończone)", "Wpisanie zaplanowanego działania nie zamyka sprawy, lecz sugeruje aktualizację postępów", "", "", "Do wykonania", "", ""],
+    ["TEST-31", "", "", "Scenariusz F: Sprawa przeterminowana SLA", "System wykrywa brak reakcji w określonym czasie i oznacza sprawę jako przeterminowaną na Dashboardzie", "", "", "Do wykonania", "", ""],
+    ["TEST-32", "", "", "Scenariusz G: Sprawa bez zaplanowanego kolejnego kroku", "Dashboard odnotowuje brak kolejnego działania i wyróżnia sprawę w kolejce do przypisania zadania", "", "", "Do wykonania", "", ""],
+    ["TEST-33", "", "", "Scenariusz H: Zgłoszenie z danymi osobowymi (filtr PII)", "Lokalny filtr PII blokuje automatyczne wysłanie danych do AI i oznacza stan jako 'Wymaga weryfikacji'", "", "", "Do wykonania", "", ""],
+    ["TEST-34", "", "", "Scenariusz I: Obsługa limitu API / offline queue", "Przy niedostępności API system nie blokuje zapisu CRM i podstawia bezpieczny szablon roboczy", "", "", "Do wykonania", "", ""],
+    ["TEST-35", "", "", "Scenariusz J: Jednoczesne wpłynięcie kilku zgłoszeń (LockService)", "LockService kolejkuje zgłoszenia, nadaje unikalne ID i zapobiega kolizjom danych", "", "", "Do wykonania", "", ""]
   ];
 
   if (testSheet.getLastRow() === 0) {
     testSheet.getRange("A1:J1").merge()
-      .setValue("ELWOZ ECO SmartCare – Rejestr Testów Systemowych v0.2.6 (Odbiorca: wsb.student.tester@gmail.com)")
+      .setValue("ELWOZ ECO SmartCare – Rejestr Testów Systemowych v0.2.7 (Customer Service Intelligence)")
       .setFontSize(12).setFontWeight("bold").setBackground("#143d59").setFontColor("#ffffff")
       .setHorizontalAlignment("center").setVerticalAlignment("middle");
     testSheet.setRowHeight(1, 38);
@@ -1278,11 +1316,11 @@ function setupTestsSheet(spreadsheet) {
   testSheet.setColumnWidth(5, 270);
   testSheet.setColumnWidth(6, 270);
 
-  Logger.log("Zakładka TESTY zweryfikowana z zachowaniem danych.");
+  Logger.log("Zakładka TESTY zaktualizowana dla v0.2.7.");
 }
 
 /**
- * Konfiguruje zakładkę INSTRUKCJA AI (aktualna generacja Gemini Flash v0.2.6)
+ * Konfiguruje zakładkę INSTRUKCJA AI (v0.2.7)
  */
 function setupAiInstructionSheet(spreadsheet) {
   let aiSheet = spreadsheet.getSheetByName(SMARTCARE_SETUP_CONFIG.sheetTabs.aiGuide);
@@ -1291,35 +1329,36 @@ function setupAiInstructionSheet(spreadsheet) {
   }
 
   aiSheet.getRange("A1:D1").merge()
-    .setValue("ELWOZ ECO SmartCare – Instrukcja Obsługi Zgłoszeń i Komunikacji z AI (v0.2.6)")
+    .setValue("ELWOZ ECO SmartCare – Instrukcja Obsługi Zgłoszeń i Customer Service Intelligence (v0.2.7)")
     .setFontSize(12).setFontWeight("bold").setBackground("#143d59").setFontColor("#ffffff")
     .setHorizontalAlignment("center").setVerticalAlignment("middle");
   aiSheet.setRowHeight(1, 38);
 
   const instructions = [
     ["1. Zasada nadrzędna", "Sztuczna inteligencja pełni WYŁĄCZNIE rolę asystenta pracownika (Human-in-the-Loop). Pracownik weryfikuje i zatwierdza każdą wiadomość przed wysyłką."],
-    ["2. Ochrona wizerunku i zasady PR", "AI KATEGORYCZNIE NIE WOLNO:\n• ujawniać wewnętrznych kar, reprymend ani nagan pracowników,\n• deklarować uznania reklamacji lub winy przedsiębiorstwa,\n• wymyślać wykonanych działań naprawczych, tras ani fikcyjnych podjazdów,\n• ustalać sztywnych terminów realizacji ani obiecywać zadośćuczynień finansowych,\n• generować opinii w imieniu mieszkańców ani sugerować liczby gwiazdek."],
-    ["3. Twarda anonimizacja danych", "Przed analizą w AI model otrzymuje wyłącznie zanonimizowany kontekst operacyjny (rodzaj problemu, frakcję, miejscowość bez ulicy i numeru posesji oraz treść zweryfikowaną przez pracownika). Wszelkie numery telefonów, adresy e-mail, nazwiska i numery PESEL są usuwane przed wysłaniem do modelu."],
-    ["4. Model sztucznej inteligencji", "Wdrożono pulę modeli Gemini Flash z budżetem 8192 tokenów, minimalnym poziomem myślenia i temperaturą 1.0, eliminując błędy obcięcia odpowiedzi."],
-    ["5. Dedykowane konto testowe", "Wszystkie usługi (Sheets, Forms, Apps Script, Gemini API) zarządzane są z konta: wsb.student.tester@gmail.com. Adres ten stanowi jedyny dopuszczalny cel wysyłki poczty."],
-    ["6. Tryb Demonstracyjny", "Wszelka korespondencja mailowa jest bezwarunkowo kierowana na adres wsb.student.tester@gmail.com z prefiksem [TEST]."]
+    ["2. Automatyczna analiza zgłoszeń", "Nowe zgłoszenia są automatycznie poddawane lokalnej walidacji i analizie przez model Gemini Flash. Wyniki (kategoria, streszczenie, sugerowany priorytet, sprzeczności, kolejny krok i pierwsza odpowiedź) trafiają bezpośrednio do CRM."],
+    ["3. Ochrona wizerunku i zasady PR", "AI KATEGORYCZNIE NIE WOLNO:\n• ujawniać wewnętrznych kar, reprymend ani nagan pracowników,\n• deklarować uznania reklamacji lub winy przedsiębiorstwa,\n• wymyślać wykonanych działań naprawczych, tras ani fikcyjnych podjazdów,\n• ustalać sztywnych terminów realizacji ani obiecywać zadośćuczynień finansowych,\n• generować opinii w imieniu mieszkańców ani sugerować liczby gwiazdek."],
+    ["4. Twarda anonimizacja danych", "Przed analizą w AI model otrzymuje wyłącznie zanonimizowany kontekst operacyjny (rodzaj problemu, frakcję, miejscowość bez ulicy i numeru posesji oraz treść zweryfikowaną przez pracownika). Wszelkie numery telefonów, adresy e-mail, nazwiska i numery PESEL są usuwane przed wysłaniem do modelu."],
+    ["5. Priorytetyzacja i SLA", "System wyróżnia 4 poziomy priorytetów: PILNY (15 min), WYSOKI (1h), STANDARDOWY (4h) i NISKI (24h). AI rekomenduje priorytet, ale pracownik ma pełne prawo jego zmiany."],
+    ["6. Dedykowane konto testowe", "Wszystkie usługi (Sheets, Forms, Apps Script, Gemini API) zarządzane są z konta: wsb.student.tester@gmail.com. Adres ten stanowi jedyny dopuszczalny cel wysyłki poczty."],
+    ["7. Tryb Demonstracyjny", "Wszelka korespondencja mailowa jest bezwarunkowo kierowana na adres wsb.student.tester@gmail.com z prefiksem [TEST]."]
   ];
 
   for (let i = 0; i < instructions.length; i++) {
     const row = 3 + i;
     aiSheet.getRange(row, 1).setValue(instructions[i][0]).setFontWeight("bold").setBackground("#f8fafc").setVerticalAlignment("middle");
     aiSheet.getRange(row, 2, 1, 3).merge().setValue(instructions[i][1]).setWrap(true).setVerticalAlignment("middle");
-    aiSheet.setRowHeight(row, i === 1 ? 95 : 55);
+    aiSheet.setRowHeight(row, i === 2 ? 95 : 55);
   }
 
-  aiSheet.setColumnWidth(1, 210);
+  aiSheet.setColumnWidth(1, 230);
   aiSheet.setColumnWidth(2, 600);
 
-  Logger.log("Zakładka INSTRUKCJA AI zaktualizowana do v0.2.6.");
+  Logger.log("Zakładka INSTRUKCJA AI zaktualizowana do v0.2.7.");
 }
 
 /**
- * Instaluje wyzwalacz onFormSubmit (usuwając ewentualne potwierdzone duplikaty)
+ * Instaluje wyzwalacz onFormSubmit
  */
 function installFormSubmitTrigger(spreadsheet) {
   const triggers = ScriptApp.getUserTriggers(spreadsheet);
@@ -1345,7 +1384,12 @@ function installFormSubmitTrigger(spreadsheet) {
 }
 
 /**
- * Obsługa nowego zgłoszenia po wysłaniu formularza Google Forms
+ * Obsługa nowego zgłoszenia po wysłaniu formularza Google Forms (v0.2.7)
+ * - Nadanie unikalnego ID
+ * - Wyliczenie terminu SLA
+ * - Inicjalizacja stanu analizy AI
+ * - Natychmiastowe powiadomienie e-mail do dyspozytora
+ * - Nieblokujące uruchomienie automatycznej analizy AI
  */
 function handleNewTicketSubmit(e) {
   const lock = LockService.getScriptLock();
@@ -1376,7 +1420,10 @@ function handleNewTicketSubmit(e) {
     const idCol = getCol("ID Zgłoszenia");
     const statusCol = getCol("Status");
     const priorityCol = getCol("Priorytet");
+    const aiStateCol = getCol("Stan analizy AI");
+    const slaDeadlineCol = getCol("Termin SLA 1. reakcji");
     const opinionCol = getCol("Prośba o opinię wysłana");
+    const sideCol = getCol("Strona odpowiedzialna");
 
     let assignedId = "";
     if (idCol > 0) {
@@ -1394,19 +1441,42 @@ function handleNewTicketSubmit(e) {
       sheet.getRange(row, statusCol).setValue("Nowe");
     }
     if (priorityCol > 0 && !sheet.getRange(row, priorityCol).getValue()) {
-      sheet.getRange(row, priorityCol).setValue("Standardowy");
+      sheet.getRange(row, priorityCol).setValue("STANDARDOWY");
+    }
+    if (aiStateCol > 0 && !sheet.getRange(row, aiStateCol).getValue()) {
+      sheet.getRange(row, aiStateCol).setValue("Oczekuje");
+    }
+    if (sideCol > 0 && !sheet.getRange(row, sideCol).getValue()) {
+      sheet.getRange(row, sideCol).setValue("Przedsiębiorstwo");
     }
     if (opinionCol > 0 && !sheet.getRange(row, opinionCol).getValue()) {
       sheet.getRange(row, opinionCol).setValue("NIE");
     }
 
+    // Wyliczenie wstępnego terminu SLA (4 godziny dla zgłoszenia Standardowego)
+    if (slaDeadlineCol > 0 && !sheet.getRange(row, slaDeadlineCol).getValue()) {
+      const now = new Date();
+      const slaMinutes = SMARTCARE_SETUP_CONFIG.slaMinutes["STANDARDOWY"] || 240;
+      const slaDate = new Date(now.getTime() + slaMinutes * 60 * 1000);
+      sheet.getRange(row, slaDeadlineCol).setValue(slaDate).setNumberFormat("yyyy-MM-dd HH:mm");
+    }
+
     SpreadsheetApp.flush();
     Logger.log(`Nowe zgłoszenie ${assignedId} w wierszu ${row} zainicjalizowane pod ochroną LockService.`);
 
-    // Wysłanie automatycznego powiadomienia e-mail do dyspozytora
+    // 1. Natychmiastowe powiadomienie e-mail do dyspozytora (nie blokuje niczego)
     sendNewTicketInternalNotification(sheet, row, headers, assignedId);
 
-    // Odświeżenie statystyk na Dashboardzie
+    // 2. Automatyczne, asynchroniczne wywołanie analizy AI (v0.2.7)
+    if (typeof triggerAutoAiAnalysisForTicket === "function") {
+      try {
+        triggerAutoAiAnalysisForTicket(sheet, row, headers);
+      } catch (aiErr) {
+        Logger.log(`Błąd automatycznej analizy AI dla ${assignedId}: ${aiErr.toString()}`);
+      }
+    }
+
+    // 3. Odświeżenie statystyk na Dashboardzie
     refreshDashboardStats(sheet.getParent());
 
   } catch (err) {
@@ -1451,17 +1521,20 @@ function sendNewTicketInternalNotification(sheet, row, headers, ticketId) {
   const ticketType = getVal("Rodzaj zgłoszenia") || "Zgłoszenie komunalne";
   const wasteFraction = getVal("Rodzaj odpadów") || "Nie określono";
   const city = getVal("Miejscowość") || "Rejon Kartuzy";
+  const priority = getVal("Priorytet") || "STANDARDOWY";
   const contactReq = getVal("Prośba o kontakt ze strony pracownika");
   const nowFormatted = Utilities.formatDate(new Date(), "Europe/Warsaw", "yyyy-MM-dd HH:mm");
   const recipient = SMARTCARE_SETUP_CONFIG.dedicatedTesterEmail;
 
-  const subject = `[TEST] Nowe zgłoszenie ${ticketId} – ${ticketType}`;
+  const isUrgent = priority === "PILNY" || priority === "WYSOKI";
+  const subjectPrefix = isUrgent ? "[PILNE][TEST]" : "[TEST]";
+  const subject = `${subjectPrefix} Nowe zgłoszenie ${ticketId} – ${ticketType}`;
   const sheetUrl = ss.getUrl();
 
   const htmlBody = `
 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 620px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; background: #ffffff;">
-  <div style="background: #143d59; color: #ffffff; padding: 18px 24px;">
-    <h2 style="margin: 0; font-size: 18px; color: #ffffff;">ELWOZ ECO SmartCare – Nowe zgłoszenie</h2>
+  <div style="background: ${isUrgent ? '#b91c1c' : '#143d59'}; color: #ffffff; padding: 18px 24px;">
+    <h2 style="margin: 0; font-size: 18px; color: #ffffff;">ELWOZ ECO SmartCare – Nowe zgłoszenie ${isUrgent ? '(PILNE)' : ''}</h2>
     <span style="font-size: 12px; color: #a5f3fc;">Punkt Obsługi Klienta w Kartuzach • Powiadomienie wewnętrzne dyspozytora</span>
   </div>
   <div style="padding: 22px 24px; color: #1e293b; line-height: 1.5; font-size: 14px;">
@@ -1469,11 +1542,12 @@ function sendNewTicketInternalNotification(sheet, row, headers, ticketId) {
     
     <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px;">
       <tr style="border-bottom: 1px solid #f1f5f9;"><td style="padding: 8px 0; color: #64748b; width: 42%;">Numer zgłoszenia:</td><td style="padding: 8px 0; font-weight: bold; color: #0f172a;">${ticketId}</td></tr>
+      <tr style="border-bottom: 1px solid #f1f5f9;"><td style="padding: 8px 0; color: #64748b;">Priorytet:</td><td style="padding: 8px 0; font-weight: bold; color: ${isUrgent ? '#b91c1c' : '#1e40af'};">${priority}</td></tr>
       <tr style="border-bottom: 1px solid #f1f5f9;"><td style="padding: 8px 0; color: #64748b;">Data wpłynięcia:</td><td style="padding: 8px 0; font-weight: bold;">${nowFormatted}</td></tr>
       <tr style="border-bottom: 1px solid #f1f5f9;"><td style="padding: 8px 0; color: #64748b;">Rodzaj zgłoszenia:</td><td style="padding: 8px 0; font-weight: bold; color: #1b7a3e;">${ticketType}</td></tr>
       <tr style="border-bottom: 1px solid #f1f5f9;"><td style="padding: 8px 0; color: #64748b;">Frakcja odpadów:</td><td style="padding: 8px 0;">${wasteFraction}</td></tr>
       <tr style="border-bottom: 1px solid #f1f5f9;"><td style="padding: 8px 0; color: #64748b;">Miejscowość:</td><td style="padding: 8px 0;">${city}</td></tr>
-      <tr style="border-bottom: 1px solid #f1f5f9;"><td style="padding: 8px 0; color: #64748b;">Wnioskowano o kontakt:</td><td style="padding: 8px 0; font-weight: bold; color: ${contactReq ? '#b45309' : '#475569'};">${contactReq ? 'TAK (wymaga kontaktu telefonicznego lub e-mail)' : 'NIE'}</td></tr>
+      <tr style="border-bottom: 1px solid #f1f5f9;"><td style="padding: 8px 0; color: #64748b;">Wnioskowano o kontakt:</td><td style="padding: 8px 0; font-weight: bold; color: ${contactReq ? '#b45309' : '#475569'};">${contactReq ? 'TAK (wymaga kontaktu)' : 'NIE'}</td></tr>
       <tr><td style="padding: 8px 0; color: #64748b;">Status sprawy:</td><td style="padding: 8px 0;"><span style="background: #e3f2fd; color: #0d47a1; padding: 3px 8px; border-radius: 9999px; font-weight: bold; font-size: 11px;">Nowe</span></td></tr>
     </table>
 
@@ -1483,7 +1557,7 @@ function sendNewTicketInternalNotification(sheet, row, headers, ticketId) {
 
     <p style="font-size: 11px; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 12px; margin-top: 20px; line-height: 1.4;">
       🔒 <strong>Bezpieczeństwo RODO:</strong> Pełne dane mieszkańca znajdują się w zabezpieczonym arkuszu CRM.<br>
-      Wiadomość testowa w ramach projektu Uniwersytetu WSB Merito w Gdańsku (SmartCare v0.2.6).
+      Wiadomość testowa w ramach projektu Uniwersytetu WSB Merito w Gdańsku (SmartCare v0.2.7).
     </p>
   </div>
 </div>`;
@@ -1517,7 +1591,7 @@ function sendNewTicketInternalNotification(sheet, row, headers, ticketId) {
 }
 
 /**
- * Niezawodny generator sekwencyjnego, unikalnego ID zgłoszenia (np. ELW-2026-0001)
+ * Generator unikalnego ID zgłoszenia (np. ELW-2026-0001)
  */
 function getNextUniqueTicketId(sheet, idCol) {
   const lastRow = sheet.getLastRow();
@@ -1558,43 +1632,45 @@ function getNextUniqueTicketId(sheet, idCol) {
 }
 
 /**
- * GŁÓWNA FUNKCJA AKTUALIZUJĄCA DO WERSJI v0.2.6 (FINAL RELEASE)
- * Dostępna w menu arkusza: "📋 SmartCare -> 🚀 Aktualizuj system do v0.2.6"
- * Bezpieczna, bezinwazyjna, zachowuje wszystkie dane i formularz, naprawia Dashboard i powiadomienia.
+ * GŁÓWNA FUNKCJA AKTUALIZUJĄCA DO WERSJI v0.2.7 (Customer Service Intelligence)
+ * Dostępna w menu arkusza: "📋 SmartCare -> 🚀 Aktualizuj system do v0.2.7"
  */
-function updateSystemToV026() {
+function updateSystemToV027() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const ui = SpreadsheetApp.getUi();
 
   try {
-    // 1. Zapewnienie ustawień w zakładce USTAWIENIA
+    // 1. Zapewnienie ustawień SLA i AI w USTAWIENIACH
     setupSettingsSheet(ss);
 
-    // 2. Naprawa i dynamiczne przeliczenie całego Dashboardu z autokalibracją locale
-    setupDashboardSheet(ss);
-
-    // 3. Poprawa czytelności tabeli ZGŁOSZENIA (kompaktowy widok wierszy, brak uciętych nagłówków)
+    // 2. Dopisanie nowych kolumn CSI w arkuszu ZGŁOSZENIA
     const ticketSheet = ss.getSheetByName(SMARTCARE_SETUP_CONFIG.sheetTabs.tickets);
     if (ticketSheet) {
+      setupTicketsSheet(ss);
       formatTicketsSheetForReadability(ticketSheet);
+
+      // Migracja priorytetów i SLA dla istniejących spraw
+      migrateTicketsDataV027(ticketSheet);
     }
 
-    // 4. Weryfikacja wyzwalacza onFormSubmit i usunięcie duplikatów
+    // 3. Konfiguracja Dashboardu z metrykami CSI
+    setupDashboardSheet(ss);
+
+    // 4. Aktualizacja wyzwalaczy
     installFormSubmitTrigger(ss);
 
-    // 5. Aktualizacja rejestru testów
+    // 5. Aktualizacja rejestru testów dla scenariuszy A-J
     setupTestsSheet(ss);
 
-    // 6. Aktualizacja nagłówka zakładki INSTRUKCJA AI do v0.2.6
+    // 6. Aktualizacja instrukcji AI
     setupAiInstructionSheet(ss);
 
     SpreadsheetApp.flush();
 
-    // 7. Rzeczywista weryfikacja integralności Dashboardu
+    // 7. Weryfikacja integralności
     const validation = validateDashboardIntegrity(ss);
 
     if (!validation.isValid) {
-      // REQUIREMENT 7: Nie wyświetlaj komunikatu o sukcesie, jeżeli dashboard zawiera błędy.
       let errorListHtml = "";
       for (let err of validation.errors) {
         errorListHtml += `<li style="color: #b91c1c; margin-bottom: 4px;">${escapeHtmlSetup(err)}</li>`;
@@ -1615,28 +1691,18 @@ function updateSystemToV026() {
 </head>
 <body>
   <span class="badge">Wykryto błędy weryfikacji</span>
-  <h3>ELWOZ ECO SmartCare v0.2.6 – Błąd weryfikacji Dashboardu</h3>
-  
-  <p style="font-size: 13px;">Podczas sprawdzania wskaźników po aktualizacji wykryto następujące nieprawidłowości:</p>
-  
-  <ul class="err-list">
-    ${errorListHtml}
-  </ul>
-
-  <p style="font-size: 12px; color: #475569;">
-    Sprawdź logi w edytorze Apps Script (Execution transcript). Dashboard wymaga ponownego przeliczenia.
-  </p>
-
+  <h3>ELWOZ ECO SmartCare v0.2.7 – Błąd weryfikacji Dashboardu</h3>
+  <ul class="err-list">${errorListHtml}</ul>
   <button type="button" class="btn-close" onclick="google.script.host.close()">Zamknij</button>
 </body>
 </html>`;
 
       const outputErr = HtmlService.createHtmlOutput(errorHtml).setWidth(640).setHeight(480);
-      ui.showModalDialog(outputErr, "SmartCare – Ostrzeżenie weryfikacji Dashboardu v0.2.6");
+      ui.showModalDialog(outputErr, "SmartCare – Ostrzeżenie weryfikacji v0.2.7");
       return;
     }
 
-    // Sukces: Dashboard jest w 100% zwalidowany, bez błędów formuł
+    // Sukces
     const summaryHtml = `
 <!DOCTYPE html>
 <html>
@@ -1655,31 +1721,92 @@ function updateSystemToV026() {
   </style>
 </head>
 <body>
-  <span class="badge">Weryfikacja zakończona sukcesem (0 błędów)</span>
-  <h3>ELWOZ ECO SmartCare v0.2.6 – Raport techniczny Dashboardu</h3>
+  <span class="badge">Aktualizacja v0.2.7 zakończona sukcesem</span>
+  <h3>ELWOZ ECO SmartCare v0.2.7 – Customer Service Intelligence</h3>
   
   <div class="kpi-box">
-    <span>Faktyczna liczba zgłoszeń w CRM (B5):</span>
+    <span>Liczba zweryfikowanych zgłoszeń w CRM:</span>
     <span class="kpi-val">${validation.actualTickets}</span>
   </div>
 
-  <p style="font-size: 13px;">Panel Dashboard oraz arkusz zostały pomyślnie zaktualizowane i zwalidowane bez żadnych błędów:</p>
+  <p style="font-size: 13px;">System został pomyślnie zaktualizowany do wersji <strong>v0.2.7</strong>:</p>
   
   <ul class="item-list">
-    <li><strong>Zgodność regionalna (${escapeHtmlSetup(validation.locale)}):</strong> Składnia formuł została dostosowana do ustawień arkusza z automatyczną kalibracją separatorów (brak błędów <code>#ERROR!</code>).</li>
-    <li><strong>Zgodność danych:</strong> Liczba zgłoszeń na Dashboardzie (${validation.displayedTickets}) jest w 100% zgodna z bazą ZGŁOSZENIA (${validation.actualTickets}).</li>
-    <li><strong>Wykresy analityczne:</strong> Oba wykresy (Kategorie oraz Statusy) zostały zweryfikowane i zasilone poprawnymi danymi (brak pustych pól).</li>
-    <li><strong>Czytelność nagłówków:</strong> Włączono pełne zawijanie tekstu nagłówków i zoptymalizowano szerokości kolumn (brak uciętych napisów).</li>
-    <li><strong>Instrukcja AI:</strong> Zaktualizowano nagłówek zakładki <code>INSTRUKCJA AI</code> do wersji v0.2.6.</li>
+    <li><strong>Automatyczna analiza AI:</strong> Nowe zgłoszenia są automatycznie walidowane i analizowane przez Gemini w tle.</li>
+    <li><strong>Priorytetyzacja (PILNY, WYSOKI, STANDARDOWY, NISKI):</strong> Wdrożono czytelną hierarchię spraw z celami czasowymi SLA.</li>
+    <li><strong>Centralny Panel Obsługi:</strong> W menu dostępna jest funkcja <em>🎯 Obsłuż zgłoszenie</em> łącząca pełny kontekst, AI i akcje.</li>
+    <li><strong>Zarządzanie kolejnymi krokami:</strong> Śledzenie strony odpowiedzialnej (Przedsiębiorstwo vs Mieszkaniec) oraz terminów realizacji.</li>
+    <li><strong>Dashboard CSI:</strong> Nowe wskaźniki spraw przeterminowanych, bez odpowiedzi i bez zaplanowanego działania.</li>
+    <li><strong>Integralność danych:</strong> Brak błędów formuł (0 błędów), zachowane wszystkie rekordy i wykresy.</li>
   </ul>
 
   <button type="button" class="btn-close" onclick="google.script.host.close()">Zamknij</button>
 </body>
 </html>`;
 
-    const output = HtmlService.createHtmlOutput(summaryHtml).setWidth(620).setHeight(480);
-    ui.showModalDialog(output, "SmartCare – Aktualizacja Dashboardu v0.2.6");
+    const output = HtmlService.createHtmlOutput(summaryHtml).setWidth(640).setHeight(500);
+    ui.showModalDialog(output, "SmartCare – Aktualizacja do v0.2.7 (CSI)");
   } catch (err) {
-    ui.alert("Błąd aktualizacji do v0.2.6", err.toString(), ui.ButtonSet.OK);
+    ui.alert("Błąd aktualizacji do v0.2.7", err.toString(), ui.ButtonSet.OK);
   }
+}
+
+/**
+ * Pomocnicza migracja danych dla v0.2.7 (normalizacja priorytetów, SLA, stany AI)
+ */
+function migrateTicketsDataV027(ticketSheet) {
+  if (!ticketSheet || ticketSheet.getLastRow() <= 1) return;
+  const lastCol = ticketSheet.getLastColumn();
+  const headers = ticketSheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim());
+  const data = ticketSheet.getDataRange().getValues();
+
+  const getColIdx = (name) => headers.indexOf(name);
+  const prioIdx = getColIdx("Priorytet");
+  const aiStateIdx = getColIdx("Stan analizy AI");
+  const aiSugPrioIdx = getColIdx("Sugerowany priorytet AI");
+  const sideIdx = getColIdx("Strona odpowiedzialna");
+  const slaDeadlineIdx = getColIdx("Termin SLA 1. reakcji");
+  const timeIdx = getColIdx("Sygnatura czasowa");
+  const aiSummaryIdx = getColIdx("Streszczenie AI");
+
+  for (let r = 1; r < data.length; r++) {
+    const rowNum = r + 1;
+
+    // Normalizacja priorytetu
+    if (prioIdx !== -1) {
+      let p = String(data[r][prioIdx] || "").toUpperCase().trim();
+      if (!p || p === "STANDARDOWY" || p === "STANDARD") p = "STANDARDOWY";
+      else if (p.includes("WYSOK")) p = "WYSOKI";
+      else if (p.includes("PILN")) p = "PILNY";
+      else if (p.includes("NISK")) p = "NISKI";
+      if (data[r][prioIdx] !== p) ticketSheet.getRange(rowNum, prioIdx + 1).setValue(p);
+    }
+
+    // Stan analizy AI dla istniejących spraw
+    if (aiStateIdx !== -1 && !data[r][aiStateIdx]) {
+      const hasSummary = aiSummaryIdx !== -1 && String(data[r][aiSummaryIdx] || "").trim() !== "";
+      ticketSheet.getRange(rowNum, aiStateIdx + 1).setValue(hasSummary ? "Gotowa" : "Oczekuje");
+    }
+
+    // Domyślna strona odpowiedzialna
+    if (sideIdx !== -1 && !data[r][sideIdx]) {
+      ticketSheet.getRange(rowNum, sideIdx + 1).setValue("Przedsiębiorstwo");
+    }
+
+    // Wyliczenie SLA dla zgłoszeń z pustym terminem
+    if (slaDeadlineIdx !== -1 && !data[r][slaDeadlineIdx]) {
+      const created = timeIdx !== -1 ? parseDateValue(data[r][timeIdx]) : null;
+      if (created) {
+        const slaDate = new Date(created + 240 * 60 * 1000); // 4h
+        ticketSheet.getRange(rowNum, slaDeadlineIdx + 1).setValue(slaDate).setNumberFormat("yyyy-MM-dd HH:mm");
+      }
+    }
+  }
+}
+
+/**
+ * Kompatybilność z menu v0.2.6
+ */
+function updateSystemToV026() {
+  updateSystemToV027();
 }

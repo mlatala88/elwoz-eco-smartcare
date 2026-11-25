@@ -4,6 +4,59 @@ Wszystkie istotne zmiany i wydania w projekcie **ELWOZ ECO SmartCare** są rejes
 
 ---
 
+## [0.2.7] – 2026-11-25
+### Customer Service Intelligence (CSI): Inteligentny asystent biura obsługi klienta, automatyczna analiza w tle, 4 poziomy priorytetów i SLA, Centralny Panel Obsługi oraz Kolejka Spraw
+
+#### Nowe moduły i kluczowe innowacje v0.2.7:
+1. **Automatyczna analiza w tle bez blokowania zgłoszenia (`google/ai.gs`, `google/setup.gs`):**
+   - Po zarejestrowaniu zgłoszenia przez formularz Google Forms funkcja `handleNewTicketSubmit` niezwłocznie przypisuje identyfikator sprawy, a następnie asynchronicznie/w tle wywołuje procedurę `triggerAutoAiAnalysisForTicket`.
+   - Analiza wykonuje lokalną pre-walidację oraz odpytuje model Gemini Flash, zapisując pełną strukturę 9 pól do CRM (`Stan analizy AI`: *Gotowa* lub *Wymaga weryfikacji*).
+   - Ewentualne chwilowe problemy z API Gemini nie blokują zapisu zgłoszenia ani powiadomień e-mail.
+2. **Lokalna pre-walidacja regułowa przed wywołaniem AI (`preValidateTicketData`):**
+   - Weryfikacja regułowa bez zużywania tokenów LLM:
+     - **Reguły zależne od kategorii:** Pochwały i wnioski nie wymagają dokładnego adresu; brak odbioru i uszkodzone pojemniki wymagają miejscowości i ulicy z numerem posesji.
+     - **Poprawność danych kontaktowych:** Weryfikacja formatu e-mail oraz długości numeru telefonu.
+     - **Wykrywanie pozornych odpowiedzi:** Filtrowanie placeholderów (*test, asdf, xxx, brak, nie wiem*).
+     - **Wykrywanie sprzeczności logicznych:** Wykrywanie rozbieżności między zadeklarowaną frakcją (np. BIO) a treścią opisu (np. plastik, tworzywa sztuczne).
+     - **Wykrywanie słów kluczowych zagrożenia/pilności:** Automatyczne flagowanie słów kluczowych (*zagrożenie, wyciek, gryzonie, fetor, smród, pożar, zablokowany dojazd*) oraz powtarzalności (*kolejny raz, znowu*).
+     - **Ochrona prywatności i filtr RODO:** Maskowanie numerów PESEL, e-maili i telefonów przed przekazaniem do modelu.
+3. **Rozszerzony schemat Structured Outputs (10 pól):**
+   - Zwiększono schemat JSON do 10 pól: `kategoria`, `streszczenie`, `sugerowanyPriorytet` (PILNY, WYSOKI, STANDARDOWY, NISKI), `uzasadnieniePriorytetu`, `brakujaceInformacje`, `wykryteSprzecznosci`, `sugerowaneDzialanie`, `rekomendowanyKrok`, `rekomendowanaStronaKroku`, `proponowanaOdpowiedz`.
+4. **4-stopniowy model priorytetów oraz SLA:**
+   - **PILNY** (czerwony, 15 min): zagrożenie sanitarne, bezpieczeństwo, fetor, zablokowany dojazd, wielokrotne reklamacje,
+   - **WYSOKI** (pomarańczowy, 60 min): brak odbioru całej ulicy, reklamacja ponowna,
+   - **STANDARDOWY** (niebieski, 240 min = 4 godz.): standardowy brak odbioru, wymiana pojemnika,
+   - **NISKI** (zielony, 1440 min = 24 godz.): zapytania ogólne, wnioski, pochwały.
+5. **🎯 Centralny Panel Obsługi Zgłoszenia (`actionOpenCentralTicketHub`):**
+   - Okno modalne 920x680px stanowiące zintegrowany pulpit dyspozytora:
+     - Pełny podgląd danych mieszkańca, problemu i lokalizacji,
+     - Wyniki pre-walidacji regułowej oraz wnioski AI,
+     - Edytor stanu: status, priorytet, pracownik odpowiedzialny,
+     - Zarządzanie kolejnym krokiem: treść działania, strona odpowiedzialna (*Przedsiębiorstwo* / *Mieszkaniec*), termin kroku oraz stan SLA,
+     - Szybka komunikacja: przejście do szablonów z pre-wypełnioną treścią AI w 0 sekund,
+     - Zapis do CRM za pomocą funkcji `saveTicketPanelUpdates`.
+6. **📊 Przeglądarka Kolejki Spraw i Filtry Operacyjne (`actionOpenQueueBrowser`):**
+   - Interaktywna przeglądarka spraw z filtrami operacyjnymi:
+     - Wszystkie aktywne,
+     - Przeterminowane SLA / Pilne,
+     - Brak kolejnego kroku,
+     - Oczekuje na mieszkańca,
+     - Termin dzisiaj.
+   - Bezpośredni przycisk *🎯 Obsłuż* otwierający Centralny Panel dla wybranej sprawy.
+7. **⏰ Monitorowanie SLA i Skonsolidowany Alert E-mail (`actionCheckSlaAlerts`):**
+   - Weryfikacja aktywnych spraw pod kątem przekroczenia SLA i braku kolejnego kroku.
+   - Wysłanie pojedynczego, estetycznego raportu e-mail do `wsb.student.tester@gmail.com`.
+8. **Gotowa pierwsza odpowiedź ładowana w 0 sekund:**
+   - Wykorzystanie pola `Proponowana odpowiedź AI` bezpośrednio w szablonie potwierdzenia, eliminujące 24-sekundowy czas oczekiwania na generowanie tekstu.
+9. **Rozszerzony Dashboard operacyjny CSI (`setup.gs`):**
+   - Wzbogacenie Dashboardu o sekcję wskaźników CSI: sprawy pilne/wysokie, przeterminowane SLA, brakujące pierwsze odpowiedzi, brakujące kolejne kroki, sprawy oczekujące na mieszkańca oraz z terminem na dzisiaj.
+   - Zapewnienie pełnej kompatybilności z `pl_PL` i silnikiem Ground Truth.
+10. **Bezpieczna funkcja aktualizacji systemu (`updateSystemToV027`):**
+    - Dodaje nowe kolumny do `ZGŁOSZENIA`, aktualizuje arkusz `USTAWIENIA`, formatowanie warunkowe priorytetów oraz Dashboard CSI.
+    - Zero utraty danych: zachowuje wszystkie istniejące zgłoszenia testowe (`ELW-2026-0001` do `ELW-2026-0003`) oraz ich historię.
+
+---
+
 ## [0.2.6] – 2026-11-25
 ### Wydanie Końcowe (FINAL RELEASE): Całkowita naprawa Dashboardu, dynamiczne mapowanie kolumn, wykresy analityczne, automatyczne powiadomienia e-mail, zweryfikowany profil Google oraz standardy CX i PR
 

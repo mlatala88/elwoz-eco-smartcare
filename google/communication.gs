@@ -1,22 +1,24 @@
 /**
  * ============================================================================
- * ELWOZ ECO SmartCare - Moduł Komunikacji i Zarządzania Reputacją (communication.gs)
- * Wersja: 0.2.6 (FINAL RELEASE - Powiadomienia o zgłoszeniach, dynamiczny dashboard, link Google, CX/PR)
+ * ELWOZ ECO SmartCare - Moduł Komunikacji & Customer Service Intelligence (communication.gs)
+ * Wersja: 0.2.7 (CSI - Centrum Obsługi, Kolejka spraw, Gotowa 1. odpowiedź 0s, 4 poziomy priorytetów)
  * Projekt edukacyjny: Uniwersytet WSB Merito w Gdańsku
  * Dedykowane konto testowe: wsb.student.tester@gmail.com
  * ============================================================================
  * 
- * ZAKRES MODUŁU:
- * 1. Niestandardowe menu arkusza „SmartCare” (z aktualizacją do v0.2.6 i diagnostyką).
- * 2. Cztery edytowalne szablony wiadomości oparte WYŁĄCZNIE na zweryfikowanych faktach.
- * 3. Pełne zabezpieczenie okien dialogowych przed wstrzyknięciem HTML/JS (escapeHtml).
- * 4. BEZWARUNKOWA blokada wysyłki na serwerze: dozwolony odbiorca to WYŁĄCZNIE wsb.student.tester@gmail.com.
- * 5. Zabezpieczenie przed równoczesną wysyłką za pomocą LockService.
- * 6. Zabezpieczenie przed duplikatami wysyłek (kontrola 5-minutowego okna).
- * 7. Blokada placeholdera w prośbie o opinię – autentyczny zweryfikowany link Google.
- * 8. Bezpieczna stylizacja wiadomości przez zweryfikowany model Gemini Flash (8192 tokeny, filtr myśli).
- * 9. Blokada przycisków i statusy podczas generowania odpowiedzi przez AI.
- * 10. Zapis dat w arkuszu jako obiekty Date z automatycznym odświeżaniem wskaźników Dashboardu.
+ * ZAKRES MODUŁU v0.2.7:
+ * 1. Niestandardowe menu arkusza „SmartCare” (z Centrum Obsługi Zgłoszeń i Kolejką spraw).
+ * 2. Centralny panel obsługi zgłoszenia (Obsłuż zgłoszenie) – zintegrowany widok 360° mieszkańca,
+ *    inteligencji AI, planowania kolejnego kroku oraz natychmiastowych akcji.
+ * 3. Przeglądarka kolejki spraw i filtrów operacyjnych (Kolejka spraw i filtry operacyjne).
+ * 4. Błyskawiczny kreator pierwszej odpowiedzi (0 sekund oczekiwania pracownika) zasilany
+ *    pre-generowaną treścią z kolumny CRM 'Proponowana odpowiedź AI'.
+ * 5. Cztery edytowalne szablony wiadomości oparte WYŁĄCZNIE na zweryfikowanych faktach (CX/PR).
+ * 6. BEZWARUNKOWA blokada wysyłki na serwerze: dozwolony odbiorca to WYŁĄCZNIE wsb.student.tester@gmail.com.
+ * 7. Zabezpieczenie przed równoczesną wysyłką za pomocą LockService oraz duplikatami (5-minutowe okno).
+ * 8. Autentyczny zweryfikowany link do profilu Google i blokada placeholdera.
+ * 9. Stylizacja i korekta językowa AI przez zweryfikowany model Gemini Flash (8192 tokeny, filtr myśli).
+ * 10. Automatyczna weryfikacja terminów SLA i zintegrowane odświeżanie Dashboardu.
  */
 
 // Jedyny bezwarunkowo autoryzowany odbiorca testowy
@@ -26,32 +28,36 @@ const APPROVED_TEST_RECIPIENT = "wsb.student.tester@gmail.com";
 const VERIFIED_GOOGLE_REVIEW_URL_DEFAULT = "https://search.google.com/local/writereview?placeid=ChIJ13yCwGSa_UYRqkDdyWL8wdA";
 
 /**
- * Automatyczne utworzenie menu SmartCare po otwarciu arkusza
+ * Automatyczne utworzenie menu SmartCare po otwarciu arkusza (v0.2.7)
  */
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu("📋 SmartCare")
-    .addItem("1. 🤖 Analizuj zgłoszenie przez AI", "actionAnalyzeWithAi")
+    .addItem("1. 🎯 Obsłuż zgłoszenie (Centrum Obsługi)", "actionOpenCentralTicketHub")
+    .addItem("2. 📊 Kolejka spraw i filtry operacyjne", "actionOpenQueueBrowser")
+    .addItem("3. 🤖 Analizuj zgłoszenie przez AI", "actionAnalyzeWithAi")
     .addSeparator()
-    .addItem("2. ✉️ Przygotuj potwierdzenie przyjęcia", "actionPrepareConfirmation")
-    .addItem("3. ✉️ Przygotuj informację o postępach", "actionPrepareProgressUpdate")
-    .addItem("4. ✉️ Przygotuj informację o rozwiązaniu", "actionPrepareResolution")
-    .addItem("5. ⭐ Przygotuj prośbę o opinię Google", "actionPrepareReviewRequest")
+    .addItem("4. ✉️ Przygotuj pierwszą odpowiedź / potwierdzenie", "actionPrepareConfirmation")
+    .addItem("5. ✉️ Przygotuj informację o postępach", "actionPrepareProgressUpdate")
+    .addItem("6. ✉️ Przygotuj informację o rozwiązaniu", "actionPrepareResolution")
+    .addItem("7. ⭐ Przygotuj prośbę o opinię Google", "actionPrepareReviewRequest")
     .addSeparator()
-    .addItem("6. 📞 Odnotuj kontakt telefoniczny", "actionLogPhoneCall")
-    .addItem("7. 📜 Wyświetl historię komunikacji", "actionViewCommunicationHistory")
+    .addItem("8. 📞 Odnotuj kontakt telefoniczny", "actionLogPhoneCall")
+    .addItem("9. 📜 Wyświetl historię komunikacji", "actionViewCommunicationHistory")
     .addSeparator()
     .addItem("🔍 Test diagnostyczny Gemini API", "testGeminiApiIntegration")
-    .addItem("🚀 Aktualizuj system do v0.2.6", "updateSystemToV026")
+    .addItem("🚀 Aktualizuj system do v0.2.7", "updateSystemToV027")
     .addItem("⚙️ Ustawienia / Klucz Gemini API", "configureGeminiApiKeyFromComm")
     .addToUi();
 }
 
 /**
- * Kompatybilność wsteczna - wywołanie aktualizacji v0.2.6
+ * Kompatybilność wsteczna - wywołanie aktualizacji do najnowszej wersji
  */
 function updateDashboardKpiFormulasOnly() {
-  if (typeof updateSystemToV026 === "function") {
+  if (typeof updateSystemToV027 === "function") {
+    updateSystemToV027();
+  } else if (typeof updateSystemToV026 === "function") {
     updateSystemToV026();
   }
 }
@@ -100,7 +106,7 @@ function getSmartCareSettings() {
   if (!settingsSheet) return defaultSettings;
 
   try {
-    const data = settingsSheet.getRange("A3:B13").getValues();
+    const data = settingsSheet.getRange("A3:B18").getValues();
     const settingsMap = {};
     for (let row of data) {
       if (row[0]) settingsMap[row[0].toString().trim()] = (row[1] || "").toString().trim();
@@ -119,7 +125,7 @@ function getSmartCareSettings() {
       website: settingsMap["Oficjalna strona internetowa"] || defaultSettings.website,
       googleReviewUrl: reviewUrl,
       senderName: settingsMap["Nazwa nadawcy wiadomości"] || defaultSettings.senderName,
-      testEmail: APPROVED_TEST_RECIPIENT // Bezwarunkowo wymuszony adres testerski
+      testEmail: APPROVED_TEST_RECIPIENT
     };
   } catch (err) {
     Logger.log("Błąd odczytu USTAWIENIA: " + err.toString());
@@ -128,7 +134,7 @@ function getSmartCareSettings() {
 }
 
 /**
- * Pobiera dane zaznaczonego zgłoszenia z zakładki ZGŁOSZENIA
+ * Pobiera dane zaznaczonego zgłoszenia z zakładki ZGŁOSZENIA (v0.2.7)
  */
 function getSelectedTicketData() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -146,21 +152,32 @@ function getSelectedTicketData() {
     return null;
   }
 
+  return getTicketDataByRow(sheet, row);
+}
+
+/**
+ * Pobiera kompletny obiekt danych zgłoszenia dla wskazanego wiersza
+ */
+function getTicketDataByRow(sheet, row) {
   const lastCol = sheet.getLastColumn();
   const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim());
   const values = sheet.getRange(row, 1, 1, lastCol).getValues()[0];
 
   const getV = (colName) => {
-    // Elastyczne wyszukiwanie dopasowania nagłówka
     for (let i = 0; i < headers.length; i++) {
       if (headers[i] === colName || headers[i].startsWith(colName)) {
-        return (values[i] !== null && values[i] !== undefined) ? String(values[i]).trim() : "";
+        const val = values[i];
+        if (val instanceof Date) {
+          return Utilities.formatDate(val, "Europe/Warsaw", "yyyy-MM-dd HH:mm");
+        }
+        return (val !== null && val !== undefined) ? String(val).trim() : "";
       }
     }
     return "";
   };
 
   const ticketId = getV("ID Zgłoszenia") || `Wiersz-${row}`;
+  const timestamp = getV("Sygnatura czasowa") || getV("Data zgłoszenia");
   const residentEmail = getV("Adres e-mail");
   const residentPhone = getV("Numer telefonu");
   const residentName = getV("Imię i nazwisko") || "Mieszkańcu";
@@ -169,16 +186,53 @@ function getSelectedTicketData() {
   const city = getV("Miejscowość");
   const street = getV("Ulica lub lokalizacja");
   const houseNumber = getV("Numer posesji");
+  const contactRequest = getV("Prośba o kontakt ze strony pracownika");
   const description = getV("Opis zgłoszenia");
+
+  // Kolumny operacyjne CSI v0.2.7
+  const status = getV("Status") || "Nowe";
+  const priority = getV("Priorytet") || "STANDARDOWY";
+  const aiSuggestedPriority = getV("Sugerowany priorytet AI");
+  const aiPriorityRationale = getV("Uzasadnienie priorytetu AI");
+  const aiState = getV("Stan analizy AI") || "Oczekuje";
+  const localDataControl = getV("Lokalna kontrola danych");
+  const contradictions = getV("Wykryte sprzeczności AI");
+  const assignedEmployee = getV("Pracownik odpowiedzialny");
+  const nextAction = getV("Następne działanie");
+  const responsibleSide = getV("Strona odpowiedzialna") || "Przedsiębiorstwo";
+  const nextActionDeadline = getV("Termin następnego działania");
+  const slaDeadline = getV("Termin SLA 1. reakcji");
+  const slaOverdue = getV("Przekroczenie SLA");
+  const employeeNote = getV("Notatka pracownika");
+
+  // Kolumny komunikacyjne i KPI
+  const confirmDate = getV("Data potwierdzenia przyjęcia");
+  const firstContactDate = getV("Data pierwszego kontaktu");
+  const lastContactDate = getV("Data ostatniego kontaktu");
+  const resolveDate = getV("Data rozwiązania");
   const resolutionMethod = getV("Sposób rozwiązania sprawy");
+  const satisfactionRating = getV("Ocena satysfakcji mieszkańca");
+  const satisfactionNote = getV("Komentarz do oceny");
   const reviewSent = getV("Prośba o opinię wysłana").toUpperCase() === "TAK";
   const reviewSentDate = getV("Data wysłania prośby o opinię");
-  const status = getV("Status");
+
+  // Inteligencja AI
+  const aiCategory = getV("Kategoria AI");
+  const aiSummary = getV("Streszczenie AI");
+  const aiMissingInfo = getV("Brakujące informacje AI");
+  const aiSuggestedAction = getV("Sugerowane działanie AI");
+  const aiDraftResponse = getV("Proponowana odpowiedź AI");
+  const aiRecommendedNextStep = getV("Rekomendowany kolejny krok AI");
+
+  let fullLocation = city;
+  if (street) fullLocation += `, ul. ${street}`;
+  if (houseNumber) fullLocation += ` ${houseNumber}`;
 
   return {
     row,
     headers,
     ticketId,
+    timestamp,
     residentEmail,
     residentPhone,
     residentName,
@@ -187,17 +241,519 @@ function getSelectedTicketData() {
     city,
     street,
     houseNumber,
-    location: `${city}, ${street}`.trim(), // Bez numeru posesji w nagłówku ogólnym
+    location: fullLocation,
+    contactRequest,
     description,
+    status,
+    priority,
+    aiSuggestedPriority,
+    aiPriorityRationale,
+    aiState,
+    localDataControl,
+    contradictions,
+    assignedEmployee,
+    nextAction,
+    responsibleSide,
+    nextActionDeadline,
+    slaDeadline,
+    slaOverdue,
+    employeeNote,
+    confirmDate,
+    firstContactDate,
+    lastContactDate,
+    resolveDate,
     resolutionMethod,
+    satisfactionRating,
+    satisfactionNote,
     reviewSent,
     reviewSentDate,
-    status
+    aiCategory,
+    aiSummary,
+    aiMissingInfo,
+    aiSuggestedAction,
+    aiDraftResponse,
+    aiRecommendedNextStep
   };
 }
 
 /**
- * 1. Akcja: Analizuj zgłoszenie przez AI
+ * ============================================================================
+ * 1. CENTRALNY PANEL OBSŁUGI ZGŁOSZENIA (Obsłuż zgłoszenie - v0.2.7)
+ * ============================================================================
+ * Nowoczesny panel 360° dla pracownika:
+ * - Pełny kontekst mieszkańca i zgłoszenia,
+ * - Wyniki inteligencji AI & lokalnej kontroli danych,
+ * - Zarządzanie statusem, priorytetem, kolejnym krokiem i notatkami,
+ * - Natychmiastowe przyciski operacyjne (Odpowiedź 0s, Telefon, Historia, AI).
+ */
+function actionOpenCentralTicketHub() {
+  const ticket = getSelectedTicketData();
+  if (!ticket) return;
+
+  const priorityColors = {
+    "PILNY": { bg: "#fee2e2", text: "#991b1b", border: "#f87171" },
+    "WYSOKI": { bg: "#ffedd5", text: "#9a3412", border: "#fb923c" },
+    "STANDARDOWY": { bg: "#dbeafe", text: "#1e40af", border: "#60a5fa" },
+    "NISKI": { bg: "#dcfce7", text: "#166534", border: "#4ade80" }
+  };
+  const prioStyle = priorityColors[ticket.priority] || priorityColors["STANDARDOWY"];
+
+  const aiBadgeColors = {
+    "Gotowa": { bg: "#dcfce7", text: "#166534" },
+    "Wymaga weryfikacji": { bg: "#fef3c7", text: "#92400e" },
+    "W trakcie": { bg: "#e0f2fe", text: "#0369a1" },
+    "Błąd": { bg: "#fee2e2", text: "#991b1b" },
+    "Oczekuje": { bg: "#f1f5f9", text: "#475569" }
+  };
+  const aiStyle = aiBadgeColors[ticket.aiState] || aiBadgeColors["Oczekuje"];
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 16px; background: #f8fafc; color: #1e293b; font-size: 13px; line-height: 1.45; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #059669; padding-bottom: 10px; margin-bottom: 14px; }
+    .header-title { font-size: 17px; font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 8px; }
+    .pill { display: inline-block; padding: 3px 10px; border-radius: 9999px; font-size: 11px; font-weight: 700; }
+    .grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 14px; }
+    .card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+    .card-title { font-size: 13px; font-weight: 700; color: #143d59; margin-top: 0; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; border-bottom: 1px solid #f1f5f9; padding-bottom: 5px; }
+    .field-row { display: flex; margin-bottom: 5px; }
+    .field-label { width: 140px; color: #64748b; font-weight: 600; font-size: 12px; }
+    .field-val { flex: 1; color: #0f172a; word-break: break-word; }
+    .desc-box { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 10px; font-size: 12px; max-height: 80px; overflow-y: auto; margin-top: 6px; white-space: pre-wrap; }
+    .ai-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 10px; margin-bottom: 10px; }
+    .warn-box { background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 8px 10px; font-size: 12px; color: #92400e; margin-bottom: 8px; }
+    .form-group { margin-bottom: 8px; }
+    label { display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 3px; }
+    input[type="text"], input[type="date"], select, textarea { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 5px; font-size: 12px; font-family: inherit; }
+    input:focus, select:focus, textarea:focus { border-color: #059669; outline: none; }
+    textarea { height: 60px; resize: vertical; }
+    .btn-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; margin-top: 14px; border-top: 1px solid #e2e8f0; padding-top: 12px; }
+    .btn-group-left { display: flex; gap: 8px; }
+    .btn-group-right { display: flex; gap: 8px; }
+    button { padding: 8px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; border: none; transition: 0.15s; }
+    .btn-primary { background: #1b7a3e; color: #ffffff; }
+    .btn-primary:hover { background: #145a32; }
+    .btn-action-mail { background: #0284c7; color: #ffffff; }
+    .btn-action-mail:hover { background: #0369a1; }
+    .btn-action-phone { background: #f59e0b; color: #ffffff; }
+    .btn-action-phone:hover { background: #d97706; }
+    .btn-secondary { background: #e2e8f0; color: #334155; }
+    .btn-secondary:hover { background: #cbd5e1; }
+    .btn-ai-reload { background: #f3e8ff; color: #6b21a8; border: 1px solid #d8b4fe; }
+    .btn-ai-reload:hover { background: #e9d5ff; }
+  </style>
+</head>
+<body>
+  <div class="header-bar">
+    <div class="header-title">
+      <span>🎯 Centrum Obsługi Zgłoszenia: ${escapeHtml(ticket.ticketId)}</span>
+      <span class="pill" style="background:${prioStyle.bg}; color:${prioStyle.text}; border:1px solid ${prioStyle.border};">Priorytet: ${escapeHtml(ticket.priority)}</span>
+      <span class="pill" style="background:${aiStyle.bg}; color:${aiStyle.text};">AI: ${escapeHtml(ticket.aiState)}</span>
+    </div>
+    <div>
+      <span style="font-size:12px; color:#64748b;">Status: <strong>${escapeHtml(ticket.status)}</strong> | SLA: <strong>${escapeHtml(ticket.slaDeadline || "Brak")}</strong></span>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- LEWA KOLUMNA: Mieszkaniec & Treść & Inteligencja AI -->
+    <div>
+      <div class="card" style="margin-bottom: 12px;">
+        <h4 class="card-title">👤 Dane zgłoszenia & Mieszkaniec</h4>
+        <div class="field-row"><span class="field-label">Imię i nazwisko:</span><span class="field-val"><strong>${escapeHtml(ticket.residentName)}</strong></span></div>
+        <div class="field-row"><span class="field-label">Lokalizacja:</span><span class="field-val">📍 ${escapeHtml(ticket.location)}</span></div>
+        <div class="field-row"><span class="field-label">Kontakt:</span><span class="field-val">✉️ ${escapeHtml(ticket.residentEmail || "brak e-mail")} | 📞 ${escapeHtml(ticket.residentPhone || "brak tel")}</span></div>
+        <div class="field-row"><span class="field-label">Frakcja / Kategoria:</span><span class="field-val"><strong>${escapeHtml(ticket.wasteFraction || "Nieokreślona")}</strong> (${escapeHtml(ticket.ticketType)})</span></div>
+        <div class="field-row"><span class="field-label">Wpłynęło:</span><span class="field-val">${escapeHtml(ticket.timestamp)} ${ticket.contactRequest ? '<span style="color:#b45309; font-weight:bold;">[Wnioskowano o kontakt]</span>' : ''}</span></div>
+        
+        <label style="margin-top:8px;">Oryginalny opis mieszkańca:</label>
+        <div class="desc-box">${escapeHtml(ticket.description)}</div>
+      </div>
+
+      <div class="card">
+        <h4 class="card-title">🤖 Customer Service Intelligence (AI)</h4>
+        
+        ${ticket.localDataControl ? `
+        <div class="warn-box">
+          <strong>Lokalna kontrola danych:</strong> ${escapeHtml(ticket.localDataControl)}
+          ${ticket.contradictions && ticket.contradictions !== "Brak sprzeczności" ? `<br>⚠️ <strong>Wykryta sprzeczność:</strong> ${escapeHtml(ticket.contradictions)}` : ''}
+        </div>` : ''}
+
+        <div class="ai-box">
+          <div style="margin-bottom:6px;"><strong>Kategoria AI:</strong> ${escapeHtml(ticket.aiCategory || ticket.ticketType)}</div>
+          <div style="margin-bottom:6px;"><strong>Streszczenie AI:</strong> ${escapeHtml(ticket.aiSummary || "Analiza oczekuje na uruchomienie.")}</div>
+          <div style="margin-bottom:6px;"><strong>Sugerowany priorytet:</strong> <span style="font-weight:bold; color:#b91c1c;">${escapeHtml(ticket.aiSuggestedPriority || "STANDARDOWY")}</span> <em>(${escapeHtml(ticket.aiPriorityRationale || "Brak uzasadnienia")})</em></div>
+          <div style="margin-bottom:6px;"><strong>Brakujące informacje:</strong> ${escapeHtml(ticket.aiMissingInfo || "Brak braków")}</div>
+          <div style="margin-bottom:6px;"><strong>Rekomendowane zadanie:</strong> 🎯 ${escapeHtml(ticket.aiRecommendedNextStep || ticket.aiSuggestedAction || "Weryfikacja zgłoszenia")}</div>
+          <div><strong>Strona kolejnego kroku:</strong> ${ticket.responsibleSide === "Mieszkaniec" ? '<span style="color:#b45309; font-weight:bold;">Mieszkaniec (oczekujemy na dane)</span>' : '<span style="color:#1e40af; font-weight:bold;">Przedsiębiorstwo (działanie POK/dyspozytora)</span>'}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PRAWA KOLUMNA: Zarządzanie sprawą & Kolejny krok -->
+    <div>
+      <div class="card" style="height: 100%; box-sizing: border-box;">
+        <h4 class="card-title">⚙️ Planowanie działań & Zarządzanie sprawą</h4>
+        
+        <form id="ticketPanelForm">
+          <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 8px;">
+            <div class="form-group">
+              <label for="pStatus">Status sprawy:</label>
+              <select id="pStatus">
+                <option value="Nowe" ${ticket.status === 'Nowe' ? 'selected' : ''}>Nowe</option>
+                <option value="Do weryfikacji" ${ticket.status === 'Do weryfikacji' ? 'selected' : ''}>Do weryfikacji</option>
+                <option value="W realizacji" ${ticket.status === 'W realizacji' ? 'selected' : ''}>W realizacji</option>
+                <option value="Rozwiązane" ${ticket.status === 'Rozwiązane' ? 'selected' : ''}>Rozwiązane</option>
+                <option value="Zamknięte" ${ticket.status === 'Zamknięte' ? 'selected' : ''}>Zamknięte</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="pPriority">Zatwierdzony Priorytet:</label>
+              <select id="pPriority">
+                <option value="PILNY" ${ticket.priority === 'PILNY' ? 'selected' : ''}>🔴 PILNY (15 min)</option>
+                <option value="WYSOKI" ${ticket.priority === 'WYSOKI' ? 'selected' : ''}>🟠 WYSOKI (1 godz.)</option>
+                <option value="STANDARDOWY" ${ticket.priority === 'STANDARDOWY' ? 'selected' : ''}>🔵 STANDARDOWY (4 godz.)</option>
+                <option value="NISKI" ${ticket.priority === 'NISKI' ? 'selected' : ''}>🟢 NISKI (24 godz.)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="pNextAction">Następne działanie operacyjne:</label>
+            <input type="text" id="pNextAction" value="${escapeHtml(ticket.nextAction || ticket.aiRecommendedNextStep || '')}" placeholder="np. Weryfikacja zapisu GPS śmieciarki">
+          </div>
+
+          <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 8px;">
+            <div class="form-group">
+              <label for="pResponsibleSide">Strona odpowiedzialna:</label>
+              <select id="pResponsibleSide">
+                <option value="Przedsiębiorstwo" ${ticket.responsibleSide === 'Przedsiębiorstwo' ? 'selected' : ''}>Przedsiębiorstwo (ELWOZ)</option>
+                <option value="Mieszkaniec" ${ticket.responsibleSide === 'Mieszkaniec' ? 'selected' : ''}>Mieszkaniec (oczekiwanie na info)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="pAgent">Pracownik odpowiedzialny:</label>
+              <input type="text" id="pAgent" value="${escapeHtml(ticket.assignedEmployee || '')}" placeholder="Login pracownika">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="pNextDeadline">Termin wykonania następnego kroku:</label>
+            <input type="text" id="pNextDeadline" value="${escapeHtml(ticket.nextActionDeadline || '')}" placeholder="np. 2026-11-26 12:00">
+          </div>
+
+          <div class="form-group">
+            <label for="pResolution">Sposób rozwiązania sprawy (wymagany przed zamknięciem):</label>
+            <textarea id="pResolution" placeholder="Faktyczne działania podjęte w terenie...">${escapeHtml(ticket.resolutionMethod || '')}</textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="pNote">Wewnętrzna notatka pracownika:</label>
+            <textarea id="pNote" placeholder="Ustalenia dyspozytorni, kontakt telefoniczny...">${escapeHtml(ticket.employeeNote || '')}</textarea>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- DOLNA BELKA AKCJI -->
+  <div class="btn-actions">
+    <div class="btn-group-left">
+      <button type="button" class="btn-primary" onclick="saveHubChanges()">💾 Zapisz zmiany w CRM</button>
+      <button type="button" class="btn-ai-reload" onclick="reRunAiAnalysis()">🤖 Przelicz AI ponownie</button>
+    </div>
+    <div class="btn-group-right">
+      <button type="button" class="btn-action-mail" onclick="openFastEmail()">✉️ Przygotuj odpowiedź (0s wait)</button>
+      <button type="button" class="btn-action-phone" onclick="openPhoneCall()">📞 Telefon</button>
+      <button type="button" class="btn-secondary" onclick="openHistory()">📜 Historia</button>
+      <button type="button" class="btn-secondary" onclick="google.script.host.close()">Zamknij</button>
+    </div>
+  </div>
+
+  <script>
+    function saveHubChanges() {
+      const payload = {
+        ticketId: ${JSON.stringify(ticket.ticketId)},
+        rowNum: ${ticket.row},
+        status: document.getElementById('pStatus').value,
+        priority: document.getElementById('pPriority').value,
+        nextAction: document.getElementById('pNextAction').value.trim(),
+        responsibleSide: document.getElementById('pResponsibleSide').value,
+        assignedEmployee: document.getElementById('pAgent').value.trim(),
+        nextActionDeadline: document.getElementById('pNextDeadline').value.trim(),
+        resolutionMethod: document.getElementById('pResolution').value.trim(),
+        employeeNote: document.getElementById('pNote').value.trim()
+      };
+
+      google.script.run
+        .withSuccessHandler((res) => {
+          if (res && res.success) {
+            alert('Zmiany zostały pomyślnie zapisane w rejestrze ZGŁOSZENIA.');
+            google.script.host.close();
+          } else {
+            alert('Błąd zapisu: ' + (res.error || 'Nieznany błąd'));
+          }
+        })
+        .withFailureHandler((err) => {
+          alert('Błąd połączenia z serwerem: ' + err);
+        })
+        .saveTicketPanelUpdates(payload);
+    }
+
+    function openFastEmail() {
+      google.script.host.close();
+      google.script.run.actionPrepareConfirmation();
+    }
+
+    function openPhoneCall() {
+      google.script.host.close();
+      google.script.run.actionLogPhoneCall();
+    }
+
+    function openHistory() {
+      google.script.host.close();
+      google.script.run.actionViewCommunicationHistory();
+    }
+
+    function reRunAiAnalysis() {
+      google.script.host.close();
+      google.script.run.actionAnalyzeWithAi();
+    }
+  </script>
+</body>
+</html>`;
+
+  const uiOutput = HtmlService.createHtmlOutput(html).setWidth(920).setHeight(680);
+  SpreadsheetApp.getUi().showModalDialog(uiOutput, `SmartCare – Centrum Obsługi Zgłoszenia (${ticket.ticketId})`);
+}
+
+/**
+ * Backend zapisu aktualizacji z Centralnego Panelu Obsługi (v0.2.7)
+ */
+function saveTicketPanelUpdates(payload) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("ZGŁOSZENIA");
+  if (!sheet) {
+    return { success: false, error: "Brak zakładki ZGŁOSZENIA." };
+  }
+
+  const row = payload.rowNum;
+  if (!row || row <= 1) {
+    return { success: false, error: "Nieprawidłowy numer wiersza." };
+  }
+
+  const lastCol = sheet.getLastColumn();
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim());
+
+  setValByHeader(sheet, row, headers, "Status", payload.status);
+  setValByHeader(sheet, row, headers, "Priorytet", payload.priority);
+  setValByHeader(sheet, row, headers, "Następne działanie", payload.nextAction);
+  setValByHeader(sheet, row, headers, "Strona odpowiedzialna", payload.responsibleSide);
+  setValByHeader(sheet, row, headers, "Pracownik odpowiedzialny", payload.assignedEmployee);
+  setValByHeader(sheet, row, headers, "Termin następnego działania", payload.nextActionDeadline);
+  setValByHeader(sheet, row, headers, "Sposób rozwiązania sprawy", payload.resolutionMethod);
+  setValByHeader(sheet, row, headers, "Notatka pracownika", payload.employeeNote);
+
+  // Jeśli status to Rozwiązane i brak daty rozwiązania, ustaw datę bieżącą
+  if (payload.status === "Rozwiązane") {
+    const resolveIdx = headers.indexOf("Data rozwiązania");
+    if (resolveIdx !== -1) {
+      const cur = sheet.getRange(row, resolveIdx + 1).getValue();
+      if (!cur) {
+        sheet.getRange(row, resolveIdx + 1).setValue(new Date()).setNumberFormat("yyyy-MM-dd HH:mm");
+      }
+    }
+  }
+
+  SpreadsheetApp.flush();
+  if (typeof refreshDashboardStats === "function") {
+    try { refreshDashboardStats(ss); } catch (_) {}
+  }
+
+  return { success: true };
+}
+
+/**
+ * ============================================================================
+ * 2. PRZEGLĄDARKA KOLEJKI SPRAW I FILTRY OPERACYJNE (v0.2.7)
+ * ============================================================================
+ * Pozwala przeglądać zgłoszenia według priorytetów, SLA i braków kolejnego kroku.
+ */
+function actionOpenQueueBrowser() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("ZGŁOSZENIA");
+  if (!sheet || sheet.getLastRow() <= 1) {
+    SpreadsheetApp.getUi().alert("Informacja", "Brak zgłoszeń w rejestrze ZGŁOSZENIA.", SpreadsheetApp.getUi().ButtonSet.OK);
+    return;
+  }
+
+  const lastRow = sheet.getLastRow();
+  const tickets = [];
+
+  for (let r = 2; r <= lastRow; r++) {
+    const t = getTicketDataByRow(sheet, r);
+    if (t.ticketId) {
+      tickets.push(t);
+    }
+  }
+
+  const ticketsJson = JSON.stringify(tickets);
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 16px; background: #f8fafc; color: #1e293b; font-size: 13px; }
+    h3 { margin-top: 0; color: #0f172a; font-size: 16px; border-bottom: 2px solid #059669; padding-bottom: 6px; }
+    .filter-tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+    .tab-btn { padding: 6px 12px; border-radius: 6px; border: 1px solid #cbd5e1; background: #ffffff; color: #475569; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .tab-btn.active { background: #143d59; color: #ffffff; border-color: #143d59; }
+    .count-badge { background: #e2e8f0; color: #0f172a; padding: 1px 6px; border-radius: 999px; font-size: 10px; margin-left: 4px; }
+    .tab-btn.active .count-badge { background: #059669; color: #ffffff; }
+    table { width: 100%; border-collapse: collapse; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; }
+    th { background: #f1f5f9; padding: 8px 10px; text-align: left; font-size: 11px; color: #475569; border-bottom: 1px solid #cbd5e1; }
+    td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; font-size: 12px; vertical-align: middle; }
+    tr:hover td { background: #f8fafc; }
+    .pill { display: inline-block; padding: 2px 7px; border-radius: 9999px; font-size: 10px; font-weight: 700; }
+    .btn-open { background: #059669; color: #ffffff; padding: 4px 10px; border-radius: 4px; border: none; font-size: 11px; font-weight: 600; cursor: pointer; }
+    .btn-open:hover { background: #047857; }
+    .table-container { max-height: 480px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <h3>📊 Kolejka spraw i filtry operacyjne Customer Service Intelligence (v0.2.7)</h3>
+
+  <div class="filter-tabs" id="filterTabs">
+    <button class="tab-btn active" onclick="setFilter('active')">Wszystkie aktywne <span class="count-badge" id="cActive">0</span></button>
+    <button class="tab-btn" onclick="setFilter('sla')">Przekroczone SLA <span class="count-badge" id="cSla">0</span></button>
+    <button class="tab-btn" onclick="setFilter('urgent')">Pilne i Wysokie <span class="count-badge" id="cUrgent">0</span></button>
+    <button class="tab-btn" onclick="setFilter('noFirst')">Brak 1. odpowiedzi <span class="count-badge" id="cNoFirst">0</span></button>
+    <button class="tab-btn" onclick="setFilter('noNext')">Brak kolejnego kroku <span class="count-badge" id="cNoNext">0</span></button>
+    <button class="tab-btn" onclick="setFilter('resident')">Oczekuje na mieszkańca <span class="count-badge" id="cResident">0</span></button>
+    <button class="tab-btn" onclick="setFilter('company')">Oczekuje na firmę <span class="count-badge" id="cCompany">0</span></button>
+  </div>
+
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 100px;">ID Sprawy</th>
+          <th style="width: 80px;">Status</th>
+          <th style="width: 90px;">Priorytet</th>
+          <th>Mieszkaniec & Lokalizacja</th>
+          <th>Kolejny krok operacyjny</th>
+          <th style="width: 90px;">Strona</th>
+          <th style="width: 110px;">Termin SLA</th>
+          <th style="width: 80px;">Akcja</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+
+  <script>
+    const allTickets = ${ticketsJson};
+    let currentFilter = 'active';
+
+    function setFilter(filter) {
+      currentFilter = filter;
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      event.target.closest('.tab-btn').classList.add('active');
+      renderTable();
+    }
+
+    function matchesFilter(t, filter) {
+      const isResolved = t.status === 'Rozwiązane' || t.status === 'Zamknięte';
+      if (filter === 'active') return !isResolved;
+      if (filter === 'sla') return t.slaOverdue === 'TAK' && !isResolved;
+      if (filter === 'urgent') return (t.priority === 'PILNY' || t.priority === 'WYSOKI') && !isResolved;
+      if (filter === 'noFirst') return !t.firstContactDate && !isResolved;
+      if (filter === 'noNext') return (!t.nextAction || t.nextAction.trim() === '') && !isResolved;
+      if (filter === 'resident') return t.responsibleSide === 'Mieszkaniec' && !isResolved;
+      if (filter === 'company') return (t.responsibleSide === 'Przedsiębiorstwo' || !t.responsibleSide) && !isResolved;
+      return true;
+    }
+
+    function updateCounts() {
+      document.getElementById('cActive').innerText = allTickets.filter(t => matchesFilter(t, 'active')).length;
+      document.getElementById('cSla').innerText = allTickets.filter(t => matchesFilter(t, 'sla')).length;
+      document.getElementById('cUrgent').innerText = allTickets.filter(t => matchesFilter(t, 'urgent')).length;
+      document.getElementById('cNoFirst').innerText = allTickets.filter(t => matchesFilter(t, 'noFirst')).length;
+      document.getElementById('cNoNext').innerText = allTickets.filter(t => matchesFilter(t, 'noNext')).length;
+      document.getElementById('cResident').innerText = allTickets.filter(t => matchesFilter(t, 'resident')).length;
+      document.getElementById('cCompany').innerText = allTickets.filter(t => matchesFilter(t, 'company')).length;
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('tableBody');
+      const filtered = allTickets.filter(t => matchesFilter(t, currentFilter));
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:30px; color:#94a3b8;">Brak spraw spełniających kryteria wybranego filtra.</td></tr>';
+        return;
+      }
+
+      let html = '';
+      for (let t of filtered) {
+        const prioColors = {
+          'PILNY': 'background:#fee2e2; color:#991b1b;',
+          'WYSOKI': 'background:#ffedd5; color:#9a3412;',
+          'STANDARDOWY': 'background:#dbeafe; color:#1e40af;',
+          'NISKI': 'background:#dcfce7; color:#166534;'
+        };
+        const pStyle = prioColors[t.priority] || prioColors['STANDARDOWY'];
+        const isOverdue = t.slaOverdue === 'TAK';
+
+        html += '<tr>' +
+          '<td><strong>' + (t.ticketId || '') + '</strong></td>' +
+          '<td><span class="pill" style="background:#f1f5f9; color:#334155;">' + (t.status || 'Nowe') + '</span></td>' +
+          '<td><span class="pill" style="' + pStyle + '">' + (t.priority || 'STANDARDOWY') + '</span></td>' +
+          '<td><strong>' + (t.residentName || 'Mieszkaniec') + '</strong><br><small style="color:#64748b;">📍 ' + (t.location || '') + '</small></td>' +
+          '<td>' + (t.nextAction || '<em style="color:#ef4444;">Brak przypisanego kroku</em>') + '</td>' +
+          '<td>' + (t.responsibleSide === 'Mieszkaniec' ? '<span style="color:#b45309; font-weight:600;">Mieszkaniec</span>' : 'Firma') + '</td>' +
+          '<td>' + (isOverdue ? '<span style="color:#b91c1c; font-weight:bold;">⚠️ ' + (t.slaDeadline || 'Przekroczone') + '</span>' : (t.slaDeadline || '-')) + '</td>' +
+          '<td><button class="btn-open" onclick="openTicket(' + t.row + ')">Obsłuż</button></td>' +
+          '</tr>';
+      }
+      tbody.innerHTML = html;
+    }
+
+    function openTicket(rowNum) {
+      google.script.host.close();
+      google.script.run.selectRowAndOpenHub(rowNum);
+    }
+
+    updateCounts();
+    renderTable();
+  </script>
+</body>
+</html>`;
+
+  const uiOutput = HtmlService.createHtmlOutput(html).setWidth(940).setHeight(640);
+  SpreadsheetApp.getUi().showModalDialog(uiOutput, "SmartCare – Kolejka spraw i filtry operacyjne");
+}
+
+/**
+ * Zaznacza wiersz w arkuszu ZGŁOSZENIA i otwiera Centrum Obsługi Zgłoszenia
+ */
+function selectRowAndOpenHub(rowNum) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("ZGŁOSZENIA");
+  if (sheet) {
+    ss.setActiveSheet(sheet);
+    sheet.setActiveRange(sheet.getRange(rowNum, 1));
+    actionOpenCentralTicketHub();
+  }
+}
+
+/**
+ * 3. Akcja: Analizuj zgłoszenie przez AI
  */
 function actionAnalyzeWithAi() {
   if (typeof analyzeSelectedTicket === "function") {
@@ -208,8 +764,9 @@ function actionAnalyzeWithAi() {
 }
 
 /**
- * 2. Akcja: Przygotuj potwierdzenie przyjęcia (Szablon A)
- * POPRAWKA AUDYTU: Usunięto niepotwierdzone deklaracje o załogach logistycznych w terenie.
+ * 4. Akcja: Przygotuj potwierdzenie przyjęcia / pierwszą odpowiedź (Szablon A - v0.2.7)
+ * INNOWACJA 0s: Jeśli kolumna 'Proponowana odpowiedź AI' zawiera gotową treść,
+ * ładujemy ją natychmiast do okna dialogowego bez konieczności czekania na model!
  */
 function actionPrepareConfirmation() {
   const ticket = getSelectedTicketData();
@@ -222,11 +779,16 @@ function actionPrepareConfirmation() {
 
   const settings = getSmartCareSettings();
   const subject = `Potwierdzenie przyjęcia zgłoszenia ${ticket.ticketId} – ELWOZ ECO SmartCare`;
-  
-  const body = 
+
+  // Jeśli AI wcześniej wygenerowało kompletną odpowiedź w tle, użyj jej natychmiast (0 sekund oczekiwania!)
+  let body = "";
+  if (ticket.aiDraftResponse && ticket.aiDraftResponse.trim().length > 20) {
+    body = ticket.aiDraftResponse.trim();
+  } else {
+    body = 
 `Dzień dobry, ${ticket.residentName},
 
-Potwierdzamy zarejestrowanie zgłoszenia w systemie demonstracyjnym ELWOZ ECO SmartCare:
+Potwierdzamy zarejestrowanie zgłoszenia w systemie ELWOZ ECO SmartCare:
 • Numer sprawy: ${ticket.ticketId}
 • Rodzaj zgłoszenia: ${ticket.ticketType}
 • Frakcja odpadów: ${ticket.wasteFraction}
@@ -241,6 +803,7 @@ ${settings.senderName}
 ${settings.facilityName}
 ul. Mściwoja II 14, 83-300 Kartuzy
 Tel. ${settings.contactPhone} | ${settings.website}`;
+  }
 
   openEmailDialog({
     ticketId: ticket.ticketId,
@@ -253,8 +816,7 @@ Tel. ${settings.contactPhone} | ${settings.website}`;
 }
 
 /**
- * 3. Akcja: Przygotuj informację o postępach (Szablon B)
- * POPRAWKA AUDYTU: Rzeczowa informacja bez fikcyjnych opisów tras śmieciarek.
+ * 5. Akcja: Przygotuj informację o postępach (Szablon B)
  */
 function actionPrepareProgressUpdate() {
   const ticket = getSelectedTicketData();
@@ -290,8 +852,7 @@ Tel. ${settings.contactPhone} | ${settings.website}`;
 }
 
 /**
- * 4. Akcja: Przygotuj informację o rozwiązaniu (Szablon C)
- * POPRAWKA AUDYTU: Wymaga uzupełnienia rzeczywistego sposobu załatwienia sprawy.
+ * 6. Akcja: Przygotuj informację o rozwiązaniu (Szablon C)
  */
 function actionPrepareResolution() {
   const ticket = getSelectedTicketData();
@@ -302,7 +863,6 @@ function actionPrepareResolution() {
     return;
   }
 
-  // Wymóg uzupełnienia rzeczywistego działania podjętego przez przedsiębiorstwo
   if (!ticket.resolutionMethod) {
     SpreadsheetApp.getUi().alert(
       "Wymagane pole: Sposób rozwiązania sprawy",
@@ -346,8 +906,7 @@ Tel. ${settings.contactPhone} | ${settings.website}`;
 }
 
 /**
- * 5. Akcja: Przygotuj prośbę o opinię Google (Szablon D)
- * POPRAWKA v0.2.3: Blokada prośby z placeholderem. Wysyłka wymaga zweryfikowanego linku w USTAWIENIACH.
+ * 7. Akcja: Przygotuj prośbę o opinię Google (Szablon D)
  */
 function actionPrepareReviewRequest() {
   const ticket = getSelectedTicketData();
@@ -428,8 +987,7 @@ function promptMissingEmail(ticket) {
 }
 
 /**
- * 6. Akcja: Odnotuj kontakt telefoniczny
- * POPRAWKA AUDYTU: Pełna sanityzacja escapeHtml w oknie modalnym.
+ * 8. Akcja: Odnotuj kontakt telefoniczny
  */
 function actionLogPhoneCall() {
   const ticket = getSelectedTicketData();
@@ -468,6 +1026,7 @@ function actionLogPhoneCall() {
   <form id="callForm">
     <label for="callResult">Wynik rozmowy z mieszkańcem:</label>
     <select id="callResult" required>
+      <option value="Mieszkaniec doprecyzował numer posesji / dane">Mieszkaniec doprecyzował dane / numer posesji</option>
       <option value="Mieszkaniec potwierdził rozwiązanie">Mieszkaniec potwierdził rozwiązanie</option>
       <option value="Wyjaśniono zasady / harmonogram">Wyjaśniono zasady / harmonogram</option>
       <option value="Wymaga dalszej weryfikacji w terenie">Wymaga dalszej weryfikacji w terenie</option>
@@ -503,7 +1062,7 @@ function actionLogPhoneCall() {
 </body>
 </html>`;
 
-  const uiOutput = HtmlService.createHtmlOutput(html).setWidth(480).setHeight(380);
+  const uiOutput = HtmlService.createHtmlOutput(html).setWidth(480).setHeight(400);
   SpreadsheetApp.getUi().showModalDialog(uiOutput, "SmartCare – Rejestracja kontaktu telefonicznego");
 }
 
@@ -540,11 +1099,11 @@ function processLogPhoneCall(ticketId, phone, result, notes, agent) {
     const firstContactIdx = headers.indexOf("Data pierwszego kontaktu");
     const resultIdx = headers.indexOf("Wynik kontaktu z mieszkańcem");
     const noteIdx = headers.indexOf("Notatka pracownika");
+    const sideIdx = headers.indexOf("Strona odpowiedzialna");
 
     for (let r = 1; r < data.length; r++) {
       if (String(data[r][idIdx]).trim() === String(ticketId).trim()) {
         const rowNum = r + 1;
-        // Zapis jako Date object z formatowaniem dla spójności KPI
         if (lastContactIdx !== -1) {
           ticketSheet.getRange(rowNum, lastContactIdx + 1).setValue(now).setNumberFormat("yyyy-MM-dd HH:mm");
         }
@@ -555,6 +1114,10 @@ function processLogPhoneCall(ticketId, phone, result, notes, agent) {
         if (noteIdx !== -1) {
           const currentNote = data[r][noteIdx] || "";
           ticketSheet.getRange(rowNum, noteIdx + 1).setValue((currentNote ? currentNote + " | " : "") + `Tel (${nowStr}): ${notes}`);
+        }
+        // Po udanej rozmowie strona odpowiedzialna wraca na Przedsiębiorstwo
+        if (sideIdx !== -1) {
+          ticketSheet.getRange(rowNum, sideIdx + 1).setValue("Przedsiębiorstwo");
         }
         break;
       }
@@ -568,8 +1131,7 @@ function processLogPhoneCall(ticketId, phone, result, notes, agent) {
 }
 
 /**
- * 7. Akcja: Wyświetl historię komunikacji dla zgłoszenia
- * POPRAWKA AUDYTU: Pełna sanityzacja escapeHtml w tabeli historii.
+ * 9. Akcja: Wyświetl historię komunikacji dla zgłoszenia
  */
 function actionViewCommunicationHistory() {
   const ticket = getSelectedTicketData();
@@ -659,11 +1221,7 @@ function actionViewCommunicationHistory() {
 }
 
 /**
- * Uniwersalne okno dialogowe podglądu, edycji i wysyłki wiadomości e-mail
- * POPRAWKA AUDYTU:
- * 1. Zabezpieczenie escapeHtml we wszystkich elementach widoku.
- * 2. Bezwarunkowe oznaczenie odbiorcy jako wsb.student.tester@gmail.com.
- * 3. Bezpieczne przekazanie JSON w wywołaniu script.run.
+ * Uniwersalne okno dialogowe podglądu, edycji i wysyłki wiadomości e-mail (v0.2.7)
  */
 function openEmailDialog(params) {
   const safeTicketId = escapeHtml(params.ticketId);
@@ -893,14 +1451,7 @@ function openEmailDialog(params) {
 }
 
 /**
- * Backend wysyłki poczty z BEZWARUNKOWĄ blokadą serwerową, LockService oraz zabezpieczeniem przed duplikatami
- * POPRAWKI AUDYTU v0.2.3:
- * 1. Zabezpieczenie równoczesnej wysyłki za pomocą LockService.
- * 2. Bezwarunkowa blokada adresu wysyłki: TYLKO wsb.student.tester@gmail.com.
- * 3. Zabezpieczenie przed duplikatem (kontrola ostatnich 5 minut).
- * 4. Blokada placeholdera opinii Google: brak oznaczania rekordu w CRM i wysyłki bez zweryfikowanego linku.
- * 5. Zwracanie jednoznacznego wyniku { success, error } zapobiegające zamykaniu okna przy błędzie.
- * 6. Zapis obiektów Date z formatowaniem komórek dla prawidłowego działania KPI w godzinach.
+ * Backend wysyłki poczty z BEZWARUNKOWĄ blokadą serwerową, LockService oraz zabezpieczeniem przed duplikatami (v0.2.7)
  */
 function processSendEmail(payload) {
   const lock = LockService.getScriptLock();
@@ -923,7 +1474,6 @@ function processSendEmail(payload) {
     const agent = Session.getActiveUser().getEmail().split('@')[0] || "Pracownik";
 
     // 1. BEZWARUNKOWA BLOKADA SERWEROWA ODBIORCY:
-    // W prototypie studenckim cała korespondencja trafia WYŁĄCZNIE na wsb.student.tester@gmail.com
     const targetEmail = APPROVED_TEST_RECIPIENT;
 
     if (!targetEmail || targetEmail.toLowerCase().trim() !== APPROVED_TEST_RECIPIENT.toLowerCase().trim()) {
@@ -981,7 +1531,6 @@ function processSendEmail(payload) {
       if (hasVerifiedReviewLink) {
         finalBody += `\n\n---\n👉 Będziemy wdzięczni za podzielenie się obiektywną opinią w Profilu Firmy Google:\n${settings.googleReviewUrl}`;
       } else {
-        // Blokada wstrzykiwania tekstu zastępczego (placeholdera)
         payload.addedReviewRequest = false;
       }
     }
@@ -989,7 +1538,7 @@ function processSendEmail(payload) {
     // 6. Wymuszenie stopki akademickiej WSB Merito
     finalBody += `\n\n------------------------------------------------------------\n` +
       `[WIADOMOŚĆ TESTOWA – PROTOTYP WSB MERITO]\n` +
-      `Wiadomość wygenerowana w ramach studenckiego projektu wdrożeniowego ELWOZ ECO SmartCare.\n` +
+      `Wiadomość wygenerowana w ramach studenckiego projektu wdrożeniowego ELWOZ ECO SmartCare (v0.2.7).\n` +
       `Fikcyjny adresat zgłoszenia: ${payload.originalRecipient}\n` +
       `Jedyny zatwierdzony serwerowo odbiorca testowy: ${APPROVED_TEST_RECIPIENT}`;
 
@@ -1017,7 +1566,7 @@ function processSendEmail(payload) {
       Logger.log(`Błąd wysyłki dla ${payload.ticketId}: ${errorMessage}`);
     }
 
-    // 8. Zapis w HISTORIA KOMUNIKACJI (zawsze rejestrujemy próbę)
+    // 8. Zapis w HISTORIA KOMUNIKACJI
     if (histSheet) {
       histSheet.appendRow([
         payload.ticketId,
@@ -1083,7 +1632,6 @@ function processSendEmail(payload) {
             }
           }
 
-          // POPRAWKA v0.2.3: Oznaczanie prośby o opinię wyłącznie wtedy, gdy link jest zweryfikowany
           if ((payload.actionType === "Prośba o opinię" || payload.addedReviewRequest) && hasVerifiedReviewLink) {
             if (opinionIdx !== -1) {
               ticketSheet.getRange(rowNum, opinionIdx + 1).setValue("TAK");
@@ -1120,15 +1668,54 @@ function processSendEmail(payload) {
 }
 
 /**
- * Personalizacja wiadomości z użyciem zweryfikowanego modelu Gemini Flash
- * POPRAWKA v0.2.5:
- * 1. Zwiększono limit maxOutputTokens do 8192 oraz ustawiono temperature: 1.0.
- * 2. Wymuszono konfigurację myślenia (thinkingConfig) minimalizującą zużycie tokenów.
- * 3. Wczesna kontrola finishReason: MAX_TOKENS, SAFETY, RECITATION PRZED parsowaniem odpowiedzi.
- * 4. Dodano jedną kontrolowaną próbę ponowienia (1 retry) przy błędzie transient.
- * 5. Structured Outputs oraz filtracja części 'thought: true'.
- * 6. Pełna ochrona przed wyciekiem klucza API w błędach i logach (key=[UKRYTY]).
- * 7. Ścisły zakaz wymyślania załóg, tras i ustaleń.
+ * Automatyczna kontrola przeterminowanych spraw (SLA) i powiadamianie (v0.2.7)
+ */
+function checkOverdueTicketsAndNotify() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ticketSheet = ss.getSheetByName("ZGŁOSZENIA");
+  if (!ticketSheet || ticketSheet.getLastRow() <= 1) return;
+
+  const data = ticketSheet.getDataRange().getValues();
+  const headers = data[0].map(h => String(h).trim());
+  const now = new Date();
+
+  const idIdx = headers.indexOf("ID Zgłoszenia");
+  const statusIdx = headers.indexOf("Status");
+  const firstContactIdx = headers.indexOf("Data pierwszego kontaktu");
+  const slaDeadlineIdx = headers.indexOf("Termin SLA 1. reakcji");
+  const slaOverdueIdx = headers.indexOf("Przekroczenie SLA");
+
+  if (slaDeadlineIdx === -1 || slaOverdueIdx === -1) return;
+
+  const overdueList = [];
+
+  for (let r = 1; r < data.length; r++) {
+    const status = String(data[r][statusIdx] || "").trim();
+    if (status === "Rozwiązane" || status === "Zamknięte") continue;
+
+    const hasFirstContact = data[r][firstContactIdx] !== null && data[r][firstContactIdx] !== undefined && String(data[r][firstContactIdx]).trim() !== "";
+    if (hasFirstContact) continue;
+
+    const deadlineVal = data[r][slaDeadlineIdx];
+    if (deadlineVal) {
+      const deadline = new Date(deadlineVal);
+      if (!isNaN(deadline.getTime()) && deadline < now) {
+        ticketSheet.getRange(r + 1, slaOverdueIdx + 1).setValue("TAK");
+        overdueList.push(data[r][idIdx]);
+      }
+    }
+  }
+
+  if (overdueList.length > 0) {
+    Logger.log(`Wykryto ${overdueList.length} przeterminowanych spraw SLA: ${overdueList.join(", ")}`);
+    if (typeof refreshDashboardStats === "function") {
+      try { refreshDashboardStats(ss); } catch (_) {}
+    }
+  }
+}
+
+/**
+ * Personalizacja wiadomości z użyciem zweryfikowanego modelu Gemini Flash (v0.2.7)
  */
 function polishMessageWithAi(ticketId, templateText) {
   let lastError = null;
@@ -1152,7 +1739,7 @@ function polishMessageWithAi(ticketId, templateText) {
 }
 
 /**
- * Bezpośrednie wywołanie Gemini API do stylizacji wiadomości (v0.2.5)
+ * Bezpośrednie wywołanie Gemini API do stylizacji wiadomości (v0.2.7)
  */
 function polishMessageWithAiDirect(ticketId, templateText) {
   const scriptProperties = PropertiesService.getScriptProperties();
@@ -1161,17 +1748,14 @@ function polishMessageWithAiDirect(ticketId, templateText) {
     throw new Error("Brak klucza Gemini API w Script Properties. Użyj gotowego szablonu.");
   }
 
-  // Dynamiczne ustalenie modelu z bezpłatnej puli Flash
   const targetModel = (typeof getVerifiedGeminiModel === "function")
     ? getVerifiedGeminiModel(apiKey)
     : ((typeof SMARTCARE_AI_CONFIG !== "undefined" && SMARTCARE_AI_CONFIG.defaultModel) ? SMARTCARE_AI_CONFIG.defaultModel : "gemini-3.6-flash");
 
-  // Konfiguracja poziomu myślenia
   const thinkingConfig = (typeof getThinkingConfigForModel === "function")
     ? getThinkingConfigForModel(targetModel)
     : (String(targetModel).includes("2.5") ? { thinkingBudget: 0 } : { thinkingLevel: "MINIMAL" });
 
-  // Twarda anonimizacja treści wejściowej
   const cleanTemplate = anonymizeText(templateText);
 
   const systemPrompt = 
@@ -1181,7 +1765,7 @@ function polishMessageWithAiDirect(ticketId, templateText) {
     "1. POPRAWIAJ GRAMATYKĘ, ORTOGRAFIĘ, INTERPUNKCJĘ I STYL: Dbaj o wysoki standard polszczyzny, uprzejmy, empatyczny, partnerski i rzeczowy ton.\n" +
     "2. USUWAJ PRZYPADKOWO SKOPIOWANE ELEMENTY INTERFEJSU: Wytnij wszelkie techniczne pozostałości, znaczniki UI lub etykiety formularza (np. '[Opis]', 'ID Zgłoszenia:', 'Pole edytowalne:', 'Wiersz:', znaczniki pól itp.).\n" +
     "3. OCHRONA WIZERUNKU PRZEDSIĘBIORSTWA I PRACOWNIKÓW (PR): BEZWZGLĘDNIE NIE UJAWNIAJ WEWNĘTRZNYCH KAR, REPRYMEND, NAGAN, ROZMÓW DYSCYPLINUJĄCYCH ANI KONSEKWENCJI SŁUŻBOWYCH PRACOWNIKÓW LUB ZAŁÓG ŚMIECIAREK. Zamiast kar komunikuj standardy jakościowe, procedury weryfikacyjne i podjęte działania systemowe.\n" +
-    "4. ZASADA PRAWDY: BEZWZGLĘDNIE NIE WYMYŚLAJ FAKTÓW ANI WYKONANYCH DZIAŁAŃ. Opieraj się wyłącznie na faktach i ustaleniach przekazanych w szablonie. Nie twórz fikcyjnych tras, podjazdów śmieciarek ani zmyślonych rozmów dyspozytorni.\n" +
+    "4. ZASADA PRAWDY: BEZWZGLĘDNIE NIE WYMYŚLAJ FAKTÓW ANI WYKONANYCH DZIAŁAŃ. Opieraj się wyłącznie na faktach i ustaleniach przekazanych w szablonie. Rozróżniaj działania zaplanowane (np. 'zaplanowano podjazd kontrolny') od zakończonych.\n" +
     "5. OCHRONA PRAWNA SPÓŁKI: NIGDY nie deklaruj formalnego uznania winy przedsiębiorstwa ani uznania roszczeń reklamacyjnych. NIGDY nie obiecuj rekompensat finansowych, bonifikat, zniżek ani sztywnych terminów, których nie ma w szablonie.\n" +
     "6. ZACHOWAJ KLUCZOWE DANE: Zachowaj numer identyfikacyjny zgłoszenia (np. ELW-...) oraz oficjalne dane kontaktowe do POK w Kartuzach.\n" +
     "7. Odpowiedź zwróć w formacie JSON ze wskazanym kluczem stylizowanaTresc.";
@@ -1264,7 +1848,6 @@ function polishMessageWithAiDirect(ticketId, templateText) {
 
   const candidate = jsonResponse.candidates[0];
 
-  // WCZESNA KONTROLA finishReason PRZED PARSOWANIEM
   if (candidate.finishReason === "SAFETY") {
     throw new Error("Generowanie odpowiedzi zostało zablokowane przez filtry bezpieczeństwa (SAFETY).");
   }
@@ -1276,8 +1859,6 @@ function polishMessageWithAiDirect(ticketId, templateText) {
   }
 
   const parts = candidate.content.parts || [];
-
-  // Filtrujemy części thought (thought: true)
   const validParts = parts.filter(p => !p.thought && typeof p.text === "string" && p.text.trim() !== "");
   if (validParts.length === 0) {
     throw new Error("Model Gemini nie zwrócił treści wiadomości.");
@@ -1285,7 +1866,6 @@ function polishMessageWithAiDirect(ticketId, templateText) {
 
   const rawText = validParts.map(p => p.text).join("").trim();
 
-  // Próba odczytu ze structured output
   try {
     let cleanJson = rawText;
     if (cleanJson.startsWith("```")) {
@@ -1295,9 +1875,7 @@ function polishMessageWithAiDirect(ticketId, templateText) {
     if (parsed && typeof parsed.stylizowanaTresc === "string" && parsed.stylizowanaTresc.trim() !== "") {
       return parsed.stylizowanaTresc.trim();
     }
-  } catch (_) {
-    // Fallback: jeśli model zwrócił czysty tekst
-  }
+  } catch (_) {}
 
   return rawText;
 }
@@ -1308,17 +1886,12 @@ function polishMessageWithAiDirect(ticketId, templateText) {
 function anonymizeText(text) {
   if (!text) return "";
   return String(text)
-    // 1. Zabezpieczenie oficjalnych danych kontaktowych spółki przed wycięciem
     .replace(/kartuzy@elwozeco\.pl/gi, "___POK_EMAIL___")
     .replace(/58\s*681\s*22\s*99/g, "___POK_PHONE1___")
     .replace(/605\s*347\s*455/g, "___POK_PHONE2___")
-    // 2. Usunięcie prywatnych adresów e-mail mieszkańców
     .replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, "[E-MAIL USUNIĘTO]")
-    // 3. Usunięcie numerów PESEL (11 cyfr)
     .replace(/\b\d{11}\b/g, "[IDENTYFIKATOR USUNIĘTO]")
-    // 4. Usunięcie numerów telefonów (z prefiksem +48 lub 9 cyfr ze spacjami/myślnikami)
     .replace(/(?:\+?48[\s-]?)?(?:\b\d{3}[\s-]?\d{3}[\s-]?\d{3}\b|\b\d{9}\b)/g, "[NUMER TELEFONU USUNIĘTO]")
-    // 5. Przywrócenie oficjalnych danych POK Kartuzy
     .replace(/___POK_EMAIL___/g, "kartuzy@elwozeco.pl")
     .replace(/___POK_PHONE1___/g, "58 681 22 99")
     .replace(/___POK_PHONE2___/g, "605 347 455");
