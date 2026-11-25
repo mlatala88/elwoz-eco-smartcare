@@ -1,5 +1,5 @@
 # ELWOZ ECO SmartCare – Procedura Testowa i Rejestr Weryfikacji
-**Wersja:** 0.2.1 (Zarządzanie reputacją, komunikacja i dedykowane konto testowe)  
+**Wersja:** 0.2.2 (Poprawki po niezależnym audycie kodu)  
 **Projekt:** Studencki prototyp wdrożeniowy – Uniwersytet WSB Merito w Gdańsku  
 **Przedsiębiorstwo:** ELWOZ ECO Sp. z o.o. (Rejon Kartuzy)  
 **Dedykowane konto testowe:** `wsb.student.tester@gmail.com`

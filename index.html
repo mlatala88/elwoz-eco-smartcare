@@ -94,198 +94,48 @@
       </div>
     </section>
 
-    <!-- Karta potwierdzenia zgłoszenia (pokazywana po wysłaniu) -->
-    <section class="confirmation-card" id="confirmationCard" role="region" aria-live="polite">
-      <div class="confirmation-icon">✓</div>
-      <h3 class="confirmation-title">Zgłoszenie zostało zarejestrowane!</h3>
-      <div class="confirmation-id-box">
-        <div class="confirmation-id-label">Numer zgłoszenia testowego:</div>
-        <div class="confirmation-id-val" id="confirmedTicketId">ELW-2026-0001</div>
-      </div>
-      <p class="confirmation-text">
-        Dane formularza zostały zapisane w arkuszu demonstracyjnym <strong>ELWOZ ECO SmartCare – Centrum zgłoszeń</strong>. 
-        Pracownik w panelu CRM otrzymał powiadomienie o nowym zgłoszeniu.
-      </p>
-      
-      <div class="confirmation-alert">
-        <strong>Pamiętaj:</strong> To jest zgłoszenie testowe w ramach prototypu studenckiego WSB Merito. 
-        Nie jest ono realizowane przez dyspozytornię ELWOZ ECO Sp. z o.o. 
-        Jeśli sprawa dotyczy rzeczywistego problemu komunalnego, prosimy o zgłoszenie go oficjalnym kanałem.
-      </div>
-
-      <div class="confirmation-actions">
-        <a href="https://elwozeco.pl/kontakt/" target="_blank" rel="noopener" class="btn-secondary">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-          Oficjalny kanał reklamacji ELWOZ ECO
-        </a>
-        <button type="button" class="btn-submit" id="btnNewTicket" style="flex: initial;">
-          Wypełnij kolejne zgłoszenie testowe
-        </button>
-      </div>
-    </section>
-
-    <!-- Główny formularz zgłoszeniowy -->
+    <!-- Moduł zgłoszeniowy (Natywny Google Forms z bezpośrednim połączeniem do Google Sheets CRM) -->
     <section class="form-section" id="zgloszenie">
       <div class="form-header">
         <h3 class="form-title">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-action)" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-          Formularz zgłoszenia nieprawidłowości
+          Natywny formularz zgłoszenia nieprawidłowości
         </h3>
-        <p class="form-subtitle">Rejon: Kartuzy i okoliczne sołectwa. Bez konieczności logowania.</p>
+        <p class="form-subtitle">Rejon: Kartuzy i okoliczne sołectwa. Bez konieczności logowania i instalacji.</p>
       </div>
 
-      <!-- Alert o danych fikcyjnych -->
+      <!-- Alert o danych fikcyjnych i bezpieczeństwie -->
       <div class="test-data-alert" role="note">
         <div class="test-data-alert-icon">⚠️</div>
         <div class="test-data-alert-content">
           <strong>Wymóg bezpieczeństwa danych (Prototyp testowy):</strong>
           Wszystkie zgłoszenia na tym etapie muszą zawierać <u>wyłącznie dane fikcyjne</u>. 
-          Nie wpisuj prawdziwych danych osobowych, prywatnych numerów telefonów ani rzeczywistych adresów zamieszkania.
+          Zgłoszenia trafiają bezpośrednio do prywatnego arkusza Google Sheets powiązanego z kontem <strong>wsb.student.tester@gmail.com</strong>.
+          W sprawach rzeczywistych skorzystaj z <a href="https://elwozeco.pl/kontakt/" target="_blank" rel="noopener">oficjalnego kontaktu ELWOZ ECO</a>.
         </div>
       </div>
 
-      <form id="smartCareForm" novalidate>
-        
-        <!-- 1. Rodzaj zgłoszenia i odpadów -->
-        <div class="form-row form-row-2">
-          <div class="form-group">
-            <label for="ticketType" class="form-label">
-              Rodzaj zgłoszenia <span class="required-mark">*</span>
-            </label>
-            <select id="ticketType" name="ticketType" class="form-control" required>
-              <option value="" disabled selected>-- Wybierz rodzaj zgłoszenia --</option>
-              <option value="brak odbioru odpadów">brak odbioru odpadów</option>
-              <option value="niepełny odbiór odpadów">niepełny odbiór odpadów</option>
-              <option value="uszkodzony pojemnik">uszkodzony pojemnik</option>
-              <option value="bałagan po odbiorze">bałagan po odbiorze</option>
-              <option value="brak worków">brak worków</option>
-              <option value="problem z harmonogramem">problem z harmonogramem</option>
-              <option value="sugestia">sugestia</option>
-              <option value="pochwała">pochwała</option>
-              <option value="inne">inne</option>
-            </select>
-            <span class="form-hint">Wskaż czego dotyczy sprawa</span>
-          </div>
+      <!-- Kontener na osadzony formularz Google Forms -->
+      <div id="googleFormContainer" style="display: none; width: 100%; min-height: 800px; border-radius: 8px; overflow: hidden;">
+        <iframe id="googleFormIframe" src="" width="100%" height="860" frameborder="0" marginheight="0" marginwidth="0" style="border: 1px solid var(--color-border); border-radius: 8px;">Ładowanie natywnego formularza Google Forms...</iframe>
+      </div>
 
-          <div class="form-group">
-            <label for="wasteFraction" class="form-label">
-              Rodzaj odpadów
-            </label>
-            <select id="wasteFraction" name="wasteFraction" class="form-control">
-              <option value="nie dotyczy / nie wiem" selected>nie dotyczy / nie wiem</option>
-              <option value="odpady zmieszane">odpady zmieszane (pojemnik czarny)</option>
-              <option value="papier">papier (pojemnik/worek niebieski)</option>
-              <option value="metale i tworzywa sztuczne">metale i tworzywa sztuczne (żółty)</option>
-              <option value="szkło">szkło (pojemnik/worek zielony)</option>
-              <option value="BIO">BIO (pojemnik/worek brązowy)</option>
-              <option value="odpady wielkogabarytowe">odpady wielkogabarytowe</option>
-              <option value="inne">inne</option>
-            </select>
-            <span class="form-hint">Jeśli dotyczy konkretnej frakcji</span>
-          </div>
-        </div>
-
-        <!-- 2. Lokalizacja -->
-        <div class="form-subheading">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-          Lokalizacja zdarzenia
-        </div>
-
-        <div class="form-row form-row-3">
-          <div class="form-group">
-            <label for="city" class="form-label">
-              Miejscowość <span class="required-mark">*</span>
-            </label>
-            <input type="text" id="city" name="city" class="form-control" placeholder="np. Kartuzy (test)" required>
-            <span class="form-hint">Gmina Kartuzy</span>
-          </div>
-
-          <div class="form-group">
-            <label for="street" class="form-label">
-              Ulica lub lokalizacja <span class="required-mark">*</span>
-            </label>
-            <input type="text" id="street" name="street" class="form-control" placeholder="np. ul. Jeziorna (test)" required>
-            <span class="form-hint">Nazwa ulicy lub punkt orientacyjny</span>
-          </div>
-
-          <div class="form-group">
-            <label for="houseNumber" class="form-label">
-              Nr posesji / identyfikator <span class="required-mark">*</span>
-            </label>
-            <input type="text" id="houseNumber" name="houseNumber" class="form-control" placeholder="np. 12A / altana" required>
-            <span class="form-hint">Numer domu lub opis miejsca</span>
-          </div>
-        </div>
-
-        <!-- 3. Informacje o zdarzeniu -->
-        <div class="form-subheading">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          Informacje o zdarzeniu
-        </div>
-
-        <div class="form-group">
-          <label for="incidentDate" class="form-label">
-            Data wystąpienia problemu
-          </label>
-          <input type="date" id="incidentDate" name="incidentDate" class="form-control">
-          <span class="form-hint">Kiedy nastąpiło zdarzenie (pozostaw puste lub wskaż datę)</span>
-        </div>
-
-        <div class="form-group">
-          <label for="description" class="form-label">
-            Opis zgłoszenia <span class="required-mark">*</span>
-          </label>
-          <textarea id="description" name="description" class="form-control" rows="4" placeholder="Opisz sytuację (pamiętaj: wyłącznie fikcyjne dane na potrzeby testu!). Np.: Pojemnik na odpady BIO nie został opróżniony mimo wystawienia przed godziną 06:30." required></textarea>
-          <span class="form-hint">Szczegóły zdarzenia pomogą dyspozytorowi w szybkiej weryfikacji</span>
-        </div>
-
-        <!-- 4. Dane kontaktowe (opcjonalne) -->
-        <div class="form-subheading">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-          Dane kontaktowe mieszkańca (opcjonalne)
-        </div>
-        <p class="form-hint" style="margin-bottom: 12px;">
-          Dane kontaktowe umożliwiają pracownikowi przekazanie informacji zwrotnej o sposobie rozwiązania sprawy. 
-          Na etapie testów podawaj wyłącznie fikcyjne dane (np. Jan Testowy, 500-000-000, wsb.student.tester@gmail.com).
+      <!-- Karta instrukcyjna wyświetlana przed wklejeniem linku z setup.gs -->
+      <div id="googleFormPlaceholder" class="test-data-alert" style="background: #ffffff; border: 1.5px dashed var(--color-primary); padding: 20px;">
+        <h4 style="color: var(--color-accent-blue); margin-bottom: 8px;">Natywne połączenie z Google Forms & Google Sheets CRM</h4>
+        <p style="font-size: 0.875rem; color: var(--color-text-muted); margin-bottom: 12px;">
+          Zgłoszenia mieszkańców nie są symulowane w przeglądarce – trafiają bezpośrednio do arkusza Google Sheets poprzez natywny formularz Google Forms powiązany z kontem testowym <code>wsb.student.tester@gmail.com</code>.
         </p>
-
-        <div class="form-row form-row-3">
-          <div class="form-group">
-            <label for="contactName" class="form-label">Imię i nazwisko (fikcyjne)</label>
-            <input type="text" id="contactName" name="contactName" class="form-control" placeholder="np. Jan Testowy">
-          </div>
-
-          <div class="form-group">
-            <label for="contactPhone" class="form-label">Numer telefonu (fikcyjny)</label>
-            <input type="tel" id="contactPhone" name="contactPhone" class="form-control" placeholder="np. 500 000 000">
-          </div>
-
-          <div class="form-group">
-            <label for="contactEmail" class="form-label">Adres e-mail (fikcyjny)</label>
-            <input type="email" id="contactEmail" name="contactEmail" class="form-control" placeholder="np. wsb.student.tester@gmail.com">
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label class="checkbox-label">
-            <input type="checkbox" id="requestCallback" name="requestCallback" value="tak">
-            <span>Proszę o kontakt zwrotny ze strony pracownika ELWOZ ECO w sprawie tego zgłoszenia</span>
-          </label>
-        </div>
-
-        <!-- Przyciski akcji -->
-        <div class="form-actions">
-          <button type="submit" class="btn-submit" id="btnSubmitTicket">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-            Wyślij zgłoszenie testowe
-          </button>
-          
-          <a href="#" target="_blank" rel="noopener" class="btn-secondary" id="btnOpenDirectForm" title="Otwórz bezpośredni formularz Google Forms w nowym oknie">
+        <p style="font-size: 0.85rem; color: var(--color-text-main); margin-bottom: 16px;">
+          <strong>Pola zarządzane przez formularz:</strong> Rodzaj zgłoszenia, Rodzaj odpadów, Miejscowość, Ulica, Numer posesji, Data zdarzenia, Opis, Imię i nazwisko, Telefon, E-mail, Prośba o kontakt.
+        </p>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <a href="#" class="btn-submit" id="btnOpenDirectForm" style="text-decoration: none; display: inline-flex;">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-            Otwórz Google Form bezpośrednio
+            Otwórz formularz Google Forms
           </a>
         </div>
-      </form>
+      </div>
     </section>
 
     <!-- Sekcja danych POK Kartuzy -->

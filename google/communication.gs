@@ -1,23 +1,22 @@
 /**
  * ============================================================================
  * ELWOZ ECO SmartCare - Moduł Komunikacji i Zarządzania Reputacją (communication.gs)
- * Wersja: 0.2.1
+ * Wersja: 0.2.2 (Poprawki po niezależnym audycie: Sanityzacja HTML, Whitelist, Fakty)
  * Projekt edukacyjny: Uniwersytet WSB Merito w Gdańsku
  * Dedykowane konto testowe: wsb.student.tester@gmail.com
  * ============================================================================
  * 
- * Moduł realizuje:
+ * ZAKRES MODUŁU:
  * 1. Niestandardowe menu arkusza „SmartCare”.
- * 2. Przygotowywanie 4 edytowalnych szablonów wiadomości (Potwierdzenie, Postępy, Rozwiązanie, Opinia Google).
- * 3. Obsługę okien dialogowych podglądu i edycji wiadomości (HtmlService).
- * 4. Opcjonalną personalizację szablonu z użyciem Gemini AI (z poszanowaniem zakazu wymyślania faktów).
- * 5. TWARDE ZABEZPIECZENIE SERWEROWE: W trybie demonstracyjnym wysyłka jest możliwa
- *    WYŁĄCZNIE na zatwierdzony adres wsb.student.tester@gmail.com z prefiksem [TEST].
- * 6. Zapis pełnego audytu operacji w zakładce HISTORIA KOMUNIKACJI.
- * 7. Rejestrację rozmów telefonicznych i aktualizację dat kontaktu oraz statusów opinii w rejestrze ZGŁOSZENIA.
+ * 2. Cztery edytowalne szablony wiadomości oparte WYŁĄCZNIE na zweryfikowanych faktach.
+ * 3. Pełne zabezpieczenie okien dialogowych przed wstrzyknięciem HTML/JS (escapeHtml).
+ * 4. BEZWARUNKOWA blokada wysyłki na serwerze: dozwolony odbiorca to WYŁĄCZNIE wsb.student.tester@gmail.com.
+ * 5. Zabezpieczenie przed duplikatami wysyłek (kontrola 5-minutowego okna).
+ * 6. Bezpieczna anonimizacja treści przekazywanych do modelu Gemini 2.0 Flash.
+ * 7. Zapis dat w arkuszu jako obiekty Date z poprawnym formatem dla formuł KPI.
  */
 
-// Jedyny zatwierdzony serwerowo adres testowy
+// Jedyny bezwarunkowo autoryzowany odbiorca testowy
 const APPROVED_TEST_RECIPIENT = "wsb.student.tester@gmail.com";
 
 /**
@@ -41,6 +40,19 @@ function onOpen() {
 }
 
 /**
+ * Funkcja sanityzacji tekstu zabezpieczająca przed wstrzyknięciem HTML i XSS
+ */
+function escapeHtml(str) {
+  if (str === null || str === undefined) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/**
  * Pobiera ustawienia systemowe z zakładki USTAWIENIA
  */
 function getSmartCareSettings() {
@@ -53,9 +65,8 @@ function getSmartCareSettings() {
     contactEmail: "kartuzy@elwozeco.pl",
     contactPhone: "58 681 22 99",
     website: "https://elwozeco.pl/",
-    googleReviewUrl: "https://search.google.com/local/writereview?placeid=PLACEHOLDER_KARTUZY",
+    googleReviewUrl: "", // Usunięto fikcyjny link do opinii
     senderName: "ELWOZ ECO SmartCare – POK Kartuzy",
-    isDemoMode: true,
     testEmail: APPROVED_TEST_RECIPIENT
   };
 
@@ -68,16 +79,20 @@ function getSmartCareSettings() {
       if (row[0]) settingsMap[row[0].toString().trim()] = (row[1] || "").toString().trim();
     }
 
+    let reviewUrl = settingsMap["Zweryfikowany link do opinii Google"] || "";
+    if (reviewUrl.includes("PLACEHOLDER")) {
+      reviewUrl = ""; // Wyczyszczenie fikcyjnego linku jeśli istniał
+    }
+
     return {
       companyName: settingsMap["Nazwa przedsiębiorstwa"] || defaultSettings.companyName,
       facilityName: settingsMap["Nazwa placówki"] || defaultSettings.facilityName,
       contactEmail: settingsMap["Adres e-mail do kontaktu"] || defaultSettings.contactEmail,
       contactPhone: settingsMap["Numer telefonu"] || defaultSettings.contactPhone,
       website: settingsMap["Oficjalna strona internetowa"] || defaultSettings.website,
-      googleReviewUrl: settingsMap["Zweryfikowany link do opinii Google"] || defaultSettings.googleReviewUrl,
+      googleReviewUrl: reviewUrl,
       senderName: settingsMap["Nazwa nadawcy wiadomości"] || defaultSettings.senderName,
-      isDemoMode: (settingsMap["Ustawienie trybu demonstracyjnego"] || "TAK").toUpperCase() === "TAK",
-      testEmail: APPROVED_TEST_RECIPIENT // Zawsze wymuszany zatwierdzony adres testerski
+      testEmail: APPROVED_TEST_RECIPIENT // Bezwarunkowo wymuszony adres testerski
     };
   } catch (err) {
     Logger.log("Błąd odczytu USTAWIENIA: " + err.toString());
@@ -105,12 +120,17 @@ function getSelectedTicketData() {
   }
 
   const lastCol = sheet.getLastColumn();
-  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim());
   const values = sheet.getRange(row, 1, 1, lastCol).getValues()[0];
 
-  const getV = (name) => {
-    const idx = headers.indexOf(name);
-    return idx !== -1 ? (values[idx] || "").toString().trim() : "";
+  const getV = (colName) => {
+    // Elastyczne wyszukiwanie dopasowania nagłówka
+    for (let i = 0; i < headers.length; i++) {
+      if (headers[i] === colName || headers[i].startsWith(colName)) {
+        return (values[i] !== null && values[i] !== undefined) ? String(values[i]).trim() : "";
+      }
+    }
+    return "";
   };
 
   const ticketId = getV("ID Zgłoszenia") || `Wiersz-${row}`;
@@ -140,7 +160,7 @@ function getSelectedTicketData() {
     city,
     street,
     houseNumber,
-    location: `${city}, ${street} ${houseNumber}`.trim(),
+    location: `${city}, ${street}`.trim(), // Bez numeru posesji w nagłówku ogólnym
     description,
     resolutionMethod,
     reviewSent,
@@ -156,12 +176,13 @@ function actionAnalyzeWithAi() {
   if (typeof analyzeSelectedTicket === "function") {
     analyzeSelectedTicket();
   } else {
-    SpreadsheetApp.getUi().alert("Informacja", "Moduł ai.gs jest dostępny. Uruchom analizę lub skorzystaj z promptu w INSTRUKCJA AI.", SpreadsheetApp.getUi().ButtonSet.OK);
+    SpreadsheetApp.getUi().alert("Informacja", "Moduł ai.gs jest dostępny. Uruchom analizę bezpośrednio.", SpreadsheetApp.getUi().ButtonSet.OK);
   }
 }
 
 /**
  * 2. Akcja: Przygotuj potwierdzenie przyjęcia (Szablon A)
+ * POPRAWKA AUDYTU: Usunięto niepotwierdzone deklaracje o załogach logistycznych w terenie.
  */
 function actionPrepareConfirmation() {
   const ticket = getSelectedTicketData();
@@ -178,20 +199,18 @@ function actionPrepareConfirmation() {
   const body = 
 `Dzień dobry, ${ticket.residentName},
 
-Dziękujemy za kontakt z Cyfrowym Punktem Obsługi Mieszkańca ELWOZ ECO SmartCare.
-
-Potwierdzamy zarejestrowanie zgłoszenia:
+Potwierdzamy zarejestrowanie zgłoszenia w systemie demonstracyjnym ELWOZ ECO SmartCare:
 • Numer sprawy: ${ticket.ticketId}
 • Rodzaj zgłoszenia: ${ticket.ticketType}
 • Frakcja odpadów: ${ticket.wasteFraction}
-• Lokalizacja: ${ticket.location}
+• Wskazana ulica / rejon: ${ticket.location}
 
-Zgłoszenie zostało przekazane do dyspozytorni Punktu Obsługi Klienta w Kartuzach. Sprawa jest obecnie weryfikowana przez nasz zespół logistyczny.
+Zgłoszenie oczekuje na weryfikację przez dyspozytora Punktu Obsługi Klienta w Kartuzach.
 
-W przypadku pytań prosimy o kontakt z biurem POK Kartuzy (tel. ${settings.contactPhone}, e-mail: ${settings.contactEmail}), podając numer sprawy ${ticket.ticketId}.
+W przypadku pytań prosimy o kontakt z biurem POK Kartuzy (tel. ${settings.contactPhone}, e-mail: ${settings.contactEmail}), powołując się na numer sprawy ${ticket.ticketId}.
 
 Z poważaniem,
-Zespół Obsługi Mieszkańców ELWOZ ECO Sp. z o.o.
+${settings.senderName}
 ${settings.facilityName}
 ul. Mściwoja II 14, 83-300 Kartuzy
 Tel. ${settings.contactPhone} | ${settings.website}`;
@@ -208,6 +227,7 @@ Tel. ${settings.contactPhone} | ${settings.website}`;
 
 /**
  * 3. Akcja: Przygotuj informację o postępach (Szablon B)
+ * POPRAWKA AUDYTU: Rzeczowa informacja bez fikcyjnych opisów tras śmieciarek.
  */
 function actionPrepareProgressUpdate() {
   const ticket = getSelectedTicketData();
@@ -219,16 +239,14 @@ function actionPrepareProgressUpdate() {
   }
 
   const settings = getSmartCareSettings();
-  const subject = `Informacja o postępach w sprawie ${ticket.ticketId} – ELWOZ ECO SmartCare`;
+  const subject = `Informacja o statusie sprawy ${ticket.ticketId} – ELWOZ ECO SmartCare`;
 
   const body = 
 `Dzień dobry, ${ticket.residentName},
 
-Przekazujemy bieżącą informację dotyczącą zgłoszenia ${ticket.ticketId} (${ticket.location}):
+Informujemy o aktualnym statusie zgłoszenia ${ticket.ticketId} dotyczącego: ${ticket.ticketType} (${ticket.location}):
 
-Nasz zespół operacyjny prowadzi obecnie bezpośrednią weryfikację sprawy w rejonie Kartuz wraz z brygadą wywozową i dyspozytorem. Dokładamy starań, aby sytuacja została wyjaśniona w możliwie najkrótszym czasie.
-
-Powiadomimy Cię niezwłocznie o zakończeniu działań i sposobie rozwiązania problemu.
+Sprawa została przekazana do dyspozytora rejonu Kartuzy w celu weryfikacji okoliczności zdarzenia. O kolejnych ustaleniach lub sposobie załatwienia sprawy powiadomimy w kolejnej wiadomości.
 
 Z poważaniem,
 ${settings.senderName}
@@ -246,6 +264,7 @@ Tel. ${settings.contactPhone} | ${settings.website}`;
 
 /**
  * 4. Akcja: Przygotuj informację o rozwiązaniu (Szablon C)
+ * POPRAWKA AUDYTU: Wymaga uzupełnienia rzeczywistego sposobu załatwienia sprawy.
  */
 function actionPrepareResolution() {
   const ticket = getSelectedTicketData();
@@ -256,12 +275,12 @@ function actionPrepareResolution() {
     return;
   }
 
-  // Walidacja: sprawdzenie czy pracownik wpisał rzeczywisty sposób rozwiązania sprawy
+  // Wymóg uzupełnienia rzeczywistego działania podjętego przez przedsiębiorstwo
   if (!ticket.resolutionMethod) {
     SpreadsheetApp.getUi().alert(
       "Wymagane pole: Sposób rozwiązania sprawy",
       "Przed przygotowaniem informacji o rozwiązaniu zgłoszenia należy uzupełnić kolumnę 'Sposób rozwiązania sprawy' w arkuszu.\n\n" +
-      "Wpisz rzeczywiste działania podjęte przez przedsiębiorstwo (np. 'Zastępczy odbiór bioodpadów wykonany w dn. 25.11' lub 'Wymieniono uszkodzony pojemnik 240L na nowy').",
+      "Wpisz faktyczne działania podjęte w sprawie (np. 'Zrealizowano odbiór zastępczy bioodpadów w dn. 25.11' lub 'Wymieniono uszkodzony pojemnik 240L na nowy').",
       SpreadsheetApp.getUi().ButtonSet.OK
     );
     return;
@@ -273,12 +292,12 @@ function actionPrepareResolution() {
   let body = 
 `Dzień dobry, ${ticket.residentName},
 
-Informujemy, że zgłoszenie ${ticket.ticketId} dotyczące: ${ticket.ticketType} (${ticket.location}) zostało zrealizowane.
+Informujemy o zakończeniu obsługi zgłoszenia ${ticket.ticketId} (${ticket.ticketType}, ${ticket.location}).
 
-Wykonane działania:
+Sposób załatwienia sprawy:
 ${ticket.resolutionMethod}
 
-Dziękujemy za zgłoszenie sytuacji, co pozwala nam na bieżąco dbać o czystość i sprawny odbiór odpadów w gminie Kartuzy.
+Dziękujemy za kontakt z Punktem Obsługi Klienta w Kartuzach.
 
 Z poważaniem,
 ${settings.senderName}
@@ -298,6 +317,7 @@ Tel. ${settings.contactPhone} | ${settings.website}`;
 
 /**
  * 5. Akcja: Przygotuj prośbę o opinię Google (Szablon D)
+ * POPRAWKA AUDYTU: Neutralna prośba, brak fikcyjnego linku jeśli niezweryfikowany.
  */
 function actionPrepareReviewRequest() {
   const ticket = getSelectedTicketData();
@@ -308,11 +328,10 @@ function actionPrepareReviewRequest() {
     return;
   }
 
-  // Zabezpieczenie przed ponowną prośbą o opinię
   if (ticket.reviewSent) {
     const confirmRetry = SpreadsheetApp.getUi().alert(
       "Prośba o opinię była już wysłana",
-      `Prośba o opinię do zgłoszenia ${ticket.ticketId} została już zarejestrowana jako wysłana w dniu: ${ticket.reviewSentDate || 'wcześniej'}.\n\nCzy na pewno chcesz wysłać ją ponownie?`,
+      `Prośba o opinię do zgłoszenia ${ticket.ticketId} została już zarejestrowana w dniu: ${ticket.reviewSentDate || 'wcześniej'}.\n\nCzy na pewno chcesz przygotować ponowną wiadomość?`,
       SpreadsheetApp.getUi().ButtonSet.YES_NO
     );
     if (confirmRetry !== SpreadsheetApp.getUi().Button.YES) {
@@ -321,19 +340,25 @@ function actionPrepareReviewRequest() {
   }
 
   const settings = getSmartCareSettings();
-  const subject = `Twoja opinia o obsłudze zgłoszenia ${ticket.ticketId} – ELWOZ ECO`;
+  const subject = `Opinia o obsłudze zgłoszenia ${ticket.ticketId} – ELWOZ ECO`;
+
+  let linkSection = "";
+  if (settings.googleReviewUrl && settings.googleReviewUrl.trim() !== "") {
+    linkSection = `👉 Wystaw obiektywną recenzję w Profilu Firmy Google:\n${settings.googleReviewUrl}`;
+  } else {
+    linkSection = `[Link do Profilu Firmy Google zostanie udostępniony po zweryfikowaniu wizytówki POK Kartuzy w zakładce USTAWIENIA]`;
+  }
 
   const body = 
 `Dzień dobry, ${ticket.residentName},
 
-Niedawno zakończyliśmy obsługę Twojego zgłoszenia (${ticket.ticketId}) dotyczącego odbioru odpadów w rejonie Kartuz.
+Niedawno zakończyliśmy obsługę zgłoszenia ${ticket.ticketId} w rejonie Kartuz.
 
-Nieustannie pracujemy nad podnoszeniem standardów obsługi mieszkańców. Będziemy wdzięczni za poświęcenie minuty i podzielenie się obiektywną opinią na temat Twoich doświadczeń z ELWOZ ECO w Profilu Firmy Google:
+Będziemy wdzięczni za podzielenie się opinią na temat kontaktu z naszym Biurem Obsługi Klienta:
 
-👉 Wystaw opinię w Google:
-${settings.googleReviewUrl}
+${linkSection}
 
-Każda autentyczna recenzja pomaga nam lepiej dopasować usługi do potrzeb mieszkańców naszej gminy.
+Każda autentyczna opinia pozwala nam rzetelnie oceniać i usprawniać standardy obsługi mieszkańców.
 
 Z poważaniem,
 ${settings.senderName}
@@ -354,25 +379,31 @@ ${settings.companyName}`;
  */
 function promptMissingEmail(ticket) {
   const ui = SpreadsheetApp.getUi();
-  let msg = `Zgłoszenie ${ticket.ticketId} nie zawiera adresu e-mail mieszkańca.\n\n`;
+  let msg = `Zgłoszenie ${ticket.ticketId} nie posiada wpisanego adresu e-mail mieszkańca.\n\n`;
   if (ticket.residentPhone) {
-    msg += `Dostępny jest numer telefonu: ${ticket.residentPhone}.\nCzy chcesz teraz odnotować kontakt telefoniczny?`;
+    msg += `Podano numer telefonu: ${ticket.residentPhone}.\nCzy chcesz zarejestrować kontakt telefoniczny?`;
     const res = ui.alert("Brak adresu e-mail", msg, ui.ButtonSet.YES_NO);
     if (res === ui.Button.YES) {
       actionLogPhoneCall();
     }
   } else {
-    msg += "Mieszkaniec nie podał również numeru telefonu (zgłoszenie anonimowe). Korespondencja bezpośrednia nie jest możliwa.";
+    msg += "Mieszkaniec nie podał numeru telefonu (zgłoszenie anonimowe). Bezpośrednia korespondencja nie jest możliwa.";
     ui.alert("Brak danych kontaktowych", msg, ui.ButtonSet.OK);
   }
 }
 
 /**
  * 6. Akcja: Odnotuj kontakt telefoniczny
+ * POPRAWKA AUDYTU: Pełna sanityzacja escapeHtml w oknie modalnym.
  */
 function actionLogPhoneCall() {
   const ticket = getSelectedTicketData();
   if (!ticket) return;
+
+  const safeTicketId = escapeHtml(ticket.ticketId);
+  const safeResidentName = escapeHtml(ticket.residentName);
+  const safeResidentPhone = escapeHtml(ticket.residentPhone || "brak numeru");
+  const safeUserEmail = escapeHtml(Session.getActiveUser().getEmail().split("@")[0]);
 
   const html = `
 <!DOCTYPE html>
@@ -396,7 +427,7 @@ function actionLogPhoneCall() {
 <body>
   <h3>Odnotuj rozmowę telefoniczną</h3>
   <div class="info">
-    Zgłoszenie: <strong>${ticket.ticketId}</strong> | Rozmówca: <strong>${ticket.residentName}</strong> (${ticket.residentPhone || 'brak nr'})
+    Zgłoszenie: <strong>${safeTicketId}</strong> | Rozmówca: <strong>${safeResidentName}</strong> (${safeResidentPhone})
   </div>
   
   <form id="callForm">
@@ -410,10 +441,10 @@ function actionLogPhoneCall() {
     </select>
 
     <label for="callNotes">Notatka z przebiegu rozmowy:</label>
-    <textarea id="callNotes" placeholder="Krótkie podsumowanie ustaleń..." required></textarea>
+    <textarea id="callNotes" placeholder="Rzeczowe podsumowanie rozmowy..." required></textarea>
 
     <label for="agent">Pracownik odpowiedzialny:</label>
-    <input type="text" id="agent" value="${Session.getActiveUser().getEmail().split('@')[0]}" required>
+    <input type="text" id="agent" value="${safeUserEmail}" required>
 
     <div class="btn-bar">
       <button type="button" class="btn-cancel" onclick="google.script.host.close()">Anuluj</button>
@@ -431,7 +462,7 @@ function actionLogPhoneCall() {
       google.script.run
         .withSuccessHandler(() => { google.script.host.close(); })
         .withFailureHandler(err => { alert('Błąd zapisu: ' + err); })
-        .processLogPhoneCall('${ticket.ticketId}', '${ticket.residentPhone || ''}', result, notes, agent);
+        .processLogPhoneCall(${JSON.stringify(ticket.ticketId)}, ${JSON.stringify(ticket.residentPhone || "")}, result, notes, agent);
     }
   </script>
 </body>
@@ -442,19 +473,19 @@ function actionLogPhoneCall() {
 }
 
 /**
- * Backend zapisu rozmowy telefonicznej
+ * Backend zapisu rozmowy telefonicznej (zapis z obiektem Date dla KPI)
  */
 function processLogPhoneCall(ticketId, phone, result, notes, agent) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const histSheet = ss.getSheetByName("HISTORIA KOMUNIKACJI");
   const ticketSheet = ss.getSheetByName("ZGŁOSZENIA");
-  const now = Utilities.formatDate(new Date(), "Europe/Warsaw", "yyyy-MM-dd HH:mm");
+  const now = new Date();
+  const nowStr = Utilities.formatDate(now, "Europe/Warsaw", "yyyy-MM-dd HH:mm");
 
-  // 1. Zapis w historii komunikacji
   if (histSheet) {
     histSheet.appendRow([
       ticketId,
-      now,
+      nowStr,
       "Kontakt telefoniczny",
       "telefon",
       phone,
@@ -466,10 +497,9 @@ function processLogPhoneCall(ticketId, phone, result, notes, agent) {
     ]);
   }
 
-  // 2. Aktualizacja w ZGŁOSZENIA
   if (ticketSheet) {
     const data = ticketSheet.getDataRange().getValues();
-    const headers = data[0];
+    const headers = data[0].map(h => String(h).trim());
     const idIdx = headers.indexOf("ID Zgłoszenia");
     const lastContactIdx = headers.indexOf("Data ostatniego kontaktu");
     const firstContactIdx = headers.indexOf("Data pierwszego kontaktu");
@@ -477,14 +507,19 @@ function processLogPhoneCall(ticketId, phone, result, notes, agent) {
     const noteIdx = headers.indexOf("Notatka pracownika");
 
     for (let r = 1; r < data.length; r++) {
-      if (data[r][idIdx] === ticketId) {
+      if (String(data[r][idIdx]).trim() === String(ticketId).trim()) {
         const rowNum = r + 1;
-        if (lastContactIdx !== -1) ticketSheet.getRange(rowNum, lastContactIdx + 1).setValue(now);
-        if (firstContactIdx !== -1 && !data[r][firstContactIdx]) ticketSheet.getRange(rowNum, firstContactIdx + 1).setValue(now);
+        // Zapis jako Date object z formatowaniem dla spójności KPI
+        if (lastContactIdx !== -1) {
+          ticketSheet.getRange(rowNum, lastContactIdx + 1).setValue(now).setNumberFormat("yyyy-MM-dd HH:mm");
+        }
+        if (firstContactIdx !== -1 && !data[r][firstContactIdx]) {
+          ticketSheet.getRange(rowNum, firstContactIdx + 1).setValue(now).setNumberFormat("yyyy-MM-dd HH:mm");
+        }
         if (resultIdx !== -1) ticketSheet.getRange(rowNum, resultIdx + 1).setValue(result);
         if (noteIdx !== -1) {
           const currentNote = data[r][noteIdx] || "";
-          ticketSheet.getRange(rowNum, noteIdx + 1).setValue((currentNote ? currentNote + " | " : "") + `Tel (${now}): ${notes}`);
+          ticketSheet.getRange(rowNum, noteIdx + 1).setValue((currentNote ? currentNote + " | " : "") + `Tel (${nowStr}): ${notes}`);
         }
         break;
       }
@@ -496,6 +531,7 @@ function processLogPhoneCall(ticketId, phone, result, notes, agent) {
 
 /**
  * 7. Akcja: Wyświetl historię komunikacji dla zgłoszenia
+ * POPRAWKA AUDYTU: Pełna sanityzacja escapeHtml w tabeli historii.
  */
 function actionViewCommunicationHistory() {
   const ticket = getSelectedTicketData();
@@ -504,7 +540,7 @@ function actionViewCommunicationHistory() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const histSheet = ss.getSheetByName("HISTORIA KOMUNIKACJI");
   if (!histSheet) {
-    SpreadsheetApp.getUi().alert("Brak historii", "Zakładka 'HISTORIA KOMUNIKACJI' nie została jeszcze utworzona.", SpreadsheetApp.getUi().ButtonSet.OK);
+    SpreadsheetApp.getUi().alert("Brak historii", "Zakładka 'HISTORIA KOMUNIKACJI' nie została znaleziona.", SpreadsheetApp.getUi().ButtonSet.OK);
     return;
   }
 
@@ -512,33 +548,33 @@ function actionViewCommunicationHistory() {
   const historyList = [];
 
   for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === ticket.ticketId) {
+    if (String(data[i][0]).trim() === String(ticket.ticketId).trim()) {
       historyList.push({
-        date: data[i][1],
-        action: data[i][2],
-        channel: data[i][3],
-        recipient: data[i][4],
-        subject: data[i][5],
-        content: data[i][6],
-        agent: data[i][7],
-        status: data[i][8],
-        error: data[i][9]
+        date: escapeHtml(data[i][1]),
+        action: escapeHtml(data[i][2]),
+        channel: escapeHtml(data[i][3]),
+        recipient: escapeHtml(data[i][4]),
+        subject: escapeHtml(data[i][5]),
+        content: escapeHtml(data[i][6]),
+        agent: escapeHtml(data[i][7]),
+        status: escapeHtml(data[i][8]),
+        error: escapeHtml(data[i][9])
       });
     }
   }
 
   let htmlRows = "";
   if (historyList.length === 0) {
-    htmlRows = `<tr><td colspan="5" style="text-align: center; color: #94a3b8; padding: 20px;">Brak wpisów w historii dla tego zgłoszenia.</td></tr>`;
+    htmlRows = `<tr><td colspan="5" style="text-align: center; color: #94a3b8; padding: 20px;">Brak wpisów w historii dla zgłoszenia ${escapeHtml(ticket.ticketId)}.</td></tr>`;
   } else {
     for (let h of historyList) {
-      const statusClass = h.status === 'wysłano' ? 'color:#1b5e20; font-weight:600;' : (h.status === 'błąd wysyłki' ? 'color:#b71c1c; font-weight:600;' : 'color:#0d47a1;');
+      const statusStyle = h.status === 'wysłano' ? 'color:#1b5e20; font-weight:600;' : (h.status.indexOf('błąd') !== -1 ? 'color:#b71c1c; font-weight:600;' : 'color:#0d47a1;');
       htmlRows += `
         <tr style="border-bottom: 1px solid #e2e8f0; font-size: 0.85rem;">
           <td style="padding: 8px;">${h.date}</td>
           <td style="padding: 8px;"><strong>${h.action}</strong><br><span style="color:#64748b;">${h.channel}</span></td>
           <td style="padding: 8px;"><strong>${h.subject}</strong><br><div style="color:#475569; font-size:0.8rem; max-height:60px; overflow-y:auto;">${h.content.replace(/\n/g, '<br>')}</div></td>
-          <td style="padding: 8px; ${statusClass}">${h.status}${h.error ? '<br><small style="color:red">'+h.error+'</small>' : ''}</td>
+          <td style="padding: 8px; ${statusStyle}">${h.status}${h.error ? '<br><small style="color:#b71c1c;">'+h.error+'</small>' : ''}</td>
           <td style="padding: 8px; color:#64748b;">${h.agent}</td>
         </tr>`;
     }
@@ -558,8 +594,8 @@ function actionViewCommunicationHistory() {
   </style>
 </head>
 <body>
-  <h3>Historia korespondencji – Zgłoszenie ${ticket.ticketId}</h3>
-  <div style="font-size:0.85rem; color:#64748b;">Mieszkaniec: <strong>${ticket.residentName}</strong> | Status w CRM: <strong>${ticket.status}</strong></div>
+  <h3>Historia korespondencji – Zgłoszenie ${escapeHtml(ticket.ticketId)}</h3>
+  <div style="font-size:0.85rem; color:#64748b;">Mieszkaniec: <strong>${escapeHtml(ticket.residentName)}</strong> | Status w CRM: <strong>${escapeHtml(ticket.status)}</strong></div>
   
   <table>
     <thead>
@@ -586,10 +622,18 @@ function actionViewCommunicationHistory() {
 
 /**
  * Uniwersalne okno dialogowe podglądu, edycji i wysyłki wiadomości e-mail
+ * POPRAWKA AUDYTU:
+ * 1. Zabezpieczenie escapeHtml we wszystkich elementach widoku.
+ * 2. Bezwarunkowe oznaczenie odbiorcy jako wsb.student.tester@gmail.com.
+ * 3. Bezpieczne przekazanie JSON w wywołaniu script.run.
  */
 function openEmailDialog(params) {
-  const settings = getSmartCareSettings();
-  const actualTarget = APPROVED_TEST_RECIPIENT; // Wymuszony zatwierdzony adres testowy
+  const safeTicketId = escapeHtml(params.ticketId);
+  const safeActionType = escapeHtml(params.actionType);
+  const safeRecipient = escapeHtml(params.recipient);
+  const safeTargetEmail = escapeHtml(APPROVED_TEST_RECIPIENT);
+  const safeSubject = escapeHtml("[TEST] " + params.subject.replace(/^\[TEST\]\s*/i, ""));
+  const safeBody = escapeHtml(params.body);
 
   const html = `
 <!DOCTYPE html>
@@ -599,8 +643,7 @@ function openEmailDialog(params) {
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 16px; color: #1e293b; background: #f8fafc; margin: 0; }
     h3 { margin-top: 0; color: #143d59; font-size: 1.15rem; display: flex; align-items: center; justify-content: space-between; }
-    .badge { font-size: 0.75rem; padding: 3px 8px; border-radius: 4px; font-weight: 700; }
-    .badge-demo { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+    .badge { font-size: 0.75rem; padding: 3px 8px; border-radius: 4px; font-weight: 700; background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
     .demo-alert { background: #fffbeb; border: 1px solid #fde68a; padding: 10px 12px; border-radius: 6px; font-size: 0.8rem; color: #92400e; margin-bottom: 14px; line-height: 1.4; }
     .form-group { margin-bottom: 12px; }
     label { font-weight: 600; font-size: 0.825rem; display: block; margin-bottom: 4px; color: #334155; }
@@ -619,34 +662,33 @@ function openEmailDialog(params) {
 </head>
 <body>
   <h3>
-    <span>Podgląd i wysyłka: ${params.actionType}</span>
-    ${settings.isDemoMode ? '<span class="badge badge-demo">TRYB DEMO (ZABEZPIECZONY)</span>' : ''}
+    <span>Podgląd i wysyłka: ${safeActionType}</span>
+    <span class="badge">SERWEROWA BLOKADA TESTOWA</span>
   </h3>
 
-  ${settings.isDemoMode ? `
   <div class="demo-alert">
-    <strong>Twarde zabezpieczenie serwerowe WSB Merito:</strong><br>
-    Wiadomość zostanie wysłana WYŁĄCZNIE na zatwierdzony adres testowy: <strong>${actualTarget}</strong>.<br>
-    Temat otrzyma prefiks <code>[TEST]</code>. Adres fikcyjnego mieszkańca (<em>${params.recipient}</em>) nie otrzyma wiadomości.
-  </div>` : ''}
+    <strong>Bezwarunkowa blokada serwera (wsb.student.tester@gmail.com):</strong><br>
+    Wiadomość testowa zostanie wysłana WYŁĄCZNIE na zatwierdzony adres testowy: <strong>${safeTargetEmail}</strong>.<br>
+    W temacie dodano <code>[TEST]</code>. Adres fikcyjnego mieszkańca (<em>${safeRecipient}</em>) nie otrzyma wiadomości.
+  </div>
 
   <form id="emailForm">
     <div class="form-group">
-      <label>Adresat (Odbiorca testowy):</label>
-      <input type="text" value="${actualTarget} (Zatwierdzone konto testerskie)" readonly style="background: #f1f5f9; font-weight: 600; color: #1e40af;">
+      <label>Adresat (Jedyny autoryzowany cel testowy):</label>
+      <input type="text" value="${safeTargetEmail} (Zatwierdzone konto testerskie)" readonly style="background: #f1f5f9; font-weight: 600; color: #1e40af;">
     </div>
 
     <div class="form-group">
       <label for="emailSubject">Temat wiadomości:</label>
-      <input type="text" id="emailSubject" value="${settings.isDemoMode ? '[TEST] ' : ''}${params.subject}" required>
+      <input type="text" id="emailSubject" value="${safeSubject}" required>
     </div>
 
     <div class="form-group">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
         <label for="emailBody" style="margin-bottom:0;">Treść wiadomości (edytowalna):</label>
-        <button type="button" class="btn-ai" onclick="personalizeWithAi()">✨ Usprawnij treść z AI</button>
+        <button type="button" class="btn-ai" onclick="personalizeWithAi()">✨ Usprawnij styl z AI (Gemini 2.0)</button>
       </div>
-      <textarea id="emailBody" required>${params.body}</textarea>
+      <textarea id="emailBody" required>${safeBody}</textarea>
     </div>
 
     ${params.includeReviewOption ? `
@@ -655,7 +697,7 @@ function openEmailDialog(params) {
         <input type="checkbox" id="addGoogleReview" ${params.alreadyReviewed ? '' : 'checked'} style="margin-top: 2px;">
         <span>
           <strong>Dołącz zaproszenie do wystawienia neutralnej opinii Google</strong><br>
-          ${params.alreadyReviewed ? '<span style="color:#b45309;">⚠️ Prośba o opinię była już wysłana w dn. ' + (params.alreadyReviewedDate || 'wcześniej') + '. Ponowne zaznaczenie wymaga świadomej decyzji.</span>' : 'Zgodnie z zasadami: brak nagród, brak filtrowania zadowolenia, neutralna prośba.'}
+          ${params.alreadyReviewed ? '<span style="color:#b45309;">⚠️ Prośba o opinię była już wysłana w dn. ' + escapeHtml(params.alreadyReviewedDate || 'wcześniej') + '. Ponowne zaznaczenie wymaga świadomej decyzji pracownika.</span>' : 'Zgodnie z zasadami etycznymi: brak nagród, brak filtrowania ocen, pełna neutralność.'}
         </span>
       </label>
     </div>` : ''}
@@ -678,10 +720,6 @@ function openEmailDialog(params) {
         return;
       }
 
-      if (addReview) {
-        body += '\\n\\n---\\n👉 Podziel się z nami opinią w Google:\\n${settings.googleReviewUrl}\\n(Twoja obiektywna ocena pomaga nam doskonalić usługi komunalne w rejonie Kartuz)';
-      }
-
       document.getElementById('btnSubmit').disabled = true;
       document.getElementById('btnSubmit').innerText = 'Wysyłanie...';
 
@@ -695,9 +733,9 @@ function openEmailDialog(params) {
           document.getElementById('btnSubmit').innerText = 'Zatwierdź i wyślij';
         })
         .processSendEmail({
-          ticketId: '${params.ticketId}',
-          actionType: '${params.actionType}',
-          originalRecipient: '${params.recipient}',
+          ticketId: ${JSON.stringify(params.ticketId)},
+          actionType: ${JSON.stringify(params.actionType)},
+          originalRecipient: ${JSON.stringify(params.recipient)},
           subject: subject,
           body: body,
           addedReviewRequest: addReview
@@ -718,7 +756,7 @@ function openEmailDialog(params) {
           bodyEl.disabled = false;
           alert('AI niedostępne (skorzystaj ze standardowego szablonu): ' + err);
         })
-        .polishMessageWithAi('${params.ticketId}', currentText);
+        .polishMessageWithAi(${JSON.stringify(params.ticketId)}, currentText);
     }
   </script>
 </body>
@@ -729,64 +767,89 @@ function openEmailDialog(params) {
 }
 
 /**
- * Backend wysyłki e-mail przez MailApp z TWARDYM ZABEZPIECZENIEM SERWEROWYM
+ * Backend wysyłki poczty z BEZWARUNKOWĄ blokadą serwerową oraz zabezpieczeniem przed duplikatami
+ * POPRAWKI AUDYTU:
+ * 1. Bezwarunkowa blokada adresu wysyłki: TYLKO wsb.student.tester@gmail.com.
+ * 2. Zabezpieczenie przed duplikatem (kontrola ostatnich 5 minut).
+ * 3. Zapis obiektów Date z formatowaniem komórek dla prawidłowego działania KPI.
+ * 4. W razie błędu: brak oznaczania rekordu jako wysłany w CRM.
  */
 function processSendEmail(payload) {
   const settings = getSmartCareSettings();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const histSheet = ss.getSheetByName("HISTORIA KOMUNIKACJI");
   const ticketSheet = ss.getSheetByName("ZGŁOSZENIA");
-  const now = Utilities.formatDate(new Date(), "Europe/Warsaw", "yyyy-MM-dd HH:mm");
+  const now = new Date();
+  const nowStr = Utilities.formatDate(now, "Europe/Warsaw", "yyyy-MM-dd HH:mm");
   const agent = Session.getActiveUser().getEmail().split('@')[0] || "Pracownik";
 
-  // W trybie demonstracyjnym docelowy adres jest twardo ustawiony na APPROVED_TEST_RECIPIENT
-  const targetEmail = settings.isDemoMode ? APPROVED_TEST_RECIPIENT : payload.originalRecipient;
+  // 1. BEZWARUNKOWA BLOKADA SERWEROWA ODBIORCY:
+  // W prototypie studenckim cała korespondencja trafia WYŁĄCZNIE na wsb.student.tester@gmail.com
+  const targetEmail = APPROVED_TEST_RECIPIENT;
 
-  // TWARDE ZABEZPIECZENIE PO STRONIE SERWERA (SERVER-SIDE SECURITY ENFORCEMENT):
-  // Jeśli system jest w trybie demonstracyjnym, dozwolona jest wysyłka WYŁĄCZNIE na APPROVED_TEST_RECIPIENT.
-  // Każda próba przekierowania na inny adres jest natychmiast blokowana na poziomie backendu.
-  if (settings.isDemoMode) {
-    if (!targetEmail || targetEmail.toLowerCase().trim() !== APPROVED_TEST_RECIPIENT.toLowerCase().trim()) {
-      const securityErr = `BLOKADA BEZPIECZEŃSTWA SERWERA: W trybie demonstracyjnym wysyłka na adres '${targetEmail}' jest zabroniona! Dozwolony odbiorca to wyłącznie: ${APPROVED_TEST_RECIPIENT}`;
-      Logger.log(securityErr);
-      if (histSheet) {
-        histSheet.appendRow([
-          payload.ticketId,
-          now,
-          payload.actionType,
-          "e-mail",
-          targetEmail || "NIEZNANY",
-          payload.subject || "BRAK TEMATU",
-          payload.body || "",
-          agent,
-          "błąd wysyłki",
-          securityErr
-        ]);
+  if (!targetEmail || targetEmail.toLowerCase().trim() !== APPROVED_TEST_RECIPIENT.toLowerCase().trim()) {
+    const criticalErr = `BEZWARUNKOWA BLOKADA SERWERA: Próba wysyłki na inny adres niż ${APPROVED_TEST_RECIPIENT} została zablokowana!`;
+    Logger.log(criticalErr);
+    SpreadsheetApp.getUi().alert("Blokada Bezpieczeństwa", criticalErr, SpreadsheetApp.getUi().ButtonSet.OK);
+    return;
+  }
+
+  // 2. KONTROLA DUPLIKATÓW W CIĄGU OSTATNICH 5 MINUT:
+  if (histSheet && histSheet.getLastRow() > 2) {
+    const recentHistory = histSheet.getRange(3, 1, histSheet.getLastRow() - 2, 9).getValues();
+    const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
+
+    for (let row of recentHistory) {
+      const histTicketId = String(row[0]).trim();
+      const histAction = String(row[2]).trim();
+      const histDate = new Date(row[1]);
+      const histStatus = String(row[8]).trim();
+
+      if (histTicketId === String(payload.ticketId).trim() && 
+          histAction === String(payload.actionType).trim() && 
+          histStatus === "wysłano" && 
+          !isNaN(histDate.getTime()) && 
+          histDate > fiveMinutesAgo) {
+        
+        SpreadsheetApp.getUi().alert(
+          "Wykryto duplikat wysyłki",
+          `Wiadomość typu '${payload.actionType}' dla zgłoszenia ${payload.ticketId} została już wysłana w ciągu ostatnich 5 minut (${row[1]}).\n\nOperacja została zablokowana, aby zapobiec wysyłaniu duplikatów.`,
+          SpreadsheetApp.getUi().ButtonSet.OK
+        );
+        return;
       }
-      SpreadsheetApp.getUi().alert("Naruszenie Bezpieczeństwa", securityErr, SpreadsheetApp.getUi().ButtonSet.OK);
-      return;
     }
   }
 
-  // Wymuszenie prefiksu [TEST] w trybie demonstracyjnym
+  // 3. Wymuszenie prefiksu [TEST] w temacie
   let finalSubject = payload.subject;
-  if (settings.isDemoMode && !finalSubject.startsWith("[TEST]")) {
+  if (!finalSubject.startsWith("[TEST]")) {
     finalSubject = `[TEST] ${finalSubject}`;
   }
 
-  // Wymuszenie stopki demonstracyjnej w trybie demo
+  // 4. Dołączenie opinii jeśli wybrano w formularzu
   let finalBody = payload.body;
-  if (settings.isDemoMode) {
-    finalBody += `\n\n------------------------------------------------------------\n` +
-      `[WIADOMOŚĆ TESTOWA – PROTOTYP WSB MERITO]\n` +
-      `Wiadomość wygenerowana w ramach studenckiego projektu wdrożeniowego ELWOZ ECO SmartCare.\n` +
-      `Fikcyjny adresat zgłoszenia: ${payload.originalRecipient}\n` +
-      `Rzeczywisty zatwierdzony odbiorca testowy: ${APPROVED_TEST_RECIPIENT}`;
+  if (payload.addedReviewRequest) {
+    let reviewPart = "\n\n---\n👉 Będziemy wdzięczni za podzielenie się obiektywną opinią w Profilu Firmy Google:";
+    if (settings.googleReviewUrl && settings.googleReviewUrl.trim() !== "") {
+      reviewPart += `\n${settings.googleReviewUrl}`;
+    } else {
+      reviewPart += `\n[Link do Profilu Firmy Google zostanie udostępniony po zweryfikowaniu wizytówki POK Kartuzy w USTAWIENIACH]`;
+    }
+    finalBody += reviewPart;
   }
+
+  // 5. Wymuszenie stopki akademickiej WSB Merito
+  finalBody += `\n\n------------------------------------------------------------\n` +
+    `[WIADOMOŚĆ TESTOWA – PROTOTYP WSB MERITO]\n` +
+    `Wiadomość wygenerowana w ramach studenckiego projektu wdrożeniowego ELWOZ ECO SmartCare.\n` +
+    `Fikcyjny adresat zgłoszenia: ${payload.originalRecipient}\n` +
+    `Jedyny zatwierdzony serwerowo odbiorca testowy: ${APPROVED_TEST_RECIPIENT}`;
 
   let sendStatus = "przygotowano";
   let errorMessage = "";
 
+  // 6. Rzeczywista wysyłka przez MailApp z obsługą błędów
   try {
     const quota = MailApp.getRemainingDailyQuota();
     if (quota <= 0) {
@@ -807,11 +870,11 @@ function processSendEmail(payload) {
     Logger.log(`Błąd wysyłki dla ${payload.ticketId}: ${errorMessage}`);
   }
 
-  // 1. Zapis w HISTORIA KOMUNIKACJI
+  // 7. Zapis w HISTORIA KOMUNIKACJI (zawsze rejestrujemy próbę)
   if (histSheet) {
     histSheet.appendRow([
       payload.ticketId,
-      now,
+      nowStr,
       payload.actionType,
       "e-mail",
       targetEmail,
@@ -823,10 +886,10 @@ function processSendEmail(payload) {
     ]);
   }
 
-  // 2. Aktualizacja ZGŁOSZENIA tylko gdy wysyłka powiodła się
+  // 8. Aktualizacja ZGŁOSZENIA WYŁĄCZNIE wtedy, gdy wysyłka powiodła się
   if (sendStatus === "wysłano" && ticketSheet) {
     const data = ticketSheet.getDataRange().getValues();
-    const headers = data[0];
+    const headers = data[0].map(h => String(h).trim());
     const idIdx = headers.indexOf("ID Zgłoszenia");
     const confirmDateIdx = headers.indexOf("Data potwierdzenia przyjęcia");
     const firstContactIdx = headers.indexOf("Data pierwszego kontaktu");
@@ -837,29 +900,49 @@ function processSendEmail(payload) {
     const statusIdx = headers.indexOf("Status");
 
     for (let r = 1; r < data.length; r++) {
-      if (data[r][idIdx] === payload.ticketId) {
+      if (String(data[r][idIdx]).trim() === String(payload.ticketId).trim()) {
         const rowNum = r + 1;
 
         if (payload.actionType === "Potwierdzenie przyjęcia") {
-          if (confirmDateIdx !== -1 && !data[r][confirmDateIdx]) ticketSheet.getRange(rowNum, confirmDateIdx + 1).setValue(now);
-          if (firstContactIdx !== -1 && !data[r][firstContactIdx]) ticketSheet.getRange(rowNum, firstContactIdx + 1).setValue(now);
-          if (statusIdx !== -1 && data[r][statusIdx] === "Nowe") ticketSheet.getRange(rowNum, statusIdx + 1).setValue("Do weryfikacji");
+          if (confirmDateIdx !== -1 && !data[r][confirmDateIdx]) {
+            ticketSheet.getRange(rowNum, confirmDateIdx + 1).setValue(now).setNumberFormat("yyyy-MM-dd HH:mm");
+          }
+          if (firstContactIdx !== -1 && !data[r][firstContactIdx]) {
+            ticketSheet.getRange(rowNum, firstContactIdx + 1).setValue(now).setNumberFormat("yyyy-MM-dd HH:mm");
+          }
+          if (statusIdx !== -1 && data[r][statusIdx] === "Nowe") {
+            ticketSheet.getRange(rowNum, statusIdx + 1).setValue("Do weryfikacji");
+          }
         }
 
         if (payload.actionType === "Informacja o postępach") {
-          if (lastContactIdx !== -1) ticketSheet.getRange(rowNum, lastContactIdx + 1).setValue(now);
-          if (statusIdx !== -1 && data[r][statusIdx] === "Do weryfikacji") ticketSheet.getRange(rowNum, statusIdx + 1).setValue("W realizacji");
+          if (lastContactIdx !== -1) {
+            ticketSheet.getRange(rowNum, lastContactIdx + 1).setValue(now).setNumberFormat("yyyy-MM-dd HH:mm");
+          }
+          if (statusIdx !== -1 && data[r][statusIdx] === "Do weryfikacji") {
+            ticketSheet.getRange(rowNum, statusIdx + 1).setValue("W realizacji");
+          }
         }
 
         if (payload.actionType === "Informacja o rozwiązaniu") {
-          if (lastContactIdx !== -1) ticketSheet.getRange(rowNum, lastContactIdx + 1).setValue(now);
-          if (resolveDateIdx !== -1 && !data[r][resolveDateIdx]) ticketSheet.getRange(rowNum, resolveDateIdx + 1).setValue(now);
-          if (statusIdx !== -1) ticketSheet.getRange(rowNum, statusIdx + 1).setValue("Rozwiązane");
+          if (lastContactIdx !== -1) {
+            ticketSheet.getRange(rowNum, lastContactIdx + 1).setValue(now).setNumberFormat("yyyy-MM-dd HH:mm");
+          }
+          if (resolveDateIdx !== -1 && !data[r][resolveDateIdx]) {
+            ticketSheet.getRange(rowNum, resolveDateIdx + 1).setValue(now).setNumberFormat("yyyy-MM-dd HH:mm");
+          }
+          if (statusIdx !== -1) {
+            ticketSheet.getRange(rowNum, statusIdx + 1).setValue("Rozwiązane");
+          }
         }
 
         if (payload.actionType === "Prośba o opinię" || payload.addedReviewRequest) {
-          if (opinionIdx !== -1) ticketSheet.getRange(rowNum, opinionIdx + 1).setValue("TAK");
-          if (opinionDateIdx !== -1) ticketSheet.getRange(rowNum, opinionDateIdx + 1).setValue(now);
+          if (opinionIdx !== -1) {
+            ticketSheet.getRange(rowNum, opinionIdx + 1).setValue("TAK");
+          }
+          if (opinionDateIdx !== -1) {
+            ticketSheet.getRange(rowNum, opinionDateIdx + 1).setValue(now).setNumberFormat("yyyy-MM-dd HH:mm");
+          }
         }
 
         break;
@@ -870,12 +953,15 @@ function processSendEmail(payload) {
   if (sendStatus === "wysłano") {
     SpreadsheetApp.getActiveSpreadsheet().toast(`Wysłano: ${payload.actionType} na ${targetEmail}`, "SmartCare Sukces", 5);
   } else {
-    SpreadsheetApp.getUi().alert("Błąd wysyłki", `Nie udało się wysłać wiadomości:\n${errorMessage}\n\nOperacja została odnotowana w HISTORIA KOMUNIKACJI jako 'błąd wysyłki'.`, SpreadsheetApp.getUi().ButtonSet.OK);
+    SpreadsheetApp.getUi().alert("Błąd wysyłki e-mail", `Nie udało się wysłać wiadomości:\n${errorMessage}\n\nOperacja została odnotowana w HISTORIA KOMUNIKACJI jako 'błąd wysyłki'. CRM nie został oznaczony jako obsłużony.`, SpreadsheetApp.getUi().ButtonSet.OK);
   }
 }
 
 /**
- * Personalizacja wiadomości z użyciem Gemini AI (z poszanowaniem reguł bezpieczeństwa)
+ * Personalizacja wiadomości z użyciem Gemini 2.0 Flash (z poszanowaniem zakazu wymyślania faktów)
+ * POPRAWKA AUDYTU:
+ * 1. Wdrożono aktualny model gemini-2.0-flash.
+ * 2. Ścisły zakaz wymyślania załóg, tras i ustaleń.
  */
 function polishMessageWithAi(ticketId, templateText) {
   const scriptProperties = PropertiesService.getScriptProperties();
@@ -884,22 +970,25 @@ function polishMessageWithAi(ticketId, templateText) {
     throw new Error("Brak klucza Gemini API w Script Properties. Użyj gotowego szablonu.");
   }
 
+  // Twarda anonimizacja treści wejściowej
+  const cleanTemplate = anonymizeText(templateText);
+
   const systemPrompt = 
-    "Jesteś asystentem komunikacji w firmie komunalnej ELWOZ ECO w Kartuzach.\n" +
-    "Twoim celem jest wygładzenie i uczynienie poniższej wiadomości bardziej naturalną, empatyczną i profesjonalną.\n" +
-    "ŚCIŚLE PRZESTRZEGAJ ZASAD:\n" +
-    "1. NIE wymyślaj żadnych działań, które nie wynikają z podanego tekstu.\n" +
-    "2. NIE deklaruj uznania winy ani reklamacji.\n" +
+    "Jesteś asystentem redakcyjnym w firmie komunalnej ELWOZ ECO w Kartuzach.\n" +
+    "Twoim celem jest wygładzenie stylu poniższej wiadomości, aby była profesjonalna, empatyczna i naturalna.\n" +
+    "BEZWZGLĘDNE ZASADY PRAWDY I BEZPIECZEŃSTWA:\n" +
+    "1. NIE wymyślaj żadnych działań logistycznych, tras śmieciarek ani załóg, których nie ma w podanym tekście.\n" +
+    "2. NIE deklaruj uznania winy ani reklamacji przedsiębiorstwa.\n" +
     "3. NIE obiecuj terminów, których nie ma w szablonie.\n" +
-    "4. NIE obiecuj odszkodowań ani zniżek.\n" +
-    "5. Zachowaj kluczowe informacje, numery spraw i odnośniki w nienaruszonej formie.\n" +
-    "6. Zwróć wyłącznie samą treść wygładzonej wiadomości bez dodatkowych komentarzy.";
+    "4. NIE obiecuj zniżek ani odszkodowań.\n" +
+    "5. Zachowaj numer zgłoszenia oraz dane kontaktowe bez zmian.\n" +
+    "6. Zwróć wyłącznie samą treść wygładzonej wiadomości bez komentarzy wstępnych i końcowych.";
 
   const payload = {
     contents: [
       {
         parts: [
-          { text: systemPrompt + "\n\nOto treść szablonu do wygładzenia:\n" + templateText }
+          { text: systemPrompt + "\n\nOto treść szablonu do stylistycznego dopracowania:\n" + cleanTemplate }
         ]
       }
     ],
@@ -916,13 +1005,31 @@ function polishMessageWithAi(ticketId, templateText) {
     muteHttpExceptions: true
   };
 
-  const response = UrlFetchApp.fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, options);
+  const response = UrlFetchApp.fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, options);
   if (response.getResponseCode() !== 200) {
     throw new Error(`API Gemini zwróciło kod ${response.getResponseCode()}`);
   }
 
   const json = JSON.parse(response.getContentText());
+  if (!json.candidates || !json.candidates[0].content) {
+    throw new Error("Nieprawidłowa odpowiedź z modelu Gemini.");
+  }
+
   return json.candidates[0].content.parts[0].text.trim();
+}
+
+/**
+ * Twarda funkcja anonimizacji tekstu przed przekazaniem do AI
+ */
+function anonymizeText(text) {
+  if (!text) return "";
+  return String(text)
+    // 1. Usunięcie adresów e-mail
+    .replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, "[E-MAIL USUNIĘTO]")
+    // 2. Usunięcie numerów PESEL (11 cyfr)
+    .replace(/\b\d{11}\b/g, "[IDENTYFIKATOR USUNIĘTO]")
+    // 3. Usunięcie numerów telefonów (z prefiksem +48 lub 9 cyfr ze spacjami/myślnikami)
+    .replace(/(?:\+?48[\s-]?)?(?:\b\d{3}[\s-]?\d{3}[\s-]?\d{3}\b|\b\d{9}\b)/g, "[NUMER TELEFONU USUNIĘTO]");
 }
 
 /**
@@ -940,7 +1047,7 @@ function configureGeminiApiKeyFromComm() {
       const val = resp.getResponseText().trim();
       if (val) {
         scriptProps.setProperty("GEMINI_API_KEY", val);
-        ui.alert("Sukces", "Klucz zapisany w Script Properties.", ui.ButtonSet.OK);
+        ui.alert("Sukces", "Klucz Gemini zapisany w Script Properties.", ui.ButtonSet.OK);
       }
     }
   }

@@ -1,6 +1,6 @@
 /**
  * ELWOZ ECO SmartCare - Konfiguracja aplikacji
- * Wersja: 0.2.1 (Zarządzanie reputacją, komunikacja i dedykowane konto testowe)
+ * Wersja: 0.2.2 (Poprawki po niezależnym audycie kodu)
  * Projekt edukacyjny: Uniwersytet WSB Merito w Gdańsku
  * Dedykowane konto testowe: wsb.student.tester@gmail.com
  */
@@ -8,7 +8,7 @@
 const SMARTCARE_CONFIG = {
   appName: "ELWOZ ECO SmartCare",
   appSubtitle: "Cyfrowy Punkt Obsługi Mieszkańca – Rejon Kartuzy",
-  version: "0.2.1",
+  version: "0.2.2",
   isEducationalPrototype: true,
 
   // Dane oficjalne ELWOZ ECO - Punkt Obsługi Klienta Kartuzy
@@ -31,16 +31,20 @@ const SMARTCARE_CONFIG = {
     }
   },
 
-  // Dedykowane konto testowe WSB Merito (jedyny zatwierdzony serwerowy odbiorca w trybie demo)
+  // Dedykowane konto testowe WSB Merito (jedyny zatwierdzony serwerowy odbiorca testowy)
   testing: {
     testerAccount: "wsb.student.tester@gmail.com",
     isServerRestricted: true
   },
 
-  // Konfiguracja formularza Google Forms
+  // Konfiguracja natywnego formularza Google Forms
+  // Po powiązaniu formularza z arkuszem wklej poniżej adres URL formularza wygenerowanego na koncie wsb.student.tester@gmail.com:
   googleForm: {
-    directUrl: "https://docs.google.com/forms/d/e/1FAIpQLSc_PLACEHOLDER_FORM_ID/viewform",
-    embedUrl: "https://docs.google.com/forms/d/e/1FAIpQLSc_PLACEHOLDER_FORM_ID/viewform?embedded=true",
+    // Bezpośredni link do formularza Google Forms
+    directUrl: "",
+    // Link do osadzenia w iframe (z parametrem ?embedded=true)
+    embedUrl: "",
+    // Flaga gotowości formularza
     isFormConfigured: false
   },
 
@@ -48,7 +52,7 @@ const SMARTCARE_CONFIG = {
   disclaimer: {
     title: "UWAGA: PROTOTYP TESTOWY",
     shortNotice: "Aplikacja stanowi studencki prototyp wdrożeniowy WSB Merito. Wprowadzaj WYŁĄCZNIE fikcyjne dane.",
-    fullNotice: "System służy do celów demonstracyjnych i testowych. Zgłoszenia złożone w tym systemie NIE są przekazywane do dyspozytorni ELWOZ ECO Sp. z o.o. Korespondencja testowa w systemie jest kierowana wyłącznie na zatwierdzone konto: wsb.student.tester@gmail.com."
+    fullNotice: "System służy do celów demonstracyjnych i testowych. Zgłoszenia testowe trafiają do prywatnego arkusza Google Sheets powiązanego z kontem wsb.student.tester@gmail.com. Korespondencja testowa w systemie jest bezwarunkowo ograniczona wyłącznie do zatwierdzonego konta testerskiego."
   }
 };
 
