@@ -1,0 +1,739 @@
+/* ==========================================================================
+   ELWOZ ECO SmartCare - Style CSS (wersja 0.1.0)
+   Identyfikacja wizualna: inspirowana ELWOZ ECO Sp. z o.o.
+   Podejście: Mobile-First, czysty CSS3 bez zewnętrznych bibliotek
+   ========================================================================== */
+
+:root {
+  /* Paleta kolorystyczna - Ekologia & Zaufanie */
+  --color-primary: #1b7a3e;
+  --color-primary-dark: #13582c;
+  --color-primary-light: #e8f5e9;
+  --color-accent-blue: #143d59;
+  --color-accent-blue-light: #e3f2fd;
+  --color-action: #2e9b53;
+  --color-action-hover: #237841;
+  
+  /* Kolory statusów i ostrzeżeń */
+  --color-warning-bg: #fff8e1;
+  --color-warning-border: #ffca28;
+  --color-warning-text: #8d6b00;
+  --color-danger: #d32f2f;
+  --color-success: #2e7d32;
+
+  /* Frakcje odpadów - spójne z normami krajowymi i Elwoz Eco */
+  --frac-zmieszane: #424242;
+  --frac-papier: #1976d2;
+  --frac-tworzywa: #fbc02d;
+  --frac-szklo: #388e3c;
+  --frac-bio: #6d4c41;
+
+  /* Neutralne tła i teksty */
+  --color-bg: #f5f8f6;
+  --color-surface: #ffffff;
+  --color-surface-subtle: #f9fbf9;
+  --color-text-main: #1f2937;
+  --color-text-muted: #4b5563;
+  --color-text-light: #9ca3af;
+  --color-border: #e2e8f0;
+  --color-border-focus: #1b7a3e;
+
+  /* Typografia i geometria */
+  --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+
+  /* Cienie */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(20, 61, 89, 0.08);
+  --shadow-lg: 0 10px 25px rgba(20, 61, 89, 0.12);
+  --transition: all 0.2s ease-in-out;
+}
+
+/* Reset i bazy */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-family);
+  background-color: var(--color-bg);
+  color: var(--color-text-main);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+  transition: var(--transition);
+}
+
+a:hover {
+  color: var(--color-primary-dark);
+  text-decoration: underline;
+}
+
+/* Baner informacyjny - Prototyp studencki WSB Merito */
+.disclaimer-banner {
+  background-color: #fef3c7;
+  border-bottom: 2px solid #f59e0b;
+  color: #78350f;
+  font-size: 0.85rem;
+  padding: 8px 16px;
+  text-align: center;
+  position: relative;
+  z-index: 100;
+}
+
+.disclaimer-banner strong {
+  font-weight: 700;
+}
+
+.disclaimer-banner a {
+  color: #92400e;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+/* Nagłówek aplikacji */
+.app-header {
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+  position: sticky;
+  top: 0;
+  z-index: 90;
+}
+
+.header-container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.brand-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-logo-img {
+  height: 44px;
+  width: auto;
+  display: block;
+}
+
+.brand-titles {
+  display: flex;
+  flex-direction: column;
+}
+
+.brand-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--color-primary-dark);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.brand-title span {
+  color: var(--color-action);
+}
+
+.brand-subtitle {
+  font-size: 0.75rem;
+  color: var(--color-accent-blue);
+  font-weight: 600;
+}
+
+.badge-demo {
+  background: var(--color-accent-blue-light);
+  color: var(--color-accent-blue);
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border: 1px solid rgba(20, 61, 89, 0.15);
+}
+
+/* Główny kontener strony */
+.main-content {
+  flex: 1;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 16px;
+  width: 100%;
+}
+
+/* Sekcja Hero */
+.hero-card {
+  background: linear-gradient(135deg, #ffffff 0%, #f4faf6 100%);
+  border: 1px solid var(--color-border);
+  border-left: 6px solid var(--color-action);
+  border-radius: var(--radius-lg);
+  padding: 24px 20px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow-md);
+}
+
+.hero-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.hero-title {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--color-accent-blue);
+  line-height: 1.3;
+  margin-bottom: 12px;
+}
+
+.hero-desc {
+  font-size: 0.95rem;
+  color: var(--color-text-muted);
+  margin-bottom: 20px;
+  max-width: 680px;
+}
+
+/* Przyciski szybkiej akcji - Siatka */
+.action-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+@media (min-width: 600px) {
+  .action-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.btn-card {
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  text-decoration: none;
+  color: var(--color-text-main);
+  transition: var(--transition);
+  cursor: pointer;
+  min-height: 84px;
+}
+
+.btn-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  text-decoration: none;
+}
+
+.btn-card-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 14px;
+  flex-shrink: 0;
+  font-size: 1.4rem;
+}
+
+.btn-card-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.btn-card-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-text-main);
+  line-height: 1.25;
+}
+
+.btn-card-desc {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  margin-top: 3px;
+}
+
+/* Specjalne style kart akcji */
+.btn-card-primary {
+  background: linear-gradient(135deg, #1b7a3e 0%, #2e9b53 100%);
+  border-color: #1b7a3e;
+  color: #ffffff;
+}
+
+.btn-card-primary .btn-card-title {
+  color: #ffffff;
+}
+
+.btn-card-primary .btn-card-desc {
+  color: #e8f5e9;
+}
+
+.btn-card-primary .btn-card-icon {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+.btn-card-schedule .btn-card-icon {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.btn-card-contact .btn-card-icon {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.btn-card-faq .btn-card-icon {
+  background: #f3e8ff;
+  color: #7e22ce;
+}
+
+/* Moduł formularza */
+.form-section {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 24px 20px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-md);
+}
+
+.form-header {
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 16px;
+  margin-bottom: 20px;
+}
+
+.form-title {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--color-accent-blue);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.form-subtitle {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+
+/* Ostrzeżenie o danych fikcyjnych */
+.test-data-alert {
+  background-color: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  margin-bottom: 20px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.test-data-alert-icon {
+  font-size: 1.3rem;
+  color: #b45309;
+  line-height: 1;
+}
+
+.test-data-alert-content {
+  font-size: 0.825rem;
+  color: #78350f;
+  line-height: 1.45;
+}
+
+.test-data-alert-content strong {
+  display: block;
+  font-size: 0.875rem;
+  margin-bottom: 2px;
+  color: #92400e;
+}
+
+/* Pola formularza */
+.form-group {
+  margin-bottom: 18px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+@media (min-width: 600px) {
+  .form-row-2 {
+    grid-template-columns: 1fr 1fr;
+  }
+  .form-row-3 {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+}
+
+.form-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--color-text-main);
+  margin-bottom: 6px;
+}
+
+.form-label .required-mark {
+  color: var(--color-danger);
+  margin-left: 2px;
+}
+
+.form-hint {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+  display: block;
+}
+
+.form-control {
+  width: 100%;
+  padding: 11px 14px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: var(--color-text-main);
+  background-color: var(--color-surface);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  transition: var(--transition);
+  outline: none;
+}
+
+.form-control:focus {
+  border-color: var(--color-border-focus);
+  box-shadow: 0 0 0 3px rgba(46, 155, 83, 0.15);
+}
+
+select.form-control {
+  cursor: pointer;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234b5563' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+  padding-right: 36px;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+textarea.form-control {
+  resize: vertical;
+  min-height: 90px;
+}
+
+/* Sekcje wewnątrz formularza */
+.form-subheading {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-accent-blue);
+  margin: 22px 0 12px 0;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed var(--color-border);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--color-text-main);
+  user-select: none;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: var(--color-action);
+  cursor: pointer;
+}
+
+/* Przyciski w formularzu */
+.form-actions {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+@media (min-width: 600px) {
+  .form-actions {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+
+.btn-submit {
+  flex: 1;
+  background-color: var(--color-action);
+  color: #ffffff;
+  border: none;
+  padding: 14px 24px;
+  font-size: 1rem;
+  font-weight: 700;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: var(--transition);
+  box-shadow: 0 4px 10px rgba(46, 155, 83, 0.25);
+}
+
+.btn-submit:hover {
+  background-color: var(--color-action-hover);
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background-color: #ffffff;
+  color: var(--color-text-main);
+  border: 1.5px solid var(--color-border);
+  padding: 13px 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: var(--transition);
+  text-decoration: none;
+}
+
+.btn-secondary:hover {
+  background-color: var(--color-bg);
+  border-color: #cbd5e1;
+  text-decoration: none;
+}
+
+/* Widok potwierdzenia wysłania zgłoszenia */
+.confirmation-card {
+  display: none;
+  background: #ffffff;
+  border: 2px solid var(--color-action);
+  border-radius: var(--radius-lg);
+  padding: 30px 20px;
+  text-align: center;
+  margin-bottom: 24px;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.confirmation-icon {
+  width: 64px;
+  height: 64px;
+  background: var(--color-primary-light);
+  color: var(--color-action);
+  border-radius: var(--radius-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  margin-bottom: 16px;
+}
+
+.confirmation-title {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--color-primary-dark);
+  margin-bottom: 8px;
+}
+
+.confirmation-id-box {
+  background: var(--color-bg);
+  border: 1px dashed var(--color-action);
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  display: inline-block;
+  margin: 12px 0 16px 0;
+}
+
+.confirmation-id-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  font-weight: 700;
+}
+
+.confirmation-id-val {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--color-accent-blue);
+  letter-spacing: 1px;
+}
+
+.confirmation-text {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  max-width: 600px;
+  margin: 0 auto 20px auto;
+  line-height: 1.5;
+}
+
+.confirmation-alert {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: var(--radius-md);
+  padding: 12px;
+  font-size: 0.8rem;
+  color: #92400e;
+  max-width: 620px;
+  margin: 0 auto 20px auto;
+  text-align: left;
+}
+
+.confirmation-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  justify-content: center;
+}
+
+@media (min-width: 600px) {
+  .confirmation-actions {
+    flex-direction: row;
+  }
+}
+
+/* Sekcja informacyjna POK Kartuzy */
+.info-section {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.info-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.info-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--color-accent-blue);
+}
+
+.contact-card-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 600px) {
+  .contact-card-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.contact-item {
+  background: var(--color-surface-subtle);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+}
+
+.contact-item-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.contact-item-val {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text-main);
+  word-break: break-word;
+}
+
+/* Sekcja edukacyjna WSB Merito */
+.project-note {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin-bottom: 24px;
+  font-size: 0.85rem;
+  color: #334155;
+}
+
+.project-note h4 {
+  font-size: 0.95rem;
+  color: #0f172a;
+  margin-bottom: 6px;
+}
+
+/* Stopka */
+.app-footer {
+  background-color: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  padding: 24px 16px;
+  margin-top: auto;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.footer-container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.footer-links {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.footer-copy {
+  margin-top: 8px;
+}
