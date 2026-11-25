@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  * ELWOZ ECO SmartCare - Moduł Komunikacji i Zarządzania Reputacją (communication.gs)
- * Wersja: 0.2.2 (Poprawki po niezależnym audycie: Sanityzacja HTML, Whitelist, Fakty)
+ * Wersja: 0.2.3 (LockService, obsługa błędów dialogu, blokada placeholdera opinii)
  * Projekt edukacyjny: Uniwersytet WSB Merito w Gdańsku
  * Dedykowane konto testowe: wsb.student.tester@gmail.com
  * ============================================================================
@@ -11,9 +11,11 @@
  * 2. Cztery edytowalne szablony wiadomości oparte WYŁĄCZNIE na zweryfikowanych faktach.
  * 3. Pełne zabezpieczenie okien dialogowych przed wstrzyknięciem HTML/JS (escapeHtml).
  * 4. BEZWARUNKOWA blokada wysyłki na serwerze: dozwolony odbiorca to WYŁĄCZNIE wsb.student.tester@gmail.com.
- * 5. Zabezpieczenie przed duplikatami wysyłek (kontrola 5-minutowego okna).
- * 6. Bezpieczna anonimizacja treści przekazywanych do modelu Gemini 2.0 Flash.
- * 7. Zapis dat w arkuszu jako obiekty Date z poprawnym formatem dla formuł KPI.
+ * 5. Zabezpieczenie przed równoczesną wysyłką za pomocą LockService.
+ * 6. Zabezpieczenie przed duplikatami wysyłek (kontrola 5-minutowego okna).
+ * 7. Blokada placeholdera w prośbie o opinię – brak oznaczania jako wysłane bez zweryfikowanego linku.
+ * 8. Bezpieczna stylizacja wiadomości przez zweryfikowany model Gemini Flash.
+ * 9. Zapis dat w arkuszu jako obiekty Date z poprawnym formatem dla formuł KPI w godzinach.
  */
 
 // Jedyny bezwarunkowo autoryzowany odbiorca testowy
@@ -35,8 +37,19 @@ function onOpen() {
     .addItem("6. 📞 Odnotuj kontakt telefoniczny", "actionLogPhoneCall")
     .addItem("7. 📜 Wyświetl historię komunikacji", "actionViewCommunicationHistory")
     .addSeparator()
+    .addItem("🔄 Aktualizuj formuły Dashboardu (v0.2.3)", "updateDashboardKpiFormulasOnly")
     .addItem("⚙️ Ustawienia / Klucz Gemini API", "configureGeminiApiKeyFromComm")
     .addToUi();
+}
+
+/**
+ * Weryfikacja czy adres URL Profilu Firmy Google jest autentycznym linkiem (a nie placeholderem)
+ */
+function isVerifiedReviewUrl(url) {
+  if (!url) return false;
+  const trimmed = String(url).trim();
+  if (trimmed === "" || trimmed.includes("PLACEHOLDER")) return false;
+  return trimmed.startsWith("http://") || trimmed.startsWith("https://");
 }
 
 /**
@@ -303,6 +316,8 @@ Z poważaniem,
 ${settings.senderName}
 Tel. ${settings.contactPhone} | ${settings.website}`;
 
+  const hasVerifiedReviewLink = isVerifiedReviewUrl(settings.googleReviewUrl);
+
   openEmailDialog({
     ticketId: ticket.ticketId,
     actionType: "Informacja o rozwiązaniu",
@@ -310,6 +325,7 @@ Tel. ${settings.contactPhone} | ${settings.website}`;
     subject: subject,
     body: body,
     includeReviewOption: true,
+    hasVerifiedReviewLink: hasVerifiedReviewLink,
     alreadyReviewed: ticket.reviewSent,
     alreadyReviewedDate: ticket.reviewSentDate
   });
@@ -317,7 +333,7 @@ Tel. ${settings.contactPhone} | ${settings.website}`;
 
 /**
  * 5. Akcja: Przygotuj prośbę o opinię Google (Szablon D)
- * POPRAWKA AUDYTU: Neutralna prośba, brak fikcyjnego linku jeśli niezweryfikowany.
+ * POPRAWKA v0.2.3: Blokada prośby z placeholderem. Wysyłka wymaga zweryfikowanego linku w USTAWIENIACH.
  */
 function actionPrepareReviewRequest() {
   const ticket = getSelectedTicketData();
@@ -325,6 +341,17 @@ function actionPrepareReviewRequest() {
 
   if (!ticket.residentEmail) {
     promptMissingEmail(ticket);
+    return;
+  }
+
+  const settings = getSmartCareSettings();
+  if (!isVerifiedReviewUrl(settings.googleReviewUrl)) {
+    SpreadsheetApp.getUi().alert(
+      "Brak zweryfikowanego linku do opinii Google",
+      "Nie można przygotować prośby o opinię, ponieważ w zakładce 'USTAWIENIA' nie wprowadzono autentycznego linku do Profilu Firmy Google.\n\n" +
+      "Zgodnie z zasadami systemu prośba o opinię nie może zawierać tekstu zastępczego (placeholdera). Uzupełnij pole 'Zweryfikowany link do opinii Google' w zakładce USTAWIENIA.",
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
     return;
   }
 
@@ -339,15 +366,8 @@ function actionPrepareReviewRequest() {
     }
   }
 
-  const settings = getSmartCareSettings();
   const subject = `Opinia o obsłudze zgłoszenia ${ticket.ticketId} – ELWOZ ECO`;
-
-  let linkSection = "";
-  if (settings.googleReviewUrl && settings.googleReviewUrl.trim() !== "") {
-    linkSection = `👉 Wystaw obiektywną recenzję w Profilu Firmy Google:\n${settings.googleReviewUrl}`;
-  } else {
-    linkSection = `[Link do Profilu Firmy Google zostanie udostępniony po zweryfikowaniu wizytówki POK Kartuzy w zakładce USTAWIENIA]`;
-  }
+  const linkSection = `👉 Wystaw obiektywną recenzję w Profilu Firmy Google:\n${settings.googleReviewUrl}`;
 
   const body = 
 `Dzień dobry, ${ticket.residentName},
@@ -370,7 +390,8 @@ ${settings.companyName}`;
     recipient: ticket.residentEmail,
     subject: subject,
     body: body,
-    includeReviewOption: false
+    includeReviewOption: false,
+    hasVerifiedReviewLink: true
   });
 }
 
@@ -686,12 +707,12 @@ function openEmailDialog(params) {
     <div class="form-group">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
         <label for="emailBody" style="margin-bottom:0;">Treść wiadomości (edytowalna):</label>
-        <button type="button" class="btn-ai" onclick="personalizeWithAi()">✨ Usprawnij styl z AI (Gemini 2.0)</button>
+        <button type="button" class="btn-ai" onclick="personalizeWithAi()">✨ Usprawnij styl z AI (Gemini Flash)</button>
       </div>
       <textarea id="emailBody" required>${safeBody}</textarea>
     </div>
 
-    ${params.includeReviewOption ? `
+    ${params.includeReviewOption ? (params.hasVerifiedReviewLink ? `
     <div class="review-box">
       <label style="cursor: pointer; display: flex; align-items: flex-start; gap: 8px; margin: 0;">
         <input type="checkbox" id="addGoogleReview" ${params.alreadyReviewed ? '' : 'checked'} style="margin-top: 2px;">
@@ -700,7 +721,12 @@ function openEmailDialog(params) {
           ${params.alreadyReviewed ? '<span style="color:#b45309;">⚠️ Prośba o opinię była już wysłana w dn. ' + escapeHtml(params.alreadyReviewedDate || 'wcześniej') + '. Ponowne zaznaczenie wymaga świadomej decyzji pracownika.</span>' : 'Zgodnie z zasadami etycznymi: brak nagród, brak filtrowania ocen, pełna neutralność.'}
         </span>
       </label>
-    </div>` : ''}
+    </div>` : `
+    <div class="review-box" style="background: #f1f5f9; border-color: #cbd5e1;">
+      <span style="font-size:0.8rem; color:#64748b;">
+        ℹ️ <strong>Zaproszenie do opinii Google nieaktywne:</strong> W zakładce <code>USTAWIENIA</code> nie wprowadzono zweryfikowanego adresu Profilu Google. Prośba o opinię nie może zawierać tekstu zastępczego (placeholdera).
+      </span>
+    </div>`) : ''}
 
     <div class="btn-bar">
       <button type="button" class="btn-cancel" onclick="google.script.host.close()">Anuluj</button>
@@ -725,10 +751,17 @@ function openEmailDialog(params) {
 
       google.script.run
         .withSuccessHandler((res) => {
-          google.script.host.close();
+          if (res && res.success) {
+            google.script.host.close();
+          } else {
+            const errMsg = (res && res.error) ? res.error : 'Nieznany błąd podczas wysyłki wiadomości.';
+            alert('Błąd operacji:\n\n' + errMsg + '\n\nOkno wiadomości pozostaje otwarte. Popraw treść lub spróbuj ponownie.');
+            document.getElementById('btnSubmit').disabled = false;
+            document.getElementById('btnSubmit').innerText = 'Zatwierdź i wyślij';
+          }
         })
         .withFailureHandler((err) => {
-          alert('Błąd wysyłki: ' + err);
+          alert('Błąd serwera (Apps Script): ' + err);
           document.getElementById('btnSubmit').disabled = false;
           document.getElementById('btnSubmit').innerText = 'Zatwierdź i wyślij';
         })
@@ -767,200 +800,233 @@ function openEmailDialog(params) {
 }
 
 /**
- * Backend wysyłki poczty z BEZWARUNKOWĄ blokadą serwerową oraz zabezpieczeniem przed duplikatami
- * POPRAWKI AUDYTU:
- * 1. Bezwarunkowa blokada adresu wysyłki: TYLKO wsb.student.tester@gmail.com.
- * 2. Zabezpieczenie przed duplikatem (kontrola ostatnich 5 minut).
- * 3. Zapis obiektów Date z formatowaniem komórek dla prawidłowego działania KPI.
- * 4. W razie błędu: brak oznaczania rekordu jako wysłany w CRM.
+ * Backend wysyłki poczty z BEZWARUNKOWĄ blokadą serwerową, LockService oraz zabezpieczeniem przed duplikatami
+ * POPRAWKI AUDYTU v0.2.3:
+ * 1. Zabezpieczenie równoczesnej wysyłki za pomocą LockService.
+ * 2. Bezwarunkowa blokada adresu wysyłki: TYLKO wsb.student.tester@gmail.com.
+ * 3. Zabezpieczenie przed duplikatem (kontrola ostatnich 5 minut).
+ * 4. Blokada placeholdera opinii Google: brak oznaczania rekordu w CRM i wysyłki bez zweryfikowanego linku.
+ * 5. Zwracanie jednoznacznego wyniku { success, error } zapobiegające zamykaniu okna przy błędzie.
+ * 6. Zapis obiektów Date z formatowaniem komórek dla prawidłowego działania KPI w godzinach.
  */
 function processSendEmail(payload) {
-  const settings = getSmartCareSettings();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const histSheet = ss.getSheetByName("HISTORIA KOMUNIKACJI");
-  const ticketSheet = ss.getSheetByName("ZGŁOSZENIA");
-  const now = new Date();
-  const nowStr = Utilities.formatDate(now, "Europe/Warsaw", "yyyy-MM-dd HH:mm");
-  const agent = Session.getActiveUser().getEmail().split('@')[0] || "Pracownik";
-
-  // 1. BEZWARUNKOWA BLOKADA SERWEROWA ODBIORCY:
-  // W prototypie studenckim cała korespondencja trafia WYŁĄCZNIE na wsb.student.tester@gmail.com
-  const targetEmail = APPROVED_TEST_RECIPIENT;
-
-  if (!targetEmail || targetEmail.toLowerCase().trim() !== APPROVED_TEST_RECIPIENT.toLowerCase().trim()) {
-    const criticalErr = `BEZWARUNKOWA BLOKADA SERWERA: Próba wysyłki na inny adres niż ${APPROVED_TEST_RECIPIENT} została zablokowana!`;
-    Logger.log(criticalErr);
-    SpreadsheetApp.getUi().alert("Blokada Bezpieczeństwa", criticalErr, SpreadsheetApp.getUi().ButtonSet.OK);
-    return;
-  }
-
-  // 2. KONTROLA DUPLIKATÓW W CIĄGU OSTATNICH 5 MINUT:
-  if (histSheet && histSheet.getLastRow() > 2) {
-    const recentHistory = histSheet.getRange(3, 1, histSheet.getLastRow() - 2, 9).getValues();
-    const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
-
-    for (let row of recentHistory) {
-      const histTicketId = String(row[0]).trim();
-      const histAction = String(row[2]).trim();
-      const histDate = new Date(row[1]);
-      const histStatus = String(row[8]).trim();
-
-      if (histTicketId === String(payload.ticketId).trim() && 
-          histAction === String(payload.actionType).trim() && 
-          histStatus === "wysłano" && 
-          !isNaN(histDate.getTime()) && 
-          histDate > fiveMinutesAgo) {
-        
-        SpreadsheetApp.getUi().alert(
-          "Wykryto duplikat wysyłki",
-          `Wiadomość typu '${payload.actionType}' dla zgłoszenia ${payload.ticketId} została już wysłana w ciągu ostatnich 5 minut (${row[1]}).\n\nOperacja została zablokowana, aby zapobiec wysyłaniu duplikatów.`,
-          SpreadsheetApp.getUi().ButtonSet.OK
-        );
-        return;
-      }
-    }
-  }
-
-  // 3. Wymuszenie prefiksu [TEST] w temacie
-  let finalSubject = payload.subject;
-  if (!finalSubject.startsWith("[TEST]")) {
-    finalSubject = `[TEST] ${finalSubject}`;
-  }
-
-  // 4. Dołączenie opinii jeśli wybrano w formularzu
-  let finalBody = payload.body;
-  if (payload.addedReviewRequest) {
-    let reviewPart = "\n\n---\n👉 Będziemy wdzięczni za podzielenie się obiektywną opinią w Profilu Firmy Google:";
-    if (settings.googleReviewUrl && settings.googleReviewUrl.trim() !== "") {
-      reviewPart += `\n${settings.googleReviewUrl}`;
-    } else {
-      reviewPart += `\n[Link do Profilu Firmy Google zostanie udostępniony po zweryfikowaniu wizytówki POK Kartuzy w USTAWIENIACH]`;
-    }
-    finalBody += reviewPart;
-  }
-
-  // 5. Wymuszenie stopki akademickiej WSB Merito
-  finalBody += `\n\n------------------------------------------------------------\n` +
-    `[WIADOMOŚĆ TESTOWA – PROTOTYP WSB MERITO]\n` +
-    `Wiadomość wygenerowana w ramach studenckiego projektu wdrożeniowego ELWOZ ECO SmartCare.\n` +
-    `Fikcyjny adresat zgłoszenia: ${payload.originalRecipient}\n` +
-    `Jedyny zatwierdzony serwerowo odbiorca testowy: ${APPROVED_TEST_RECIPIENT}`;
-
-  let sendStatus = "przygotowano";
-  let errorMessage = "";
-
-  // 6. Rzeczywista wysyłka przez MailApp z obsługą błędów
+  const lock = LockService.getScriptLock();
   try {
-    const quota = MailApp.getRemainingDailyQuota();
-    if (quota <= 0) {
-      throw new Error("Wyczerpano dzienny limit wysyłki Google MailApp.");
+    lock.waitLock(15000);
+  } catch (e) {
+    return {
+      success: false,
+      error: "Serwer jest obecnie zajęty inną operacją wysyłki. Spróbuj ponownie za chwilę."
+    };
+  }
+
+  try {
+    const settings = getSmartCareSettings();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const histSheet = ss.getSheetByName("HISTORIA KOMUNIKACJI");
+    const ticketSheet = ss.getSheetByName("ZGŁOSZENIA");
+    const now = new Date();
+    const nowStr = Utilities.formatDate(now, "Europe/Warsaw", "yyyy-MM-dd HH:mm");
+    const agent = Session.getActiveUser().getEmail().split('@')[0] || "Pracownik";
+
+    // 1. BEZWARUNKOWA BLOKADA SERWEROWA ODBIORCY:
+    // W prototypie studenckim cała korespondencja trafia WYŁĄCZNIE na wsb.student.tester@gmail.com
+    const targetEmail = APPROVED_TEST_RECIPIENT;
+
+    if (!targetEmail || targetEmail.toLowerCase().trim() !== APPROVED_TEST_RECIPIENT.toLowerCase().trim()) {
+      const criticalErr = `BEZWARUNKOWA BLOKADA SERWERA: Próba wysyłki na inny adres niż ${APPROVED_TEST_RECIPIENT} została zablokowana!`;
+      Logger.log(criticalErr);
+      return {
+        success: false,
+        error: criticalErr
+      };
     }
 
-    MailApp.sendEmail({
-      to: targetEmail,
-      subject: finalSubject,
-      body: finalBody,
-      name: settings.senderName
-    });
+    // 2. WERYFIKACJA LINKU DO OPINII GOOGLE:
+    const hasVerifiedReviewLink = isVerifiedReviewUrl(settings.googleReviewUrl);
+    if (payload.actionType === "Prośba o opinię" && !hasVerifiedReviewLink) {
+      return {
+        success: false,
+        error: "Brak zweryfikowanego linku do Profilu Google w USTAWIENIACH. Prośba o opinię nie może zostać wysłana z tekstem zastępczym (placeholderem) ani oznaczona w CRM."
+      };
+    }
 
-    sendStatus = "wysłano";
-  } catch (err) {
-    sendStatus = "błąd wysyłki";
-    errorMessage = err.toString();
-    Logger.log(`Błąd wysyłki dla ${payload.ticketId}: ${errorMessage}`);
-  }
+    // 3. KONTROLA DUPLIKATÓW W CIĄGU OSTATNICH 5 MINUT:
+    if (histSheet && histSheet.getLastRow() > 2) {
+      const recentHistory = histSheet.getRange(3, 1, histSheet.getLastRow() - 2, 9).getValues();
+      const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
 
-  // 7. Zapis w HISTORIA KOMUNIKACJI (zawsze rejestrujemy próbę)
-  if (histSheet) {
-    histSheet.appendRow([
-      payload.ticketId,
-      nowStr,
-      payload.actionType,
-      "e-mail",
-      targetEmail,
-      finalSubject,
-      finalBody,
-      agent,
-      sendStatus,
-      errorMessage
-    ]);
-  }
+      for (let row of recentHistory) {
+        const histTicketId = String(row[0]).trim();
+        const histAction = String(row[2]).trim();
+        const histDate = new Date(row[1]);
+        const histStatus = String(row[8]).trim();
 
-  // 8. Aktualizacja ZGŁOSZENIA WYŁĄCZNIE wtedy, gdy wysyłka powiodła się
-  if (sendStatus === "wysłano" && ticketSheet) {
-    const data = ticketSheet.getDataRange().getValues();
-    const headers = data[0].map(h => String(h).trim());
-    const idIdx = headers.indexOf("ID Zgłoszenia");
-    const confirmDateIdx = headers.indexOf("Data potwierdzenia przyjęcia");
-    const firstContactIdx = headers.indexOf("Data pierwszego kontaktu");
-    const lastContactIdx = headers.indexOf("Data ostatniego kontaktu");
-    const resolveDateIdx = headers.indexOf("Data rozwiązania");
-    const opinionIdx = headers.indexOf("Prośba o opinię wysłana");
-    const opinionDateIdx = headers.indexOf("Data wysłania prośby o opinię");
-    const statusIdx = headers.indexOf("Status");
-
-    for (let r = 1; r < data.length; r++) {
-      if (String(data[r][idIdx]).trim() === String(payload.ticketId).trim()) {
-        const rowNum = r + 1;
-
-        if (payload.actionType === "Potwierdzenie przyjęcia") {
-          if (confirmDateIdx !== -1 && !data[r][confirmDateIdx]) {
-            ticketSheet.getRange(rowNum, confirmDateIdx + 1).setValue(now).setNumberFormat("yyyy-MM-dd HH:mm");
-          }
-          if (firstContactIdx !== -1 && !data[r][firstContactIdx]) {
-            ticketSheet.getRange(rowNum, firstContactIdx + 1).setValue(now).setNumberFormat("yyyy-MM-dd HH:mm");
-          }
-          if (statusIdx !== -1 && data[r][statusIdx] === "Nowe") {
-            ticketSheet.getRange(rowNum, statusIdx + 1).setValue("Do weryfikacji");
-          }
+        if (histTicketId === String(payload.ticketId).trim() && 
+            histAction === String(payload.actionType).trim() && 
+            histStatus === "wysłano" && 
+            !isNaN(histDate.getTime()) && 
+            histDate > fiveMinutesAgo) {
+          
+          return {
+            success: false,
+            error: `Wiadomość typu '${payload.actionType}' dla zgłoszenia ${payload.ticketId} została już wysłana w ciągu ostatnich 5 minut (${row[1]}). Operacja została zablokowana, aby zapobiec duplikatom.`
+          };
         }
-
-        if (payload.actionType === "Informacja o postępach") {
-          if (lastContactIdx !== -1) {
-            ticketSheet.getRange(rowNum, lastContactIdx + 1).setValue(now).setNumberFormat("yyyy-MM-dd HH:mm");
-          }
-          if (statusIdx !== -1 && data[r][statusIdx] === "Do weryfikacji") {
-            ticketSheet.getRange(rowNum, statusIdx + 1).setValue("W realizacji");
-          }
-        }
-
-        if (payload.actionType === "Informacja o rozwiązaniu") {
-          if (lastContactIdx !== -1) {
-            ticketSheet.getRange(rowNum, lastContactIdx + 1).setValue(now).setNumberFormat("yyyy-MM-dd HH:mm");
-          }
-          if (resolveDateIdx !== -1 && !data[r][resolveDateIdx]) {
-            ticketSheet.getRange(rowNum, resolveDateIdx + 1).setValue(now).setNumberFormat("yyyy-MM-dd HH:mm");
-          }
-          if (statusIdx !== -1) {
-            ticketSheet.getRange(rowNum, statusIdx + 1).setValue("Rozwiązane");
-          }
-        }
-
-        if (payload.actionType === "Prośba o opinię" || payload.addedReviewRequest) {
-          if (opinionIdx !== -1) {
-            ticketSheet.getRange(rowNum, opinionIdx + 1).setValue("TAK");
-          }
-          if (opinionDateIdx !== -1) {
-            ticketSheet.getRange(rowNum, opinionDateIdx + 1).setValue(now).setNumberFormat("yyyy-MM-dd HH:mm");
-          }
-        }
-
-        break;
       }
     }
-  }
 
-  if (sendStatus === "wysłano") {
-    SpreadsheetApp.getActiveSpreadsheet().toast(`Wysłano: ${payload.actionType} na ${targetEmail}`, "SmartCare Sukces", 5);
-  } else {
-    SpreadsheetApp.getUi().alert("Błąd wysyłki e-mail", `Nie udało się wysłać wiadomości:\n${errorMessage}\n\nOperacja została odnotowana w HISTORIA KOMUNIKACJI jako 'błąd wysyłki'. CRM nie został oznaczony jako obsłużony.`, SpreadsheetApp.getUi().ButtonSet.OK);
+    // 4. Wymuszenie prefiksu [TEST] w temacie
+    let finalSubject = payload.subject;
+    if (!finalSubject.startsWith("[TEST]")) {
+      finalSubject = `[TEST] ${finalSubject}`;
+    }
+
+    // 5. Dołączenie opinii jeśli wybrano w formularzu i link jest zweryfikowany
+    let finalBody = payload.body;
+    if (payload.addedReviewRequest) {
+      if (hasVerifiedReviewLink) {
+        finalBody += `\n\n---\n👉 Będziemy wdzięczni za podzielenie się obiektywną opinią w Profilu Firmy Google:\n${settings.googleReviewUrl}`;
+      } else {
+        // Blokada wstrzykiwania tekstu zastępczego (placeholdera)
+        payload.addedReviewRequest = false;
+      }
+    }
+
+    // 6. Wymuszenie stopki akademickiej WSB Merito
+    finalBody += `\n\n------------------------------------------------------------\n` +
+      `[WIADOMOŚĆ TESTOWA – PROTOTYP WSB MERITO]\n` +
+      `Wiadomość wygenerowana w ramach studenckiego projektu wdrożeniowego ELWOZ ECO SmartCare.\n` +
+      `Fikcyjny adresat zgłoszenia: ${payload.originalRecipient}\n` +
+      `Jedyny zatwierdzony serwerowo odbiorca testowy: ${APPROVED_TEST_RECIPIENT}`;
+
+    let sendStatus = "przygotowano";
+    let errorMessage = "";
+
+    // 7. Rzeczywista wysyłka przez MailApp z obsługą błędów
+    try {
+      const quota = MailApp.getRemainingDailyQuota();
+      if (quota <= 0) {
+        throw new Error("Wyczerpano dzienny limit wysyłki Google MailApp.");
+      }
+
+      MailApp.sendEmail({
+        to: targetEmail,
+        subject: finalSubject,
+        body: finalBody,
+        name: settings.senderName
+      });
+
+      sendStatus = "wysłano";
+    } catch (err) {
+      sendStatus = "błąd wysyłki";
+      errorMessage = err.toString();
+      Logger.log(`Błąd wysyłki dla ${payload.ticketId}: ${errorMessage}`);
+    }
+
+    // 8. Zapis w HISTORIA KOMUNIKACJI (zawsze rejestrujemy próbę)
+    if (histSheet) {
+      histSheet.appendRow([
+        payload.ticketId,
+        nowStr,
+        payload.actionType,
+        "e-mail",
+        targetEmail,
+        finalSubject,
+        finalBody,
+        agent,
+        sendStatus,
+        errorMessage
+      ]);
+    }
+
+    // 9. Aktualizacja ZGŁOSZENIA WYŁĄCZNIE wtedy, gdy wysyłka powiodła się
+    if (sendStatus === "wysłano" && ticketSheet) {
+      const data = ticketSheet.getDataRange().getValues();
+      const headers = data[0].map(h => String(h).trim());
+      const idIdx = headers.indexOf("ID Zgłoszenia");
+      const confirmDateIdx = headers.indexOf("Data potwierdzenia przyjęcia");
+      const firstContactIdx = headers.indexOf("Data pierwszego kontaktu");
+      const lastContactIdx = headers.indexOf("Data ostatniego kontaktu");
+      const resolveDateIdx = headers.indexOf("Data rozwiązania");
+      const opinionIdx = headers.indexOf("Prośba o opinię wysłana");
+      const opinionDateIdx = headers.indexOf("Data wysłania prośby o opinię");
+      const statusIdx = headers.indexOf("Status");
+
+      for (let r = 1; r < data.length; r++) {
+        if (String(data[r][idIdx]).trim() === String(payload.ticketId).trim()) {
+          const rowNum = r + 1;
+
+          if (payload.actionType === "Potwierdzenie przyjęcia") {
+            if (confirmDateIdx !== -1 && !data[r][confirmDateIdx]) {
+              ticketSheet.getRange(rowNum, confirmDateIdx + 1).setValue(now).setNumberFormat("yyyy-MM-dd HH:mm");
+            }
+            if (firstContactIdx !== -1 && !data[r][firstContactIdx]) {
+              ticketSheet.getRange(rowNum, firstContactIdx + 1).setValue(now).setNumberFormat("yyyy-MM-dd HH:mm");
+            }
+            if (statusIdx !== -1 && data[r][statusIdx] === "Nowe") {
+              ticketSheet.getRange(rowNum, statusIdx + 1).setValue("Do weryfikacji");
+            }
+          }
+
+          if (payload.actionType === "Informacja o postępach") {
+            if (lastContactIdx !== -1) {
+              ticketSheet.getRange(rowNum, lastContactIdx + 1).setValue(now).setNumberFormat("yyyy-MM-dd HH:mm");
+            }
+            if (statusIdx !== -1 && data[r][statusIdx] === "Do weryfikacji") {
+              ticketSheet.getRange(rowNum, statusIdx + 1).setValue("W realizacji");
+            }
+          }
+
+          if (payload.actionType === "Informacja o rozwiązaniu") {
+            if (lastContactIdx !== -1) {
+              ticketSheet.getRange(rowNum, lastContactIdx + 1).setValue(now).setNumberFormat("yyyy-MM-dd HH:mm");
+            }
+            if (resolveDateIdx !== -1 && !data[r][resolveDateIdx]) {
+              ticketSheet.getRange(rowNum, resolveDateIdx + 1).setValue(now).setNumberFormat("yyyy-MM-dd HH:mm");
+            }
+            if (statusIdx !== -1) {
+              ticketSheet.getRange(rowNum, statusIdx + 1).setValue("Rozwiązane");
+            }
+          }
+
+          // POPRAWKA v0.2.3: Oznaczanie prośby o opinię wyłącznie wtedy, gdy link jest zweryfikowany
+          if ((payload.actionType === "Prośba o opinię" || payload.addedReviewRequest) && hasVerifiedReviewLink) {
+            if (opinionIdx !== -1) {
+              ticketSheet.getRange(rowNum, opinionIdx + 1).setValue("TAK");
+            }
+            if (opinionDateIdx !== -1) {
+              ticketSheet.getRange(rowNum, opinionDateIdx + 1).setValue(now).setNumberFormat("yyyy-MM-dd HH:mm");
+            }
+          }
+
+          break;
+        }
+      }
+    }
+
+    if (sendStatus === "wysłano") {
+      SpreadsheetApp.getActiveSpreadsheet().toast(`Wysłano: ${payload.actionType} na ${targetEmail}`, "SmartCare Sukces", 5);
+      return {
+        success: true,
+        status: "wysłano",
+        targetEmail: targetEmail
+      };
+    } else {
+      return {
+        success: false,
+        error: errorMessage || "Wystąpił błąd podczas wysyłki wiadomości e-mail."
+      };
+    }
+  } finally {
+    lock.releaseLock();
   }
 }
 
 /**
- * Personalizacja wiadomości z użyciem Gemini 2.0 Flash (z poszanowaniem zakazu wymyślania faktów)
- * POPRAWKA AUDYTU:
- * 1. Wdrożono aktualny model gemini-2.0-flash.
+ * Personalizacja wiadomości z użyciem zweryfikowanego modelu Gemini Flash
+ * POPRAWKA v0.2.3:
+ * 1. Zastąpiono wycofany model gemini-2.0-flash dynamiczną weryfikacją bezpłatnych modeli Flash.
  * 2. Ścisły zakaz wymyślania załóg, tras i ustaleń.
  */
 function polishMessageWithAi(ticketId, templateText) {
@@ -969,6 +1035,11 @@ function polishMessageWithAi(ticketId, templateText) {
   if (!apiKey) {
     throw new Error("Brak klucza Gemini API w Script Properties. Użyj gotowego szablonu.");
   }
+
+  // Dynamiczne ustalenie modelu z bezpłatnej puli Flash
+  const targetModel = (typeof getVerifiedGeminiModel === "function")
+    ? getVerifiedGeminiModel(apiKey)
+    : ((typeof SMARTCARE_AI_CONFIG !== "undefined" && SMARTCARE_AI_CONFIG.defaultModel) ? SMARTCARE_AI_CONFIG.defaultModel : "gemini-3.6-flash");
 
   // Twarda anonimizacja treści wejściowej
   const cleanTemplate = anonymizeText(templateText);
@@ -1005,9 +1076,9 @@ function polishMessageWithAi(ticketId, templateText) {
     muteHttpExceptions: true
   };
 
-  const response = UrlFetchApp.fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, options);
+  const response = UrlFetchApp.fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(targetModel)}:generateContent?key=${apiKey}`, options);
   if (response.getResponseCode() !== 200) {
-    throw new Error(`API Gemini zwróciło kod ${response.getResponseCode()}`);
+    throw new Error(`API Gemini (${targetModel}) zwróciło kod ${response.getResponseCode()}`);
   }
 
   const json = JSON.parse(response.getContentText());

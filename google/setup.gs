@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  * ELWOZ ECO SmartCare - Skrypt konfiguracyjny Google Apps Script (setup.gs)
- * Wersja: 0.2.2 (Poprawki po niezależnym audycie: Container-bound, Whitelist, KPI)
+ * Wersja: 0.2.3 (Poprawki: LockService, KPI w godzinach, Odsetek opinii dla zakończonych)
  * Projekt edukacyjny: Uniwersytet WSB Merito w Gdańsku
  * Dedykowane konto Google: wsb.student.tester@gmail.com
  * ============================================================================
@@ -17,7 +17,8 @@
  * 4. Dodaje i formatuje kolumny operacyjne CRM ZA kolumnami formularza.
  * 5. Konfiguruje zakładki: DASHBOARD, HISTORIA KOMUNIKACJI, USTAWIENIA, TESTY, INSTRUKCJA AI.
  * 6. Bezpieczny przy ponownym uruchomieniu: ZACHOWUJE istniejące dane testowe, zgłoszenia i historię!
- * 7. Instaluje wyzwalacz onFormSubmit nadający unikalne ID (sekwencyjnie) i status "Nowe".
+ * 7. Instaluje wyzwalacz onFormSubmit nadający unikalne ID (LockService, sekwencyjnie) i status "Nowe".
+ * 8. Udostępnia funkcję updateDashboardKpiFormulasOnly() do bezinwazyjnej aktualizacji formuł.
  */
 
 const SMARTCARE_SETUP_CONFIG = {
@@ -99,7 +100,7 @@ function setupSmartCareSystem() {
   // 7. Konfiguracja zakładki TESTY (z zachowaniem wpisanych wyników zespołu!)
   setupTestsSheet(spreadsheet);
 
-  // 8. Konfiguracja zakładki INSTRUKCJA AI (model gemini-2.0-flash)
+  // 8. Konfiguracja zakładki INSTRUKCJA AI (aktualna generacja Gemini Flash)
   setupAiInstructionSheet(spreadsheet);
 
   // 9. Instalacja instalowalnego wyzwalacza onFormSubmit
@@ -497,8 +498,8 @@ function setupDashboardSheet(spreadsheet) {
   // SEKCJA 2: Komunikacja, Czas reakcji i Rozwiązania (Wiersze 7-8)
   dash.getRange("B7:F7").setValues([[
     "Sprawy oczekujące na kontakt",
-    "Śr. czas 1. reakcji (dni)",
-    "Śr. czas rozwiązania (dni)",
+    "Śr. czas 1. reakcji (godz.)",
+    "Śr. czas rozwiązania (godz.)",
     "Średnia satysfakcja (1-5)",
     "Liczba zebranych ocen"
   ]])
@@ -510,15 +511,15 @@ function setupDashboardSheet(spreadsheet) {
     '=IFERROR(COUNTIFS(ZGŁOSZENIA!L2:L; "*Tak*"; ZGŁOSZENIA!N2:N; "Nowe") + COUNTIFS(ZGŁOSZENIA!L2:L; "*Tak*"; ZGŁOSZENIA!N2:N; "Do weryfikacji"); 0)'
   );
 
-  // POPRAWKA AUDYTU: Formuła obliczająca średni czas reakcji odporna na format Date oraz ciągi tekstowe
-  // Wylicza różnicę (Data pierwszego kontaktu [kol. U] - Sygnatura zgłoszenia [kol. A]) wyłącznie gdy obie daty są podane
+  // POPRAWKA v0.2.3: Średni czas 1. reakcji w godzinach z dokładnością do 2 miejsc po przecinku (bez INT)
+  // Różnica w dniach pomnożona przez 24 daje godziny.
   dash.getRange("C8").setFormula(
-    '=IFERROR(ROUND(AVERAGE(FILTER(IF(ISNUMBER(ZGŁOSZENIA!U2:U); INT(ZGŁOSZENIA!U2:U); INT(DATEVALUE(ZGŁOSZENIA!U2:U))) - IF(ISNUMBER(ZGŁOSZENIA!A2:A); INT(ZGŁOSZENIA!A2:A); INT(DATEVALUE(ZGŁOSZENIA!A2:A))); ZGŁOSZENIA!U2:U<>""; ZGŁOSZENIA!A2:A<>"")); 1); "brak danych")'
+    '=IFERROR(ROUND(AVERAGE(FILTER((IF(ISNUMBER(ZGŁOSZENIA!U2:U); ZGŁOSZENIA!U2:U; DATEVALUE(ZGŁOSZENIA!U2:U) + IFERROR(TIMEVALUE(ZGŁOSZENIA!U2:U); 0)) - IF(ISNUMBER(ZGŁOSZENIA!A2:A); ZGŁOSZENIA!A2:A; DATEVALUE(ZGŁOSZENIA!A2:A) + IFERROR(TIMEVALUE(ZGŁOSZENIA!A2:A); 0))) * 24; ZGŁOSZENIA!U2:U<>""; ZGŁOSZENIA!A2:A<>"")); 2); "brak danych")'
   );
 
-  // POPRAWKA AUDYTU: Średni czas rozwiązania sprawy (Data rozwiązania [kol. W] - Sygnatura [kol. A])
+  // POPRAWKA v0.2.3: Średni czas rozwiązania sprawy w godzinach z dokładnością do 2 miejsc po przecinku (bez INT)
   dash.getRange("D8").setFormula(
-    '=IFERROR(ROUND(AVERAGE(FILTER(IF(ISNUMBER(ZGŁOSZENIA!W2:W); INT(ZGŁOSZENIA!W2:W); INT(DATEVALUE(ZGŁOSZENIA!W2:W))) - IF(ISNUMBER(ZGŁOSZENIA!A2:A); INT(ZGŁOSZENIA!A2:A); INT(DATEVALUE(ZGŁOSZENIA!A2:A))); ZGŁOSZENIA!W2:W<>""; ZGŁOSZENIA!A2:A<>"")); 1); "brak danych")'
+    '=IFERROR(ROUND(AVERAGE(FILTER((IF(ISNUMBER(ZGŁOSZENIA!W2:W); ZGŁOSZENIA!W2:W; DATEVALUE(ZGŁOSZENIA!W2:W) + IFERROR(TIMEVALUE(ZGŁOSZENIA!W2:W); 0)) - IF(ISNUMBER(ZGŁOSZENIA!A2:A); ZGŁOSZENIA!A2:A; DATEVALUE(ZGŁOSZENIA!A2:A) + IFERROR(TIMEVALUE(ZGŁOSZENIA!A2:A); 0))) * 24; ZGŁOSZENIA!W2:W<>""; ZGŁOSZENIA!A2:A<>"")); 2); "brak danych")'
   );
 
   // Średnia ocena satysfakcji (kolumna Z)
@@ -547,7 +548,10 @@ function setupDashboardSheet(spreadsheet) {
     .setHorizontalAlignment("center");
 
   dash.getRange("B11").setFormula('=IFERROR(COUNTIF(ZGŁOSZENIA!AB2:AB; "TAK"); 0)');
-  dash.getRange("C11").setFormula('=IF(E5>0; TEXT(B11/E5; "0,0%"); "0,0%")');
+  // POPRAWKA v0.2.3: Odsetek wysłanych próśb o opinię liczony WYŁĄCZNIE wśród zakończonych spraw (Rozwiązane / Zamknięte)
+  dash.getRange("C11").setFormula(
+    '=IF(E5>0; TEXT((COUNTIFS(ZGŁOSZENIA!AB2:AB; "TAK"; ZGŁOSZENIA!N2:N; "Rozwiązane") + COUNTIFS(ZGŁOSZENIA!AB2:AB; "TAK"; ZGŁOSZENIA!N2:N; "Zamknięte")) / E5; "0,0%"); "0,0%")'
+  );
   dash.getRange("D11").setFormula('=IF(E5>0; TEXT(F8/E5; "0,0%"); "0,0%")');
 
   dash.getRange("E11").setValue("Liczba próśb ≠ liczba wystawionych opinii. Recenzje wystawia dobrowolnie mieszkaniec na Google.")
@@ -591,6 +595,41 @@ function setupDashboardSheet(spreadsheet) {
   dash.setColumnWidth(7, 260);
 
   Logger.log("Rozszerzona zakładka DASHBOARD przygotowana.");
+}
+
+/**
+ * Dedykowana funkcja aktualizująca WYŁĄCZNIE formuły i nagłówki Dashboardu (v0.2.3)
+ * Uruchamiana jednorazowo w istniejącym arkuszu bez ponownego tworzenia formularza,
+ * kasowania danych i utraty historii zgłoszeń.
+ */
+function updateDashboardKpiFormulasOnly() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const dash = ss.getSheetByName(SMARTCARE_SETUP_CONFIG.sheetTabs.dashboard);
+  if (!dash) {
+    throw new Error("Błąd: Zakładka DASHBOARD nie została znaleziona w tym arkuszu.");
+  }
+
+  // 1. Aktualizacja nagłówków jednostek czasu (godziny)
+  dash.getRange("C7").setValue("Śr. czas 1. reakcji (godz.)");
+  dash.getRange("D7").setValue("Śr. czas rozwiązania (godz.)");
+
+  // 2. Aktualizacja formuł czasu reakcji i rozwiązania (w godzinach, 2 miejsca po przecinku, bez INT)
+  dash.getRange("C8").setFormula(
+    '=IFERROR(ROUND(AVERAGE(FILTER((IF(ISNUMBER(ZGŁOSZENIA!U2:U); ZGŁOSZENIA!U2:U; DATEVALUE(ZGŁOSZENIA!U2:U) + IFERROR(TIMEVALUE(ZGŁOSZENIA!U2:U); 0)) - IF(ISNUMBER(ZGŁOSZENIA!A2:A); ZGŁOSZENIA!A2:A; DATEVALUE(ZGŁOSZENIA!A2:A) + IFERROR(TIMEVALUE(ZGŁOSZENIA!A2:A); 0))) * 24; ZGŁOSZENIA!U2:U<>""; ZGŁOSZENIA!A2:A<>"")); 2); "brak danych")'
+  );
+
+  dash.getRange("D8").setFormula(
+    '=IFERROR(ROUND(AVERAGE(FILTER((IF(ISNUMBER(ZGŁOSZENIA!W2:W); ZGŁOSZENIA!W2:W; DATEVALUE(ZGŁOSZENIA!W2:W) + IFERROR(TIMEVALUE(ZGŁOSZENIA!W2:W); 0)) - IF(ISNUMBER(ZGŁOSZENIA!A2:A); ZGŁOSZENIA!A2:A; DATEVALUE(ZGŁOSZENIA!A2:A) + IFERROR(TIMEVALUE(ZGŁOSZENIA!A2:A); 0))) * 24; ZGŁOSZENIA!W2:W<>""; ZGŁOSZENIA!A2:A<>"")); 2); "brak danych")'
+  );
+
+  // 3. Aktualizacja odsetka próśb o opinię Google wyłącznie wśród zakończonych spraw (Rozwiązane / Zamknięte)
+  dash.getRange("C11").setFormula(
+    '=IF(E5>0; TEXT((COUNTIFS(ZGŁOSZENIA!AB2:AB; "TAK"; ZGŁOSZENIA!N2:N; "Rozwiązane") + COUNTIFS(ZGŁOSZENIA!AB2:AB; "TAK"; ZGŁOSZENIA!N2:N; "Zamknięte")) / E5; "0,0%"); "0,0%")'
+  );
+
+  SpreadsheetApp.flush();
+  ss.toast("Zaktualizowano formuły KPI Dashboardu (v0.2.3): czas w godzinach oraz odsetek opinii dla zakończonych spraw.", "SmartCare v0.2.3", 6);
+  Logger.log("Formuły KPI w DASHBOARD zaktualizowane pomyślnie.");
 }
 
 /**
@@ -672,7 +711,7 @@ function setupTestsSheet(spreadsheet) {
 }
 
 /**
- * Konfiguruje zakładkę INSTRUKCJA AI (model gemini-2.0-flash)
+ * Konfiguruje zakładkę INSTRUKCJA AI (aktualna generacja Gemini Flash)
  */
 function setupAiInstructionSheet(spreadsheet) {
   let aiSheet = spreadsheet.getSheetByName(SMARTCARE_SETUP_CONFIG.sheetTabs.aiGuide);
@@ -683,7 +722,7 @@ function setupAiInstructionSheet(spreadsheet) {
   aiSheet.clear();
 
   aiSheet.getRange("A1:D1").merge()
-    .setValue("ELWOZ ECO SmartCare – Instrukcja Obsługi Zgłoszeń i Komunikacji z AI (v0.2.2)")
+    .setValue("ELWOZ ECO SmartCare – Instrukcja Obsługi Zgłoszeń i Komunikacji z AI (v0.2.3)")
     .setFontSize(12).setFontWeight("bold").setBackground("#143d59").setFontColor("#ffffff")
     .setHorizontalAlignment("center").setVerticalAlignment("middle");
   aiSheet.setRowHeight(1, 36);
@@ -691,8 +730,8 @@ function setupAiInstructionSheet(spreadsheet) {
   const instructions = [
     ["1. Zasada nadrzędna", "Sztuczna inteligencja pełni WYŁĄCZNIE rolę asystenta pracownika (Human-in-the-Loop). Pracownik weryfikuje i zatwierdza każdą wiadomość przed wysyłką."],
     ["2. Ograniczenia i zakazy dla AI", "AI KATEGORYCZNIE NIE WOLNO:\n• deklarować uznania reklamacji lub winy przedsiębiorstwa,\n• wymyślać wykonanych działań naprawczych (działania muszą pochodzić z notatek pracownika),\n• ustalać sztywnych terminów realizacji,\n• obiecywać jakichkolwiek odszkodowań finansowych,\n• generować opinii w imieniu mieszkańców ani sugerować liczby gwiazdek."],
-    ["3. Twarda anonimizacja danych", "Przed analizą w AI model otrzymuje wyłącznie zanonimizowany kontekst operacyjny (rodzaj problemu, frakcję, miejscowość, ulicę bez numeru posesji oraz oczyszczoną treść opisu). Wszelkie numery telefonów, adresy e-mail i numery PESEL są usuwane przez filtr backendowy."],
-    ["4. Model sztucznej inteligencji", "Wdrożono aktualny model Gemini API: gemini-2.0-flash zoptymalizowany pod kątem szybkości i kosztów."],
+    ["3. Twarda anonimizacja danych", "Przed analizą w AI model otrzymuje wyłącznie zanonimizowany kontekst operacyjny (rodzaj problemu, frakcję, miejscowość bez ulicy i numeru posesji oraz treść zweryfikowaną przez pracownika). Wszelkie numery telefonów, adresy e-mail, nazwiska i numery PESEL są usuwane przed wysłaniem do modelu."],
+    ["4. Model sztucznej inteligencji", "Wdrożono aktualną generację modeli Gemini Flash z dynamiczną weryfikacją dostępności metody generateContent dla klucza API."],
     ["5. Dedykowane konto testowe", "Wszystkie usługi (Sheets, Forms, Apps Script, Gemini API) zarządzane są z konta: wsb.student.tester@gmail.com. Adres ten stanowi jedyny dopuszczalny cel wysyłki poczty."],
     ["6. Tryb Demonstracyjny", "Wszelka korespondencja mailowa jest bezwarunkowo kierowana na adres wsb.student.tester@gmail.com z prefiksem [TEST]."]
   ];
@@ -734,9 +773,18 @@ function installFormSubmitTrigger(spreadsheet) {
 
 /**
  * Obsługa nowego zgłoszenia po wysłaniu formularza
- * POPRAWKA AUDYTU: Sekwencyjne wyznaczanie unikalnego ID (max ID + 1) zamiast row - 1.
+ * POPRAWKA AUDYTU v0.2.3: Zabezpieczenie przed wyścigami za pomocą LockService oraz trwałego
+ * licznika w ScriptProperties. Istniejące identyfikatory są bezwzględnie zachowywane.
  */
 function handleNewTicketSubmit(e) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+  } catch (lockErr) {
+    Logger.log("Przekroczono limit oczekiwania na LockService w handleNewTicketSubmit: " + lockErr.toString());
+    return;
+  }
+
   try {
     const sheet = e.range.getSheet();
     const row = e.range.getRow();
@@ -749,10 +797,14 @@ function handleNewTicketSubmit(e) {
     const priorityCol = getCol("Priorytet");
     const opinionCol = getCol("Prośba o opinię wysłana");
 
-    // Sekwencyjny generator unikalnego ID
-    if (idCol > 0 && !sheet.getRange(row, idCol).getValue()) {
-      const nextId = getNextUniqueTicketId(sheet, idCol);
-      sheet.getRange(row, idCol).setValue(nextId);
+    // Sekwencyjny generator unikalnego ID (wyłącznie gdy pole jest puste - zachowanie istniejących identyfikatorów)
+    if (idCol > 0) {
+      const currentId = sheet.getRange(row, idCol).getValue();
+      if (!currentId) {
+        const nextId = getNextUniqueTicketId(sheet, idCol);
+        sheet.getRange(row, idCol).setValue(nextId);
+        PropertiesService.getScriptProperties().setProperty("LAST_ASSIGNED_TICKET_ID", nextId);
+      }
     }
     if (statusCol > 0 && !sheet.getRange(row, statusCol).getValue()) {
       sheet.getRange(row, statusCol).setValue("Nowe");
@@ -764,14 +816,18 @@ function handleNewTicketSubmit(e) {
       sheet.getRange(row, opinionCol).setValue("NIE");
     }
 
-    Logger.log(`Nowe zgłoszenie w wierszu ${row} zainicjalizowane unikalnym ID.`);
+    SpreadsheetApp.flush();
+    Logger.log(`Nowe zgłoszenie w wierszu ${row} zainicjalizowane unikalnym ID pod ochroną LockService.`);
   } catch (err) {
-    Logger.log("Błąd onFormSubmit: " + err.toString());
+    Logger.log("Błąd handleNewTicketSubmit: " + err.toString());
+  } finally {
+    lock.releaseLock();
   }
 }
 
 /**
  * Niezawodny generator sekwencyjnego, unikalnego ID zgłoszenia (np. ELW-2026-0001)
+ * Łączy analizę istniejących wierszy arkusza z trwałym licznikiem ScriptProperties.
  */
 function getNextUniqueTicketId(sheet, idCol) {
   const lastRow = sheet.getLastRow();
@@ -790,6 +846,22 @@ function getNextUniqueTicketId(sheet, idCol) {
         }
       }
     }
+  }
+
+  // Weryfikacja trwałego licznika w ScriptProperties
+  try {
+    const propId = PropertiesService.getScriptProperties().getProperty("LAST_ASSIGNED_TICKET_ID");
+    if (propId) {
+      const matchProp = String(propId).trim().match(regex);
+      if (matchProp && matchProp[1]) {
+        const propNum = parseInt(matchProp[1], 10);
+        if (!isNaN(propNum) && propNum > maxSeq) {
+          maxSeq = propNum;
+        }
+      }
+    }
+  } catch (e) {
+    Logger.log("Błąd odczytu ScriptProperties: " + e.toString());
   }
 
   const nextSeq = maxSeq + 1;

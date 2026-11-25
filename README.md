@@ -1,10 +1,12 @@
 # ELWOZ ECO SmartCare – Cyfrowy Punkt Obsługi Mieszkańca
-**Wersja:** 0.2.2 (Poprawki po niezależnym audycie kodu – 15 punktów naprawczych)  
+**Wersja:** 0.2.3 (Audyt v0.2.3: LockService, Dynamiczny Gemini Flash, KPI w godzinach, Bezpieczeństwo Reputacji)  
 **Projekt zaliczeniowy:** *Nowoczesne technologie w marketingu i sprzedaży* – Uniwersytet WSB Merito w Gdańsku  
 **Przedsiębiorstwo:** ELWOZ ECO Sp. z o.o.  
 **Obszar wdrożenia:** Rejon Kartuz i okoliczne sołectwa  
 **Oficjalna strona przedsiębiorstwa:** [elwozeco.pl](https://elwozeco.pl/)  
-**Dedykowane konto testowe Google:** `wsb.student.tester@gmail.com`
+**Dedykowane konto testowe Google:** `wsb.student.tester@gmail.com`  
+**Publiczna strona demonstracyjna (GitHub Pages):** [https://mlatala88.github.io/elwoz-eco-smartcare/](https://mlatala88.github.io/elwoz-eco-smartcare/)  
+**Aktywny formularz Google Forms:** [https://docs.google.com/forms/d/e/1FAIpQLSdZXjHX0Tt5GqF5yacDZpouKtrcsxPBhXx-K2s5cqYfEFtnkA/viewform](https://docs.google.com/forms/d/e/1FAIpQLSdZXjHX0Tt5GqF5yacDZpouKtrcsxPBhXx-K2s5cqYfEFtnkA/viewform)
 
 ---
 
@@ -15,18 +17,19 @@
 4. [Twarde zabezpieczenie serwerowe (Server-Side Whitelist Guard)](#4-twarde-zabezpieczenie-serwerowe-server-side-whitelist-guard)
 5. [Wykorzystane technologie](#5-wykorzystane-technologie)
 6. [Struktura repozytorium](#6-struktura-repozytorium)
-7. [Instrukcja instalacji Container-bound (Krok po kroku)](#7-instrukcja-instalacji-container-bound-krok-po-kroku)
+7. [Instrukcja instalacji Container-bound oraz funkcja jednoklikowej aktualizacji](#7-instrukcja-instalacji-container-bound-oraz-funkcja-jednoklikowej-aktualizacji)
 8. [Natywny formularz Google Forms i eliminacja localStorage](#8-natywny-formularz-google-forms-i-eliminacja-localstorage)
 9. [Menu pracownika „SmartCare” w Google Sheets](#9-menu-pracownika-smartcare-w-google-sheets)
 10. [Rzetelne szablony wiadomości i procedura komunikacji](#10-rzetelne-szablony-wiadomości-i-procedura-komunikacji)
 11. [Zarządzanie reputacją i zasady opinii Google](#11-zarządzanie-reputacją-i-zasady-opinii-google)
 12. [Dziennik audytu (HISTORIA KOMUNIKACJI)](#12-dziennik-audytu-historia-komunikacji)
-13. [Rozszerzony Dashboard i Rejestr Zgłoszeń](#13-rozszerzony-dashboard-i-rejestr-zgłoszeń)
-14. [Instrukcja publikacji na GitHub Pages](#14-instrukcja-publikacji-na-github-pages)
-15. [Generowanie Kodu QR (Dla pojemników i prezentacji)](#15-generowanie-kodu-qr-dla-pojemników-i-prezentacji)
-16. [Procedura testowania i weryfikacja](#16-procedura-testowania-i-weryfikacja)
-17. [Koszty, limity i wymagania licencyjne](#17-koszty-limity-i-wymagania-licencyjne)
-18. [Wykaz działań wymagających ręcznej autoryzacji](#18-wykaz-działań-wymagających-ręcznej-autoryzacji)
+13. [Rozszerzony Dashboard i Rejestr Zgłoszeń (Kalkulacje KPI)](#13-rozszerzony-dashboard-i-rejestr-zgłoszeń-kalkulacje-kpi)
+14. [Weryfikacja danych dla AI (Human-in-the-Loop) i aktualne modele Gemini Flash](#14-weryfikacja-danych-dla-ai-human-in-the-loop-i-aktualne-modele-gemini-flash)
+15. [Instrukcja publikacji na GitHub Pages](#15-instrukcja-publikacji-na-github-pages)
+16. [Generowanie Kodu QR (Dla pojemników i prezentacji)](#16-generowanie-kodu-qr-dla-pojemników-i-prezentacji)
+17. [Procedura testowania i weryfikacja](#17-procedura-testowania-i-weryfikacja)
+18. [Koszty, limity i wymagania licencyjne](#18-koszty-limity-i-wymagania-licencyjne)
+19. [Wykaz działań wymagających ręcznej autoryzacji](#19-wykaz-działań-wymagających-ręcznej-autoryzacji)
 
 ---
 
@@ -34,14 +37,15 @@
 
 Projekt **ELWOZ ECO SmartCare** realizowany jest na Uniwersytecie WSB Merito w Gdańsku jako studencki projekt wdrożeniowy dedykowany spółce **ELWOZ ECO Sp. z o.o.**, odpowiedzialnej za odbiór odpadów komunalnych w rejonie Kartuz.
 
-Wydanie **0.2.2** wdraża kompletny pakiet poprawek po niezależnym audycie kodu:
-- Wyeliminowano pozorowany zapis zgłoszeń przez `localStorage` na rzecz natywnego przesyłu przez Google Forms do Google Sheets;
-- Przebudowano instalator na model **Container-bound Script** (Apps Script powiązany z arkuszem kalkulacyjnym);
-- Naprawiono kalkulacje wskaźników KPI (czas reakcji, czas rozwiązania) oraz usunięto błędy środowiskowe (`setGridlines`);
-- Wdrożono model **Gemini 2.0 Flash** z twardą anonimizacją danych;
-- Zabezpieczono okna dialogowe przed podatnościami XSS / HTML Injection (`escapeHtml`);
-- Wdrożono sekwencyjny generator unikalnych identyfikatorów (`max(ID) + 1`) oraz zabezpieczenie przed duplikatami wysyłek;
-- Wprowadzono bezwarunkową blokadę wysyłki na serwerze ograniczoną do `wsb.student.tester@gmail.com`.
+Wydanie **0.2.3** wdraża komplet poprawek audytowych:
+- **Kalkulacja KPI w godzinach:** Usunięto funkcję `INT()`; czas reakcji i rozwiązania liczony jest w godzinach z dokładnością do 2 miejsc po przecinku (`(U - A) * 24`);
+- **Rzetelny wskaźnik opinii:** Odsetek wysłanych próśb o opinię kalkulowany jest wyłącznie wśród zgłoszeń zamkniętych / rozwiązanych;
+- **Jednoklikowa aktualizacja Dashboardu:** Funkcja `updateDashboardKpiFormulasOnly()` pozwala zaktualizować istniejący arkusz bez konieczności ponownej instalacji czy utraty danych;
+- **Współbieżność i LockService:** Obsługa nowych zgłoszeń i generowanie unikalnych numerów ID zabezpieczona blokadami `LockService` oraz trwałym licznikiem w `ScriptProperties`;
+- **Zabezpieczenie wysyłki e-mail:** Równoczesna wysyłka chroniona `LockService`, a błędy serwera nie zamykają okna edycji wiadomości;
+- **Rygorystyczna blokada placeholdera w opiniach:** Prośba o opinię nie może zostać wysłana ani oznaczona w CRM bez autentycznego linku w `USTAWIENIA`;
+- **Aktualizacja modeli Gemini Flash:** Usunięto wyłączony model `gemini-2.0-flash`, wprowadzając domyślnie `gemini-3.6-flash` oraz dynamiczne wykrywanie bezpłatnych modeli wspierających `generateContent`;
+- **Human-in-the-Loop w module AI:** Przed wysłaniem zapytania do modelu pracownik weryfikuje oczyszczony opis w oknie dialogowym (brak ulicy, numeru posesji, nazwiska i kontaktu).
 
 ---
 
@@ -56,17 +60,17 @@ Wydanie **0.2.2** wdraża kompletny pakiet poprawek po niezależnym audycie kodu
 
 ## 3. Dedykowane konto testowe i podział środowisk
 
-W celu zachowania pełnego rozdziału odpowiedzialności projekt wykorzystuje architekturę dwukontową:
+Projekt wykorzystuje architekturę dwukontową:
 
 1. **Dedykowane konto Google:** `wsb.student.tester@gmail.com`
    - Właściciel prywatnego arkusza Google Sheets (*ELWOZ ECO SmartCare – Centrum zgłoszeń*);
    - Właściciel publicznego formularza Google Forms;
    - Środowisko wykonawcze skryptów Google Apps Script (`setup.gs`, `communication.gs`, `ai.gs`);
-   - Właściciel bezpłatnego projektu Google AI Studio (klucz Gemini 2.0 Flash przechowywany w `ScriptProperties`);
+   - Właściciel bezpłatnego projektu Google AI Studio (klucz Gemini Flash w `ScriptProperties`);
    - **Jedyny bezwarunkowo zatwierdzony serwerowy cel testowy dla korespondencji e-mail.**
 2. **Konto GitHub użytkownika:**
    - Hostuje publiczne repozytorium kodu `elwoz-eco-smartcare`;
-   - Odpowiada za serwowanie strony demonstracyjnej przez **GitHub Pages**.
+   - Serwuje stronę demonstracyjną przez **GitHub Pages**.
 
 ---
 
@@ -82,7 +86,10 @@ const APPROVED_TEST_RECIPIENT = "wsb.student.tester@gmail.com";
 const targetEmail = APPROVED_TEST_RECIPIENT;
 
 if (!targetEmail || targetEmail.toLowerCase().trim() !== APPROVED_TEST_RECIPIENT.toLowerCase().trim()) {
-  throw new Error("BEZWARUNKOWA BLOKADA BEZPIECZEŃSTWA: Dozwolony odbiorca to wyłącznie " + APPROVED_TEST_RECIPIENT);
+  return {
+    success: false,
+    error: "BEZWARUNKOWA BLOKADA BEZPIECZEŃSTWA: Dozwolony odbiorca to wyłącznie " + APPROVED_TEST_RECIPIENT
+  };
 }
 ```
 
@@ -99,8 +106,8 @@ if (!targetEmail || targetEmail.toLowerCase().trim() !== APPROVED_TEST_RECIPIENT
 - **Frontend:** HTML5, CSS3 (Mobile-First, barwy ELWOZ ECO: zieleń `#1b7a3e`, granat `#143d59`), Vanilla JavaScript (ES6+).
 - **Hosting:** GitHub Pages (statyczny hosting z SSL/HTTPS).
 - **Rejestracja i Baza CRM:** Google Forms & Google Sheets (*Centrum zgłoszeń*).
-- **Backend i Bezpieczeństwo:** Google Apps Script (Container-bound), Google MailApp ze stałą Whitelist.
-- **Sztuczna Inteligencja:** Google Gemini API (`gemini-2.0-flash` przez Google AI Studio) oraz wariant manualny w `docs/prompt-ai.md`.
+- **Backend i Bezpieczeństwo:** Google Apps Script (Container-bound), LockService, Google MailApp ze stałą Whitelist.
+- **Sztuczna Inteligencja:** Google Gemini Flash API (`gemini-3.6-flash` przez Google AI Studio) oraz wariant manualny w `docs/prompt-ai.md`.
 
 ---
 
@@ -108,66 +115,59 @@ if (!targetEmail || targetEmail.toLowerCase().trim() !== APPROVED_TEST_RECIPIENT
 
 ```
 elwoz-eco-smartcare/
-├── index.html                   # Strona główna Cyfrowego Punktu Obsługi (mobile-first)
+├── index.html                   # Strona główna Cyfrowego Punktu Obsługi (mobile-first, v0.2.3)
 ├── css/
 │   └── style.css                # Style wizualne inspirowane marką ELWOZ ECO
 ├── js/
-│   ├── config.js                # Konfiguracja linków, adresów Google Forms i alertów
-│   └── app.js                   # Obsługa widoku natywnego formularza (bez localStorage)
+│   ├── config.js                # Konfiguracja linków, adresów Google Forms i alertów (v0.2.3)
+│   └── app.js                   # Obsługa widoku natywnego formularza i bezpośredniego linku
 ├── assets/
 │   ├── logo.svg                 # Wektorowe logo ELWOZ ECO SmartCare
 │   ├── favicon.svg              # Favicon strony
+│   ├── qr-code.svg              # Kod QR prowadzący do GitHub Pages
+│   ├── qr-code.png              # Kod QR o wysokiej rozdzielczości (1000x1000 px)
 │   ├── naklejka-pojemnik-szablon.svg # Gotowy projekt naklejki na pojemnik komunalny
 │   └── generate_qr.js           # Skrypt Node.js generujący QR dla opublikowanego URL
 ├── google/
-│   ├── setup.gs                 # Instalator Container-bound (Arkusz, Formularz, CRM, Dashboard)
-│   ├── communication.gs         # Moduł komunikacji, szablony, MailApp, escapeHtml i Whitelist
-│   └── ai.gs                    # Integracja analityczna Gemini 2.0 Flash z menu SmartCare
+│   ├── setup.gs                 # Instalator Container-bound + funkcja aktualizacji formuł KPI
+│   ├── communication.gs         # Moduł komunikacji, szablony, LockService, escapeHtml i Whitelist
+│   └── ai.gs                    # Moduł AI z dialogiem weryfikacji i dynamicznym Gemini Flash
 ├── docs/
-│   ├── prompt-ai.md             # Szablon promptu manualnego, anonimizacja i zasady AI
-│   └── testy.md                 # Procedura testowa, 12 scenariuszy i matryca efektywności
-├── CHANGELOG.md                 # Dziennik zmian wydania v0.2.2 (15 punktów naprawczych)
+│   ├── prompt-ai.md             # Instrukcja promptu, procedury anonimizacji i zasady AI
+│   └── testy.md                 # Procedura testowa, 16 scenariuszy i matryca efektywności
+├── CHANGELOG.md                 # Dziennik zmian wydań (v0.1.0 -> v0.2.3)
 └── README.md                    # Niniejsza dokumentacja wdrożeniowa
 ```
 
 ---
 
-## 7. Instrukcja instalacji Container-bound (Krok po kroku)
+## 7. Instrukcja instalacji Container-bound oraz funkcja jednoklikowej aktualizacji
 
-Zgodnie z wymaganiami audytu projekt Apps Script musi być **powiązany z arkuszem Google Sheets** (Container-bound), a nie tworzony jako projekt samodzielny.
+### Dla nowej instalacji:
+1. Zaloguj się na dedykowane konto: `wsb.student.tester@gmail.com`.
+2. Otwórz [Google Sheets](https://sheets.google.com/) i utwórz nowy arkusz.
+3. Wybierz: **Rozszerzenia → Apps Script**.
+4. Wklej zawartość plików `google/setup.gs`, `google/communication.gs` oraz `google/ai.gs`.
+5. Uruchom funkcję **`setupSmartCareSystem`** i zaakceptuj uprawnienia.
 
-### Krok 1: Otwórz arkusz na koncie wsb.student.tester@gmail.com
-1. Zaloguj się w przeglądarce na dedykowane konto testowe: **`wsb.student.tester@gmail.com`**.
-2. Otwórz [Google Sheets](https://sheets.google.com/) i utwórz **Pusty arkusz**.
-
-### Krok 2: Uruchomienie edytora Apps Script w arkuszu
-1. W górnym menu arkusza wybierz: **Rozszerzenia → Apps Script** (Extensions → Apps Script).
-2. Zmień nazwę projektu w edytorze na: **„ELWOZ ECO SmartCare”**.
-
-### Krok 3: Wklejenie kodu źródłowego
-1. W pliku domyślnym `Kod.gs` (lub zmieniając jego nazwę na `setup.gs`) wklej kod z [google/setup.gs](google/setup.gs).
-2. Kliknij **+** (Dodaj plik) -> **Skrypt**, nazwij go `communication.gs` i wklej zawartość [google/communication.gs](google/communication.gs).
-3. Kliknij **+** -> **Skrypt**, nazwij go `ai.gs` i wklej zawartość [google/ai.gs](google/ai.gs).
-4. Zapisz projekt (Ctrl + S).
-
-### Krok 4: Uruchomienie instalatora
-1. Z listy funkcji wybierz: **`setupSmartCareSystem`** i kliknij **„Uruchom”**.
-2. Zaakceptuj uprawnienia do zarządzania arkuszem, tworzenia formularza i wysyłki poczty przez konto `wsb.student.tester@gmail.com`.
-3. Skrypt:
-   - nada arkuszowi nazwę *ELWOZ ECO SmartCare – Centrum zgłoszeń*,
-   - utworzy formularz Google Form i połączy go z arkuszem,
-   - skonfiguruje zakładki `ZGŁOSZENIA`, `DASHBOARD`, `HISTORIA KOMUNIKACJI`, `USTAWIENIA`, `TESTY`, `INSTRUKCJA AI`,
-   - zainstaluje wyzwalacz `onFormSubmit` nadający sekwencyjne numery ID (`ELW-2026-XXXX`).
-4. W Dzienniku wykonania skopiuj publiczny link formularza Google Form i wklej go do pliku [js/config.js](js/config.js) w polu `googleForm.directUrl`.
+### Dla istniejącej instalacji (aktualizacja z v0.2.2 do v0.2.3):
+Jeśli arkusz i formularz są już zainstalowane na Twoim koncie:
+1. Otwórz edytor Apps Script w istniejącym arkuszu.
+2. Zaktualizuj zawartość plików `setup.gs`, `communication.gs` i `ai.gs` kodem z wersji 0.2.3.
+3. Zapisz projekt (Ctrl + S).
+4. Otwórz arkusz i wybierz z menu: **📋 SmartCare → 🔄 Aktualizuj formuły Dashboardu (v0.2.3)**.
+   *(Formuły KPI w komórkach C8, D8 i C11 zostaną natychmiast zaktualizowane bez tworzenia nowego arkusza i bez utraty danych!)*
 
 ---
 
 ## 8. Natywny formularz Google Forms i eliminacja localStorage
 
-W wersji **0.2.2** całkowicie wyeliminowano pozorowany zapis do `localStorage`:
-- Mieszkaniec wypełnia **rzeczywisty formularz Google Forms** osadzony w responsywnej ramce iframe na stronie głównej lub otwierany bezpośrednio.
-- Zgłoszenie natychmiast pojawia się w arkuszu odpowiedzi Google Sheets.
-- Zainstalowany wyzwalacz `onFormSubmit` automatycznie nadaje unikalny identyfikator sprawy oraz status *Nowe*.
+W wersji **0.2.3**:
+- Mieszkaniec wypełnia rzeczywisty formularz Google Forms osadzony w responsywnej ramce iframe lub za pomocą przycisku bezpośredniego otwarcia formularza.
+- Adres aktywnego formularza jest skonfigurowany w `js/config.js`:
+  `https://docs.google.com/forms/d/e/1FAIpQLSdZXjHX0Tt5GqF5yacDZpouKtrcsxPBhXx-K2s5cqYfEFtnkA/viewform`.
+- Zgłoszenie natychmiast pojawia się w arkuszu odpowiedzi.
+- Zainstalowany wyzwalacz `onFormSubmit` (chroniony `LockService`) natychmiast nadaje unikalny identyfikator sprawy oraz status *Nowe*.
 
 ---
 
@@ -177,31 +177,32 @@ W arkuszu kalkulacyjnym na koncie `wsb.student.tester@gmail.com` dostępne jest 
 
 | Opcja menu | Rola i działanie |
 |---|---|
-| **1. 🤖 Analizuj zgłoszenie przez AI** | Zanonimizowana analiza zaznaczonego zgłoszenia przez model **Gemini 2.0 Flash** (streszczenie, brakujące dane, sugerowane działanie). |
+| **1. 🤖 Analizuj zgłoszenie przez AI** | Otwiera okno weryfikacji zanonimizowanego opisu (Human-in-the-Loop) i analizuje sprawę przez **Gemini Flash**. |
 | **2. ✉️ Przygotuj potwierdzenie przyjęcia** | Generuje szablon A w oknie modalnym (zabezpieczonym funkcją `escapeHtml`). |
 | **3. ✉️ Przygotuj informację o postępach** | Generuje szablon B informujący o weryfikacji okoliczności zgłoszenia. |
-| **4. ✉️ Przygotuj informację o rozwiązaniu** | Wymaga uzupełnienia pola *Sposób rozwiązania sprawy*; generuje szablon C z opcją dołączenia prośby o opinię. |
-| **5. ⭐ Przygotuj prośbę o opinię Google** | Generuje szablon D z neutralną prośbą o recenzję (zabezpieczenie przed duplikatami). |
+| **4. ✉️ Przygotuj informację o rozwiązaniu** | Wymaga uzupełnienia pola *Sposób rozwiązania sprawy*; generuje szablon C. |
+| **5. ⭐ Przygotuj prośbę o opinię Google** | Blokuje wysyłkę z placeholderem; wymaga autentycznego linku w USTAWIENIACH. |
 | **6. 📞 Odnotuj kontakt telefoniczny** | Rejestruje notatkę z rozmowy i aktualizuje daty kontaktu jako obiekty `Date`. |
 | **7. 📜 Wyświetl historię komunikacji** | Prezentuje pełną tabelę audytową dotychczasowej korespondencji dla zaznaczonego ID. |
+| **🔄 Aktualizuj formuły Dashboardu (v0.2.3)** | Bezpiecznie aktualizuje formuły KPI w godzinach bez modyfikacji danych. |
 | **⚙️ Ustawienia / Klucz Gemini API** | Bezpieczny konfigurator klucza API w `ScriptProperties`. |
 
 ---
 
 ## 10. Rzetelne szablony wiadomości i procedura komunikacji
 
-Szablony zostały oczyszczone z niepotwierdzonych deklaracji operacyjnych:
+Szablony są oparte wyłącznie na zweryfikowanych informacjach:
 1. **Szablon A (Potwierdzenie przyjęcia):** Potwierdza rejestrację sprawy testowej pod nadanym ID (`ELW-2026-XXXX`), wskazuje zgłoszoną frakcję i ulicę oraz informuje o oczekiwaniu na weryfikację przez dyspozytora.
 2. **Szablon B (Informacja o postępach):** Informuje o przekazaniu sprawy do dyspozytora w Kartuzach w celu wyjaśnienia okoliczności.
 3. **Szablon C (Informacja o rozwiązaniu):** Prezentuje treść wpisaną przez pracownika w kolumnie *Sposób rozwiązania sprawy*.
-4. **Szablon D (Neutralna prośba o opinię):** Neutralne zaproszenie do wystawienia recenzji. Jeśli link w `USTAWIENIA` nie został jeszcze zweryfikowany, system nie wstawia fikcyjnych linków, lecz czytelną notę.
+4. **Szablon D (Neutralna prośba o opinię):** Neutralne zaproszenie do wystawienia recenzji. Wysyłka jest zablokowana, dopóki w `USTAWIENIA` nie zostanie wprowadzony zweryfikowany adres URL wizytówki Google.
 
 ---
 
 ## 11. Zarządzanie reputacją i zasady opinii Google
 
-- **Usunięcie fikcyjnego linku:** Wycofano link `PLACEHOLDER_KARTUZY`. Pole w `USTAWIENIA` pozostaje puste do momentu autoryzacji oficjalnej wizytówki.
-- **Brak review gatingu:** Zaproszenie nie jest uzależnione od uprzednio wystawionej oceny satysfakcji.
+- **Bezwzględna blokada placeholdera:** Zgodnie z wytycznymi v0.2.3 system nie pozwala wysłać wiadomości zawierającej tekst zastępczy, a CRM nie oznacza prośby jako wysłanej bez zweryfikowanego linku.
+- **Brak review gatingu:** Zaproszenie nie jest uzależnione od oceny satysfakcji.
 - **Neutralność:** Brak sugerowania gwiazdek, brak nagród i korzyści majątkowych.
 - **Zabezpieczenie przed duplikatami:** Blokada ponownej wysyłki w oknie 5 minut oraz ostrzeżenie przy próbie powtórnej wysyłki.
 
@@ -220,71 +221,78 @@ Każde zdarzenie kontaktowe jest rejestrowane w zakładce `HISTORIA KOMUNIKACJI`
 
 ---
 
-## 13. Rozszerzony Dashboard i Rejestr Zgłoszeń
+## 13. Rozszerzony Dashboard i Rejestr Zgłoszeń (Kalkulacje KPI)
 
-Wskaźniki w zakładce `DASHBOARD` zostały naprawione pod kątem spójności typów danych:
-- *Wszystkie zgłoszenia, Nowe, W realizacji, Zakończone, Odsetek zakończonych*;
-- *Sprawy oczekujące na kontakt*;
-- *Średni czas pierwszej reakcji* oraz *Średni czas rozwiązania* – wyliczane za pomocą formuł obsługujących obiekty `Date` oraz `DATEVALUE`, eliminując błędy formatu;
-- *Średnia ocena satysfakcji (1–5)* oraz liczba zebranych ocen;
-- *Liczba wysłanych próśb o opinię Google* oraz *odsetek spraw zakończonych z prośbą*.
+Wskaźniki w zakładce `DASHBOARD`:
+- **Czas pierwszej reakcji (komórka C8):** Liczony w godzinach z dokładnością do dwóch miejsc po przecinku:
+  `=IFERROR(ROUND(AVERAGE(FILTER((ZGŁOSZENIA!U2:U - ZGŁOSZENIA!A2:A)*24; ISNUMBER(ZGŁOSZENIA!U2:U); ISNUMBER(ZGŁOSZENIA!A2:A))); 2); 0)`
+- **Czas rozwiązania sprawy (komórka D8):** Liczony w godzinach z dokładnością do dwóch miejsc po przecinku:
+  `=IFERROR(ROUND(AVERAGE(FILTER((ZGŁOSZENIA!W2:W - ZGŁOSZENIA!A2:A)*24; ISNUMBER(ZGŁOSZENIA!W2:W); ISNUMBER(ZGŁOSZENIA!A2:A))); 2); 0)`
+- **Odsetek zakończonych z prośbą o opinię (komórka C11):** Obliczany wyłącznie wśród spraw rozwiązanych / zamkniętych:
+  `=IFERROR(ROUND(COUNTIFS(ZGŁOSZENIA!X2:X; "TAK"; ZGŁOSZENIA!H2:H; "Rozwiązane") / MAX(1; COUNTIF(ZGŁOSZENIA!H2:H; "Rozwiązane") + COUNTIF(ZGŁOSZENIA!H2:H; "Zamknięte")); 4); 0)`
 
 ---
 
-## 14. Instrukcja publikacji na GitHub Pages
+## 14. Weryfikacja danych dla AI (Human-in-the-Loop) i aktualne modele Gemini Flash
 
-Repozytorium GitHub pozostaje na Twoim koncie użytkownika:
+- **Model AI:** Wycofany model `gemini-2.0-flash` (wyłączony 1 czerwca 2026 r.) zastąpiono modelem **`gemini-3.6-flash`** z dynamiczną weryfikacją bezpłatnych modeli wspierających `generateContent`.
+- **Procedura anonimizacji:** Przed wywołaniem API pracownik widzi okno weryfikacji. Model otrzymuje wyłącznie:
+  - Rodzaj zgłoszenia,
+  - Frakcję odpadów,
+  - Ogólną miejscowość (np. *Kartuzy* - bez ulicy, bez numeru posesji),
+  - Zweryfikowany zanonimizowany opis zdarzenia.
+
+---
+
+## 15. Instrukcja publikacji na GitHub Pages
+
+Repozytorium GitHub: `mlatala88/elwoz-eco-smartcare`
 
 1. Wypchnij kod do repozytorium:
    ```bash
    git add .
-   git commit -m "Release v0.2.2: 15 audit fixes implemented"
-   git push -u origin main
+   git commit -m "Release v0.2.3: Final audit fixes, LockService, and dynamic Gemini Flash configuration"
+   git push origin main
    ```
-2. W ustawieniach repozytorium (*Settings -> Pages*) włącz publikację z gałęzi **main** i katalogu **/(root)**.
-3. Strona będzie dostępna pod adresem: `https://TWOJ_LOGIN.github.io/elwoz-eco-smartcare/`.
+2. Publikacja jest aktywna pod adresem:
+   **[https://mlatala88.github.io/elwoz-eco-smartcare/](https://mlatala88.github.io/elwoz-eco-smartcare/)**
 
 ---
 
-## 15. Generowanie Kodu QR (Dla pojemników i prezentacji)
+## 16. Generowanie Kodu QR (Dla pojemników i prezentacji)
 
-Uruchom generator Node.js ze swoim adresem GitHub Pages:
+Generator Node.js ze skonfigurowanym adresem GitHub Pages:
 
 ```bash
-node assets/generate_qr.js https://TWOJ_LOGIN.github.io/elwoz-eco-smartcare/
+node assets/generate_qr.js https://mlatala88.github.io/elwoz-eco-smartcare/
 ```
 
-Skrypt wygeneruje pliki `assets/qr-code.svg` oraz `assets/qr-code.png` (1000×1000 px) gotowe do druku naklejek na kubły ([assets/naklejka-pojemnik-szablon.svg](assets/naklejka-pojemnik-szablon.svg)).
+Wygenerowane pliki:
+- `assets/qr-code.svg`
+- `assets/qr-code.png` (1000×1000 px)
 
 ---
 
-## 16. Procedura testowania i weryfikacja
+## 17. Procedura testowania i weryfikacja
 
-Przed prezentacją zaliczeniową członkowie zespołu wykonują testy opisane w [docs/testy.md](docs/testy.md) z poziomu konta `wsb.student.tester@gmail.com`:
-- Weryfikacja działania natywnego formularza Google Forms;
-- Testy szablonów A–D w oknach dialogowych zabezpieczonych `escapeHtml`;
-- **Test TEST-11:** Weryfikacja twardej blokady serwerowej uniemożliwiającej wysyłkę na adres inny niż `wsb.student.tester@gmail.com`;
-- Weryfikacja kalkulacji czasów reakcji w Dashboardzie;
-- Sprawdzenie zabezpieczenia przed duplikatami wysyłek.
+Przed prezentacją zaliczeniową zespół wykonuje 16 scenariuszy opisanych w [docs/testy.md](docs/testy.md) z poziomu konta `wsb.student.tester@gmail.com`.
 
 ---
 
-## 17. Koszty, limity i wymagania licencyjne
+## 18. Koszty, limity i wymagania licencyjne
 
 - **Koszty infrastruktury:** **0,00 zł**.
 - **Limit MailApp na koncie Gmail:** 100 wiadomości/dzień.
-- **Limit Gemini 2.0 Flash (Free Tier):** 15 zapytań/minutę.
+- **Limit Gemini Flash (Free Tier):** Bezpłatne limity Google AI Studio (brak płatnych usług).
 
 ---
 
-## 18. Wykaz działań wymagających ręcznej autoryzacji
+## 19. Wykaz działań wymagających ręcznej autoryzacji
 
-1. **Utworzenie arkusza i uruchomienie Apps Script:** Otwarcie nowego arkusza na koncie `wsb.student.tester@gmail.com` i uruchomienie edytora przez *Rozszerzenia → Apps Script*.
-2. **Akceptacja uprawnień Apps Script:** Jednorazowa autoryzacja uprawnień `SpreadsheetApp`, `FormApp` i `MailApp` na koncie `wsb.student.tester@gmail.com`.
-3. **Pobranie klucza Gemini 2.0 Flash:** Wygenerowanie darmowego klucza na [aistudio.google.com](https://aistudio.google.com/) i wprowadzenie go przez menu arkusza.
-4. **Wklejenie linku formularza w `js/config.js`:** Skopiowanie adresu URL formularza z dziennika Apps Script do konfiguracji strony WWW.
-5. **Publikacja GitHub Pages:** Aktywacja Pages w ustawieniach Twojego repozytorium na GitHubie.
+1. **Aktualizacja Apps Script:** Wklejenie zaktualizowanego kodu w edytorze arkusza na koncie `wsb.student.tester@gmail.com`.
+2. **Aktualizacja formuł Dashboardu:** Kliknięcie *SmartCare → 🔄 Aktualizuj formuły Dashboardu (v0.2.3)*.
+3. **Konfiguracja klucza Gemini Flash:** Wprowadzenie darmowego klucza z [aistudio.google.com](https://aistudio.google.com/) przez menu arkusza.
 
 ---
 
-*ELWOZ ECO SmartCare v0.2.2 – Uniwersytet WSB Merito w Gdańsku.*
+*ELWOZ ECO SmartCare v0.2.3 – Uniwersytet WSB Merito w Gdańsku.*

@@ -1,5 +1,5 @@
 # ELWOZ ECO SmartCare – Procedura Testowa i Rejestr Weryfikacji
-**Wersja:** 0.2.2 (Poprawki po niezależnym audycie kodu)  
+**Wersja:** 0.2.3 (Poprawki audytu v0.2.3: LockService, KPI w godzinach, Blokada Placeholdera Opinii, Dialog Weryfikacji AI)  
 **Projekt:** Studencki prototyp wdrożeniowy – Uniwersytet WSB Merito w Gdańsku  
 **Przedsiębiorstwo:** ELWOZ ECO Sp. z o.o. (Rejon Kartuzy)  
 **Dedykowane konto testowe:** `wsb.student.tester@gmail.com`
@@ -8,17 +8,16 @@
 
 ## 1. Cel i zasady przeprowadzania testów
 
-Niniejsza procedura służy do zweryfikowania poprawności działania aplikacji **ELWOZ ECO SmartCare** po rozszerzeniu o moduł komunikacji zwrotnej, badanie satysfakcji i prośby o autentyczne opinie Google oraz zintegrowaniu dedykowanego konta testowego `wsb.student.tester@gmail.com`.
-
-### Główne założenia testów:
+Niniejsza procedura służy do zweryfikowania poprawności działania aplikacji **ELWOZ ECO SmartCare** po wprowadzeniu poprawek v0.2.3:
 1. **Wyłącznie dane fikcyjne:** Żadne testowe zgłoszenie nie może zawierać rzeczywistych nazwisk, prywatnych adresów ani numerów telefonów mieszkańców Kartuz.
-2. **Brak zmyślonych rezultatów:** W tabelach poniżej pola dotyczące rzeczywistych rezultatów i pomiarów czasu pozostawiono puste do uzupełnienia w trakcie faktycznych sesji testowych przez zespół.
-3. **Twarde zabezpieczenie serwerowe (Backend Whitelist Guard):** W trybie demonstracyjnym backend bezwzględnie blokuje wysyłkę na jakikolwiek inny adres niż `wsb.student.tester@gmail.com`, a temat wiadomości zawsze otrzymuje prefiks `[TEST]`.
-4. **Zasady etyczne Google Reviews:** Prośba o recenzję jest neutralna, bez nagród, bez sugerowania ocen i bez filtrowania zadowolonych/niezadowolonych mieszkańców.
+2. **Brak zmyślonych rezultatów:** W tabelach poniżej pola dotyczące rzeczywistych rezultatów i pomiarów czasu pozostawiono do uzupełnienia w trakcie faktycznych sesji testowych przez zespół.
+3. **Twarde zabezpieczenie serwerowe (Backend Whitelist Guard):** Backend bezwzględnie blokuje wysyłkę na jakikolwiek inny adres niż `wsb.student.tester@gmail.com`, a temat wiadomości zawsze otrzymuje prefiks `[TEST]`.
+4. **Zasady etyczne Google Reviews:** Prośba o recenzję jest neutralna, bez nagród, bez sugerowania ocen, bez filtrowania zadowolonych/niezadowolonych mieszkańców i BEZ TEKSTU ZASTĘPCZEGO (placeholdera).
+5. **Human-in-the-Loop w module AI:** Zgłoszenie przed przekazaniem do modelu Gemini Flash jest weryfikowane przez pracownika w dedykowanym oknie dialogowym.
 
 ---
 
-## 2. Scenariusze testowe (Weryfikacja modułu komunikacji i reputacji)
+## 2. Scenariusze testowe
 
 | ID | Scenariusz testowy | Dane wejściowe / Akcja | Oczekiwany rezultat | Rzeczywisty rezultat | Status testu | Osoba testująca i data | Uwagi i poprawki |
 |---|---|---|---|---|---|---|---|
@@ -29,11 +28,15 @@ Niniejsza procedura służy do zweryfikowania poprawności działania aplikacji 
 | **TEST-05** | **Obsługa zgłoszenia bez adresu e-mail** | Próba przygotowania wiadomości dla zgłoszenia, gdzie pole e-mail jest puste. | System wyświetla monit o braku e-maila; jeśli dostępny jest telefon, pyta o zarejestrowanie kontaktu telefonicznego. | *(do uzupełnienia po teście)* | `Do wykonania` | | |
 | **TEST-06** | **Odnotowanie kontaktu telefonicznego** | Wybór z menu: *SmartCare -> Odnotuj kontakt telefoniczny*, wpisanie wyniku i notatki. | Zapis w `HISTORIA KOMUNIKACJI` ze statusem `odnotowano kontakt`; aktualizacja pola `Data ostatniego kontaktu` i `Wynik kontaktu` w `ZGŁOSZENIA`. | *(do uzupełnienia po teście)* | `Do wykonania` | | |
 | **TEST-07** | **Przygotowanie informacji o rozwiązaniu problemu** | Próba wybrania *Przygotuj informację o rozwiązaniu*, gdy pole `Sposób rozwiązania sprawy` jest puste. | System blokuje przygotowanie wiadomości i wyświetla monit o konieczności wpisania rzeczywistych działań naprawczych w arkuszu. | *(do uzupełnienia po teście)* | `Do wykonania` | | |
-| **TEST-08** | **Dodanie linku do opinii Google** | Zaznaczenie opcji dołączenia prośby o opinię w szablonie rozwiązania lub wybór opcji 5 z menu. | Wiadomość zawiera neutralną prośbę i zweryfikowany link z `USTAWIENIA`; brak obietnic nagród, rabatów czy sugestii gwiazdek. | *(do uzupełnienia po teście)* | `Do wykonania` | | |
+| **TEST-08** | **Weryfikacja linku do opinii Google** | Wybór *Przygotuj prośbę o opinię* przy braku zweryfikowanego adresu URL w `USTAWIENIA`. | System blokuje operację; informuje o zakazie wysyłki prośby z tekstem zastępczym (placeholderem); brak oznaczania w CRM. | *(do uzupełnienia po teście)* | `Do wykonania` | | |
 | **TEST-09** | **Zapis oceny satysfakcji mieszkańca (1–5)** | Wpisanie oceny w kolumnie `Ocena satysfakcji (1-5)` w `ZGŁOSZENIA`. | Formuła w `DASHBOARD` aktualizuje średnią ocenę oraz liczbę zebranych ocen; ocena nie jest wymagana do zamknięcia zgłoszenia. | *(do uzupełnienia po teście)* | `Do wykonania` | | |
 | **TEST-10** | **Zabezpieczenie przed ponowną prośbą o opinię** | Próba wysłania prośby o opinię do zgłoszenia, które ma już wartość `Prośba o opinię wysłana = TAK`. | Wyświetla się ostrzeżenie informujące, że prośba została już przekazana; wysyłka wymaga świadomego potwierdzenia. | *(do uzupełnienia po teście)* | `Do wykonania` | | |
-| **TEST-11** | **Twarda blokada serwerowa wysyłki na inny adres niż wsb.student.tester@gmail.com** | Próba wymuszenia wysyłki na obcy adres w trybie demonstracyjnym. | Backend (`processSendEmail`) bezwzględnie blokuje wysyłkę, odnotowuje próbę w historii ze statusem `błąd wysyłki` i wyświetla alert bezpieczeństwa. | *(do uzupełnienia po teście)* | `Do wykonania` | | |
-| **TEST-12** | **Obsługa błędów wysyłki (MailApp)** | Symulacja błędu (np. wyczerpany limit dzienny quota lub nieprawidłowa konfiguracja). | Status w `HISTORIA KOMUNIKACJI` otrzymuje wartość `błąd wysyłki` z opisem błędu; wiersz w `ZGŁOSZENIA` NIE jest oznaczany jako obsłużony. | *(do uzupełnienia po teście)* | `Do wykonania` | | |
+| **TEST-11** | **Twarda blokada serwerowa wysyłki na inny adres niż wsb.student.tester@gmail.com** | Próba wymuszenia wysyłki na obcy adres. | Backend (`processSendEmail`) bezwzględnie zwraca błąd, nie zamyka okna dialogowego, odnotowuje próbę jako błąd i chroni przed wysyłką zewnętrzną. | *(do uzupełnienia po teście)* | `Do wykonania` | | |
+| **TEST-12** | **Obsługa błędów wysyłki i brak zamykania modala** | Wystąpienie błędu serwera podczas wysyłki e-mail. | Klient (`showEmailComposer`) nie zamyka okna wiadomości; wyświetla czytelny komunikat błędu; pracownik może poprawić treść. | *(do uzupełnienia po teście)* | `Do wykonania` | | |
+| **TEST-13** | **Zabezpieczenie współbieżności LockService** | Równoczesna rejestracja formularza i generowanie ID zgłoszenia. | `LockService` kolejkuje operacje; trwały licznik `LAST_ASSIGNED_TICKET_ID` gwarantuje brak kolizji identyfikatorów. | *(do uzupełnienia po teście)* | `Do wykonania` | | |
+| **TEST-14** | **Obliczanie KPI w godzinach (Dashboard)** | Zgłoszenie z różnicą dat np. 2 godziny 30 minut. | Formuła `DASHBOARD` (komórki C8, D8) zwraca `2.50` godz. (dokładność do dwóch miejsc po przecinku, brak błędu INT()). | *(do uzupełnienia po teście)* | `Do wykonania` | | |
+| **TEST-15** | **Odsetek próśb o opinię wyłącznie wśród zakończonych** | 10 zgłoszeń (5 nowych, 5 rozwiązanych; 2 z wysłaną prośbą). | Komórka C11 zwraca `40%` (2/5), a nie 20% (2/10). | *(do uzupełnienia po teście)* | `Do wykonania` | | |
+| **TEST-16** | **Interaktywna weryfikacja danych dla AI (Human-in-the-Loop)** | Wybór z menu: *SmartCare -> Analizuj zgłoszenie przez AI*. | Wyświetla się okno dialogowe z oczyszczonym opisem (brak ulicy, posesji, nazwiska); pracownik może zmodyfikować treść przed wysłaniem do modelu Gemini Flash. | *(do uzupełnienia po teście)* | `Do wykonania` | | |
 
 ---
 
