@@ -31,6 +31,13 @@ document.addEventListener("DOMContentLoaded", () => {
       btnOpenDirectForm.rel = "noopener noreferrer";
     }
 
+    const btnOpenDirectLink = document.getElementById("btnOpenDirectLink");
+    if (btnOpenDirectLink) {
+      btnOpenDirectLink.href = directUrl;
+      btnOpenDirectLink.target = "_blank";
+      btnOpenDirectLink.rel = "noopener noreferrer";
+    }
+
     if (formIframe && formContainer) {
       formIframe.src = embedUrl;
       formContainer.style.display = "block";

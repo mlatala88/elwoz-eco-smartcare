@@ -38,14 +38,14 @@ const SMARTCARE_CONFIG = {
   },
 
   // Konfiguracja natywnego formularza Google Forms
-  // Po powiązaniu formularza z arkuszem wklej poniżej adres URL formularza wygenerowanego na koncie wsb.student.tester@gmail.com:
+  // Utworzony na koncie wsb.student.tester@gmail.com powiązany z arkuszem CRM
   googleForm: {
     // Bezpośredni link do formularza Google Forms
-    directUrl: "",
+    directUrl: "https://docs.google.com/forms/d/e/1FAIpQLSdZXjHX0Tt5GqF5yacDZpouKtrcsxPBhXx-K2s5cqYfEFtnkA/viewform",
     // Link do osadzenia w iframe (z parametrem ?embedded=true)
-    embedUrl: "",
+    embedUrl: "https://docs.google.com/forms/d/e/1FAIpQLSdZXjHX0Tt5GqF5yacDZpouKtrcsxPBhXx-K2s5cqYfEFtnkA/viewform?embedded=true",
     // Flaga gotowości formularza
-    isFormConfigured: false
+    isFormConfigured: true
   },
 
   // Ostrzeżenie prawne i procedury bezpieczeństwa danych
