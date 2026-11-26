@@ -1,0 +1,303 @@
+/**
+ * ELWOZ ECO SmartCare Manager v0.3.0
+ * Centrum obsługi pojedynczego zgłoszenia (Ticket Detail 3-Panel Center)
+ */
+
+.detail-view-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: calc(100vh - var(--header-height) - 48px);
+}
+
+.detail-top-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: var(--bg-panel);
+  padding: 10px 18px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  flex-shrink: 0;
+}
+
+.detail-nav-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.detail-ticket-heading {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--brand-navy);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.detail-nav-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* 3-kolumnowy obszar roboczy */
+.detail-panels-grid {
+  display: grid;
+  grid-template-columns: 310px 1fr 340px;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Panele */
+.detail-panel {
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: 100%;
+}
+
+.detail-panel-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+  background-color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--brand-navy);
+  flex-shrink: 0;
+}
+
+.detail-panel-body {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Sekcje w lewym panelu (Mieszkaniec) */
+.info-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-bottom: 1px solid var(--border-light);
+  padding-bottom: 14px;
+}
+
+.info-section:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.info-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  letter-spacing: 0.5px;
+}
+
+.info-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.info-icon {
+  width: 15px;
+  height: 15px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.info-value-block {
+  display: flex;
+  flex-direction: column;
+}
+
+.info-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.info-value {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ticket-original-description {
+  background-color: var(--bg-muted);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+}
+
+/* Środkowy panel - Asystent AI i Komunikator */
+.ai-card {
+  background-color: #F8FBF6;
+  border: 1px solid var(--prio-low-border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ai-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ai-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--brand-green-dark);
+}
+
+.ai-insight-box {
+  background-color: #FFFFFF;
+  border: 1px solid #D9EAD3;
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-primary);
+}
+
+.ai-insight-label {
+  font-weight: 700;
+  color: var(--brand-green-dark);
+  margin-bottom: 2px;
+}
+
+.ai-alert-missing {
+  background-color: #FEF3F2;
+  border: 1px solid #FECDCA;
+  color: #B42318;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.message-composer-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+}
+
+.quick-templates-bar {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.template-pill {
+  background-color: var(--bg-muted);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+}
+
+.template-pill:hover {
+  background-color: var(--prio-standard-bg);
+  border-color: var(--brand-navy);
+  color: var(--brand-navy);
+}
+
+.ai-refine-banner {
+  background-color: var(--brand-green-light);
+  border: 1px solid var(--prio-low-border);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--brand-green-dark);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Prawy panel - Zarządzanie i SLA */
+.sla-timer-card {
+  background-color: var(--bg-muted);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sla-timer-card.overdue {
+  background-color: var(--prio-urgent-bg);
+  border-color: var(--prio-urgent-border);
+}
+
+.sla-timer-card.ok {
+  background-color: var(--brand-green-light);
+  border-color: var(--prio-low-border);
+}
+
+.sla-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.sla-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.sla-timer-card.overdue .sla-value {
+  color: var(--prio-urgent);
+}
+
+.sla-timer-card.ok .sla-value {
+  color: var(--brand-green-dark);
+}
+
+.warning-no-step {
+  background-color: var(--prio-urgent-bg);
+  border: 1px solid var(--prio-urgent-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  color: var(--prio-urgent);
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

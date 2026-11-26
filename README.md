@@ -1,17 +1,38 @@
-# ELWOZ ECO SmartCare – Cyfrowy Punkt Obsługi Mieszkańca
-**Wersja:** 0.2.7 (Customer Service Intelligence: Centralny Panel Obsługi, Kolejka spraw, Gotowa 1. odpowiedź 0s, 4 poziomy priorytetów i SLA, lokalna kontrola danych, automatyczna analiza w tle)  
-**Projekt zaliczeniowy:** *Nowoczesne technologie w marketingu i sprzedaży* – Uniwersytet WSB Merito w Gdańsku  
+# ELWOZ ECO SmartCare & SmartCare Manager
+**Wersja:** 0.3.0 (SmartCare Manager – Profesjonalna aplikacja webowa SPA dla pracowników POK Kartuzy oraz silnik v0.2.7 Customer Service Intelligence)  
+**Projekt zaliczeniowy:** Studencki prototyp wdrożeniowy – Uniwersytet WSB Merito w Gdańsku  
 **Przedsiębiorstwo:** ELWOZ ECO Sp. z o.o.  
-**Obszar wdrożenia:** Rejon Kartuz i okoliczne sołectwa  
+**Obszar wdrożenia:** Rejon Kartuz i okoliczne gminy (Sierakowice, Żukowo, Somonino, Chmielno, Przodkowo, Stężyca)  
 **Oficjalna strona przedsiębiorstwa:** [elwozeco.pl](https://elwozeco.pl/)  
 **Dedykowane konto testowe Google:** `wsb.student.tester@gmail.com`  
-**Publiczna strona demonstracyjna (GitHub Pages):** [https://mlatala88.github.io/elwoz-eco-smartcare/](https://mlatala88.github.io/elwoz-eco-smartcare/)  
-**Aktywny formularz Google Forms:** [https://docs.google.com/forms/d/e/1FAIpQLSdZXjHX0Tt5GqF5yacDZpouKtrcsxPBhXx-K2s5cqYfEFtnkA/viewform](https://docs.google.com/forms/d/e/1FAIpQLSdZXjHX0Tt5GqF5yacDZpouKtrcsxPBhXx-K2s5cqYfEFtnkA/viewform)  
-**Zweryfikowany link do opinii Google:** [https://search.google.com/local/writereview?placeid=ChIJ13yCwGSa_UYRqkDdyWL8wdA](https://search.google.com/local/writereview?placeid=ChIJ13yCwGSa_UYRqkDdyWL8wdA)
+**Panel Menedżera SmartCare (v0.3.0):** [manager/index.html](manager/index.html) (lub [manager.html](manager.html))  
+**Publiczna aplikacja mieszkańca (GitHub Pages):** [https://mlatala88.github.io/elwoz-eco-smartcare/](https://mlatala88.github.io/elwoz-eco-smartcare/)  
+**Aktywny formularz zgłoszeniowy:** [Formularz Google Forms](https://docs.google.com/forms/d/e/1FAIpQLSdZXjHX0Tt5GqF5yacDZpouKtrcsxPBhXx-K2s5cqYfEFtnkA/viewform)  
+**Zweryfikowany link do opinii Google:** [Wizytówka POK Kartuzy](https://search.google.com/local/writereview?placeid=ChIJ13yCwGSa_UYRqkDdyWL8wdA)  
+
+---
+
+## 🚀 Nowość w wydaniu v0.3.0: ELWOZ ECO SmartCare Manager
+
+W ramach wydania **v0.3.0** przygotowano kompletną, niezależną aplikację webową (SPA) dla pracowników przedsiębiorstwa komunalnego ELWOZ ECO, która zastępuje bezpośrednią pracę w arkuszu Google Sheets:
+
+- 📊 **Pulpit Customer Service Intelligence:** 16 klikalnych wskaźników KPI (wszystkie, nowe, pilny kontakt, przeterminowane SLA, do zrobienia dzisiaj, bez kolejnego kroku, oczekujące na mieszkańca/firmę, wskaźnik rozwiązań, średnie czasy reakcji i rozwiązania, średnia ocena satysfakcji, zebrane opinie i zaproszenia Google), filtry okresów i 6 interaktywnych wykresów Chart.js.
+- 📋 **Kolejka Moje zadania:** 7 wyspecjalizowanych sekcji operacyjnych z możliwością filtrowania zadań przypisanych do wybranego dyspozytora.
+- 📑 **Wszystkie zgłoszenia:** Kompaktowa tabela operacyjna, multi-kryterialne filtry, modal konfiguracji widoczności kolumn oraz eksport do CSV.
+- 🎯 **Trzykolumnowe Centrum Obsługi Zgłoszenia:** Pełny widok danych mieszkańca (lewy panel), asystent AI i kreator wiadomości z korektą stylu CX/PR (środkowy panel) oraz zarządzanie statusem, SLA, kolejnym krokiem i notatkami poufnymi (prawy panel).
+- 💬 **Komunikacja & Satysfakcja:** Centralny dziennik audytu korespondencji i rozmów telefonicznych oraz panel monitorowania ocen CSAT z etycznym modułem zaproszeń do Google Reviews.
+- 🔍 **Diagnostyka & Bezpieczeństwo:** Telemetria połączeń, symulator błędów API do testów QA, zero kluczy API po stronie przeglądarki i brak modyfikacji produkcyjnej wersji v0.2.8.
+- 📚 **Kompletna dokumentacja techniczna:**
+  - [Dokumentacja Architektury (docs/ARCHITEKTURA.md)](docs/ARCHITEKTURA.md)
+  - [Kontrakt Integracji z Backendem Google Apps Script (docs/KONTRAKT-INTEGRACJI.md)](docs/KONTRAKT-INTEGRACJI.md)
+  - [Raport z Testów – 30/30 PASSED (docs/RAPORT-TESTOW.md)](docs/RAPORT-TESTOW.md)
+  - [Instrukcja Uruchomienia (docs/INSTRUKCJA-URUCHOMIENIA.md)](docs/INSTRUKCJA-URUCHOMIENIA.md)
+  - [Galeria Zrzutów Ekranu (docs/screenshots/)](docs/screenshots/)
 
 ---
 
 ## Spis treści
+0. [ELWOZ ECO SmartCare Manager v0.3.0 (Nowość)](#-nowość-w-wydaniu-v030-elwoz-eco-smartcare-manager)
 1. [Kontekst i cel projektu](#1-kontekst-i-cel-projektu)
 2. [Główne założenia i architektura](#2-główne-założenia-i-architektura)
 3. [Dedykowane konto testowe i podział środowisk](#3-dedykowane-konto-testowe-i-podział-środowisk)

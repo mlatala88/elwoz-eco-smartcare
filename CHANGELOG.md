@@ -4,6 +4,39 @@ Wszystkie istotne zmiany i wydania w projekcie **ELWOZ ECO SmartCare** są rejes
 
 ---
 
+## [0.3.0] – 2026-11-26
+### ELWOZ ECO SmartCare Manager v0.3.0 – Niezależna aplikacja webowa biura obsługi mieszkańców (Prototyp edukacyjny WSB Merito)
+
+#### Główne innowacje i moduły v0.3.0:
+1. **Dedykowany interfejs webowy SPA (Manager):**
+   - Kompletna aplikacja webowa w czystym HTML5, CSS3 i JavaScript (ES Modules), zastępująca bezpośrednią pracę pracownika w arkuszu Google Sheets.
+   - Nowoczesny, kompaktowy i profesjonalny design system inspirowany identyfikacją ELWOZ ECO (`#252D72`, `#6BAA43`), zgodny z wytycznymi dostępności WCAG 2.2 AA.
+   - Zwijane menu boczne (230 px / 68 px), górny pasek nawigacji (64 px) z globalną wyszukiwarką, centrum powiadomień operacyjnych oraz przełącznikiem aktywnego profilu pracownika.
+2. **Warstwa abstrakcji dostępu do danych (Wzorzec DataProvider):**
+   - `DataProviderInterface`: pełna separacja logiki prezentacji od pamięci danych.
+   - `DemoDataProvider`: w pełni działający adapter demonstracyjny z trwałością w `localStorage`, zaawansowaną analityką metryk CSI w czasie rzeczywistym i symulacją AI.
+   - `AppsScriptDataProvider`: w pełni udokumentowany kontrakt i adapter docelowy dla przyszłej integracji z backendem Google Apps Script.
+3. **8 funkcjonalnych modułów operacyjnych:**
+   - **1. Pulpit (Customer Service Intelligence):** 16 klikalnych kafelków KPI, filtry okresu (Dzisiaj, 7 dni, 30 dni, Wszystkie, Własny zakres), 6 interaktywnych wykresów Chart.js oraz tabela Top 5 najważniejszych spraw wymagających działania.
+   - **2. Moje zadania:** Zaawansowana kolejka CRM podzielona na 7 sekcji (Natychmiastowa reakcja, Przeterminowane, Dzisiaj, Zaplanowane, Oczekujące na mieszkańca, Bez opiekuna, Bez kolejnego kroku) z filtrem spraw przypisanych do aktywnego pracownika.
+   - **3. Wszystkie zgłoszenia:** Kompaktowa tabela z wyszukiwarką wielopolową, sortowaniem, filtrami wielokryterialnymi (status, priorytet, kategoria, opiekun, termin, stan AI), modalem wyboru widoczności kolumn oraz eksportem do CSV.
+   - **4. Centrum obsługi pojedynczego zgłoszenia (3-kolumnowe):**
+     - Panel lewy: dane mieszkańca, lokalizacja, frakcja, oryginalny opis i historia wcześniejszych kontaktów.
+     - Panel środkowy: analiza CSI Asystenta AI (streszczenie, braki danych, sprzeczności, priorytet, rekomendowany krok) oraz kreator wiadomości z szybkimi szablonami, przyciskiem korekty AI (CX/PR) i rejestracją rozmów telefonicznych.
+     - Panel prawy: zarządzanie statusem, zatwierdzonym priorytetem, opiekunem, kolejnym krokiem (z ostrzeżeniem gdy puste), terminem działania, licznikiem SLA i poufnymi notatkami wewnętrznymi.
+   - **5. Komunikacja:** Centralny dziennik korespondencji i notatek telefonicznych z filtrowaniem po kanale i podglądem pełnej treści.
+   - **6. Satysfakcja & Reputacja:** Analiza ocen CSAT (skala 1–5), rozkład gwiazdek, komentarze, alerty spraw z niską oceną (1–2 ★) oraz etyczny moduł zaproszeń do Google Reviews ze zweryfikowanym linkiem.
+   - **7. Raporty i analityka:** Zestawienie efektywności, obciążenia i skuteczności personelu POK, powtarzających się problemów i udziału kategorii z eksportem CSV.
+   - **8. Diagnostyka & Ustawienia:** Panel telemetrii (stan CRM, Gemini API, opóźnienia, błędy), uruchamianie automatycznego testu API, symulator awarii API dla testów QA, zarządzanie personelem oraz fabryczny reset bazy demonstracyjnej.
+4. **Syntetyczny zbiór danych (30 spraw):**
+   - 30 realistycznych spraw z rejonu Kartuz i gmin ościennych (Sierakowice, Żukowo, Somonino, Chmielno, Przodkowo, Stężyca) odzwierciedlających wszystkie kluczowe scenariusze (uszkodzenia pojemników, pominięcia, brak worków, fetor, zanieczyszczenia, pochwały, sugestie, sprzeczności, przeterminowania i błędy AI).
+5. **Jakość, testy i bezpieczeństwo:**
+   - 30 zautomatyzowanych testów jednostkowych i integracyjnych zaliczonych na 100% (0 błędów).
+   - Zweryfikowana responsywność na ekranach 1920×1080 oraz 1366×768 (11 zapisanych zrzutów ekranu w `docs/screenshots/`).
+   - Brak jakichkolwiek kluczy API po stronie przeglądarki, twardy filtr PII i brak modyfikacji produkcyjnego arkusza/kodu Apps Script v0.2.8.
+
+---
+
 ## [0.2.7] – 2026-11-25
 ### Customer Service Intelligence (CSI): Inteligentny asystent biura obsługi klienta, automatyczna analiza w tle, 4 poziomy priorytetów i SLA, Centralny Panel Obsługi oraz Kolejka Spraw
 

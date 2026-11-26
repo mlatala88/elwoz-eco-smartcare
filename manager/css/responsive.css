@@ -1,0 +1,111 @@
+/**
+ * ELWOZ ECO SmartCare Manager v0.3.0
+ * Responsive Styles (1366x768 laptop, 1920x1080 desktop, tablet/compact)
+ */
+
+/* Ekrany laptopowe i standardowe (np. 1366x768) */
+@media (max-width: 1440px) {
+  .charts-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .chart-card.chart-wide {
+    grid-column: span 2;
+  }
+  
+  .detail-panels-grid {
+    grid-template-columns: 280px 1fr 300px;
+    gap: 12px;
+  }
+  
+  .kpi-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 10px;
+  }
+  
+  .kpi-value {
+    font-size: 22px;
+  }
+}
+
+/* Ekrany kompaktowe / mniejsze laptopy (<= 1200px) */
+@media (max-width: 1200px) {
+  .detail-panels-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    overflow-y: auto;
+  }
+  
+  .detail-view-container {
+    height: auto;
+    overflow: visible;
+  }
+  
+  .detail-panel {
+    height: auto;
+    max-height: none;
+  }
+  
+  .charts-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .chart-card.chart-wide {
+    grid-column: span 1;
+  }
+}
+
+/* Duże ekrany Full HD i 2K/4K (>= 1920px) */
+@media (min-width: 1920px) {
+  .kpi-grid {
+    grid-template-columns: repeat(8, 1fr);
+    gap: 16px;
+  }
+  
+  .charts-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+  
+  .chart-container {
+    height: 260px;
+  }
+  
+  .detail-panels-grid {
+    grid-template-columns: 360px 1fr 380px;
+    gap: 20px;
+  }
+}
+
+/* Mobilne i tablety */
+@media (max-width: 768px) {
+  #app {
+    flex-direction: column;
+  }
+  
+  .app-sidebar {
+    width: 100%;
+    min-width: 100%;
+    height: auto;
+  }
+  
+  .app-sidebar.collapsed {
+    display: none;
+  }
+  
+  .app-topbar {
+    padding: 0 12px;
+  }
+  
+  .app-content {
+    padding: 12px;
+  }
+  
+  .topbar-left {
+    max-width: 100%;
+  }
+  
+  .user-info {
+    display: none;
+  }
+}
