@@ -214,6 +214,7 @@ function getTicketDataByRow(sheet, row) {
   const slaDeadline = getV("Termin SLA 1. reakcji");
   const slaOverdue = getV("Przekroczenie SLA");
   const employeeNote = getV("Notatka pracownika");
+  const residentContactResult = getV(["Wynik kontaktu z mieszkańcem", "Wynik kontaktu"]);
 
   // Kolumny komunikacyjne i KPI
   const confirmDate = getV("Data potwierdzenia przyjęcia");
@@ -269,6 +270,7 @@ function getTicketDataByRow(sheet, row) {
     slaDeadline,
     slaOverdue,
     employeeNote,
+    residentContactResult,
     confirmDate,
     firstContactDate,
     lastContactDate,
@@ -775,9 +777,82 @@ function actionAnalyzeWithAi() {
 }
 
 /**
- * 4. Akcja: Przygotuj potwierdzenie przyjęcia / pierwszą odpowiedź (Szablon A - v0.2.7)
- * INNOWACJA 0s: Jeśli kolumna 'Proponowana odpowiedź AI' zawiera gotową treść,
- * ładujemy ją natychmiast do okna dialogowego bez konieczności czekania na model!
+ * Generuje treść awaryjnej pierwszej odpowiedzi dopasowaną do kategorii (v0.2.8)
+ * - dla pochwały: ciepłe podziękowanie i przekazanie załodze (bez GPS!)
+ * - dla zgłoszenia niekompletnego: prośba o doprecyzowanie danych
+ * - dla reklamacji kompletnej: potwierdzenie weryfikacji operacyjnej
+ */
+function generateTailoredEmergencyConfirmation(ticket, settings) {
+  const isPraise = /pochwał|podzięk/i.test(ticket.ticketType || "");
+  const hasIssues = Boolean(ticket.aiMissingInfo || (ticket.localDataControl && ticket.localDataControl.includes("Wymaga uzupełnienia")));
+
+  if (isPraise) {
+    return (
+`Dzień dobry, ${ticket.residentName},
+
+Serdecznie dziękujemy za przesłanie miłych słów dotyczących pracy naszej załogi w rejonie Kartuz (${ticket.location || "Rejon Kartuzy"}).
+
+Pana/Pani opinia została zarejestrowana w naszym systemie (sprawa: ${ticket.ticketId}) i przekazana bezpośrednio załodze realizującej odbiory oraz kierownikowi rejonu. Tego typu sygnały są dla całego zespołu ELWOZ ECO największą motywacją do codziennej rzetelnej pracy.
+
+Z poważaniem,
+${settings.senderName}
+${settings.facilityName}
+ul. Mściwoja II 14, 83-300 Kartuzy
+Tel. ${settings.contactPhone} | ${settings.website}`
+    );
+  }
+
+  if (hasIssues) {
+    return (
+`Dzień dobry, ${ticket.residentName},
+
+Potwierdzamy zarejestrowanie zgłoszenia ${ticket.ticketId} w systemie ELWOZ ECO SmartCare:
+• Rodzaj zgłoszenia: ${ticket.ticketType || "Zgłoszenie komunalne"}
+• Frakcja odpadów: ${ticket.wasteFraction || "Nieokreślona"}
+• Wskazana lokalizacja: ${ticket.location || "Do doprecyzowania"}
+
+W celu sprawnego podjęcia działań operacyjnych w terenie uprzejmie prosimy o doprecyzowanie brakujących danych (np. numer posesji lub dokładna lokalizacja pojemnika).
+
+Po otrzymaniu informacji niezwłocznie skierujemy sprawę do realizacji.
+
+W razie pytań prosimy o kontakt z biurem POK Kartuzy (tel. ${settings.contactPhone}, e-mail: ${settings.contactEmail}), powołując się na numer sprawy ${ticket.ticketId}.
+
+Z poważaniem,
+${settings.senderName}
+${settings.facilityName}
+ul. Mściwoja II 14, 83-300 Kartuzy
+Tel. ${settings.contactPhone} | ${settings.website}`
+    );
+  }
+
+  return (
+`Dzień dobry, ${ticket.residentName},
+
+Potwierdzamy zarejestrowanie zgłoszenia w systemie ELWOZ ECO SmartCare:
+• Numer sprawy: ${ticket.ticketId}
+• Rodzaj zgłoszenia: ${ticket.ticketType}
+• Frakcja odpadów: ${ticket.wasteFraction}
+• Wskazana ulica / rejon: ${ticket.location}
+
+1. Ustalenia wstępne: Zgłoszenie zostało poprawnie zarejestrowane w naszym systemie CRM.
+2. Działania ze strony Mieszkańca: Ze strony Mieszkańca na ten moment nie są wymagane żadne dodatkowe działania.
+3. Kolejny krok przedsiębiorstwa: Dyspozytor POK Kartuzy dokonuje weryfikacji operacyjnej trasy oraz raportu dziennego załogi.
+4. Strona odpowiedzialna za realizację: Przedsiębiorstwo ELWOZ ECO.
+
+W przypadku pytań prosimy o kontakt z biurem POK Kartuzy (tel. ${settings.contactPhone}, e-mail: ${settings.contactEmail}), powołując się na numer sprawy ${ticket.ticketId}.
+
+Z poważaniem,
+${settings.senderName}
+${settings.facilityName}
+ul. Mściwoja II 14, 83-300 Kartuzy
+Tel. ${settings.contactPhone} | ${settings.website}`
+  );
+}
+
+/**
+ * 4. Akcja: Przygotuj potwierdzenie przyjęcia / pierwszą odpowiedź (Szablon A - v0.2.8)
+ * Zabezpieczenie v0.2.8: Jeśli Stan analizy AI to "Błąd", nie używamy starej propozycji z CRM,
+ * lecz generujemy bezpieczną odpowiedź dopasowaną do kategorii (Pochwała, Niekompletne, Reklamacja).
  */
 function actionPrepareConfirmation() {
   const ticket = getSelectedTicketData();
@@ -791,32 +866,13 @@ function actionPrepareConfirmation() {
   const settings = getSmartCareSettings();
   const subject = `Potwierdzenie przyjęcia zgłoszenia ${ticket.ticketId} – ELWOZ ECO SmartCare`;
 
-  // Jeśli AI wcześniej wygenerowało kompletną odpowiedź w tle, użyj jej natychmiast (0 sekund oczekiwania!)
   let body = "";
-  if (ticket.aiDraftResponse && ticket.aiDraftResponse.trim().length > 20) {
+  const isAiError = ticket.aiState === "Błąd";
+
+  if (!isAiError && ticket.aiDraftResponse && ticket.aiDraftResponse.trim().length > 20) {
     body = ticket.aiDraftResponse.trim();
   } else {
-    body = 
-`Dzień dobry, ${ticket.residentName},
-
-Potwierdzamy zarejestrowanie zgłoszenia w systemie ELWOZ ECO SmartCare:
-• Numer sprawy: ${ticket.ticketId}
-• Rodzaj zgłoszenia: ${ticket.ticketType}
-• Frakcja odpadów: ${ticket.wasteFraction}
-• Wskazana ulica / rejon: ${ticket.location}
-
-1. Ustalenia wstępne: Zgłoszenie zostało poprawnie zarejestrowane w naszym systemie CRM.
-2. Działania ze strony Mieszkańca: Ze strony Mieszkańca na ten moment nie są wymagane żadne dodatkowe działania.
-3. Kolejny krok przedsiębiorstwa: Dyspozytor POK Kartuzy dokonuje weryfikacji trasy śmieciarki w systemie GPS oraz w dziennym raporcie załogi.
-4. Strona odpowiedzialna za realizację: Przedsiębiorstwo ELWOZ ECO.
-
-W przypadku pytań prosimy o kontakt z biurem POK Kartuzy (tel. ${settings.contactPhone}, e-mail: ${settings.contactEmail}), powołując się na numer sprawy ${ticket.ticketId}.
-
-Z poważaniem,
-${settings.senderName}
-${settings.facilityName}
-ul. Mściwoja II 14, 83-300 Kartuzy
-Tel. ${settings.contactPhone} | ${settings.website}`;
+    body = generateTailoredEmergencyConfirmation(ticket, settings);
   }
 
   openEmailDialog({
@@ -830,7 +886,9 @@ Tel. ${settings.contactPhone} | ${settings.website}`;
 }
 
 /**
- * 5. Akcja: Przygotuj informację o postępach (Szablon B)
+ * 5. Akcja: Przygotuj informację o postępach (Szablon B - v0.2.8)
+ * Dynamicznie buduje treść na podstawie rzeczywistych notatek i ustaleń:
+ * notatka pracownika, następne działanie, strona odpowiedzialna, wynik kontaktu z mieszkańcem.
  */
 function actionPrepareProgressUpdate() {
   const ticket = getSelectedTicketData();
@@ -844,15 +902,40 @@ function actionPrepareProgressUpdate() {
   const settings = getSmartCareSettings();
   const subject = `Informacja o statusie sprawy ${ticket.ticketId} – ELWOZ ECO SmartCare`;
 
+  const progressDetails = [];
+  if (ticket.employeeNote) {
+    progressDetails.push(`• Ustalenia operacyjne pracownika: ${ticket.employeeNote}`);
+  }
+  if (ticket.nextAction) {
+    progressDetails.push(`• Kolejne zaplanowane działanie: ${ticket.nextAction}`);
+  }
+  if (ticket.responsibleSide) {
+    progressDetails.push(`• Strona odpowiedzialna za realizację kroku: ${ticket.responsibleSide}`);
+  }
+  if (ticket.residentContactResult) {
+    progressDetails.push(`• Dotychczasowy wynik kontaktu: ${ticket.residentContactResult}`);
+  }
+
+  let detailsSection = "";
+  if (progressDetails.length > 0) {
+    detailsSection = "Aktualne ustalenia w toku sprawy:\n" + progressDetails.join("\n") + "\n\n";
+  } else {
+    detailsSection = `Sprawa znajduje się w toku realizacji (status: ${ticket.status || "W toku"}). Trwa weryfikacja operacyjna z dyspozytorem rejonu Kartuzy.\n\n`;
+  }
+
   const body = 
 `Dzień dobry, ${ticket.residentName},
 
 Informujemy o aktualnym statusie zgłoszenia ${ticket.ticketId} dotyczącego: ${ticket.ticketType} (${ticket.location}):
 
-Sprawa została przekazana do dyspozytora rejonu Kartuzy w celu weryfikacji okoliczności zdarzenia. O kolejnych ustaleniach lub sposobie załatwienia sprawy powiadomimy w kolejnej wiadomości.
+${detailsSection}O kolejnych ustaleniach lub sposobie ostatecznego załatwienia sprawy powiadomimy w kolejnej wiadomości.
+
+W razie pytań prosimy o kontakt z biurem POK Kartuzy (tel. ${settings.contactPhone}, e-mail: ${settings.contactEmail}), powołując się na numer sprawy ${ticket.ticketId}.
 
 Z poważaniem,
 ${settings.senderName}
+${settings.facilityName}
+ul. Mściwoja II 14, 83-300 Kartuzy
 Tel. ${settings.contactPhone} | ${settings.website}`;
 
   openEmailDialog({

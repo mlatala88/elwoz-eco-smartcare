@@ -1,5 +1,5 @@
 # ELWOZ ECO SmartCare – Cyfrowy Punkt Obsługi Mieszkańca
-**Wersja:** 0.2.8 (Customer Service Intelligence: Stabilizacja silnika CRM, eliminacja blokad LockService, kolejka AI 15 RPM, warstwa Service API pod v0.3.0)  
+**Wersja:** 0.2.8 (Stabilizacja silnika CRM, obsługa limitów 15 RPM, eliminacja blokad LockService, audyt kolejki AI, Service API pod v0.3.0)  
 **Projekt zaliczeniowy:** *Nowoczesne technologie w marketingu i sprzedaży* – Uniwersytet WSB Merito w Gdańsku  
 **Przedsiębiorstwo:** ELWOZ ECO Sp. z o.o.  
 **Obszar wdrożenia:** Rejon Kartuz i okoliczne sołectwa  
@@ -10,6 +10,9 @@
 **Zweryfikowany link do opinii Google:** [https://search.google.com/local/writereview?placeid=ChIJ13yCwGSa_UYRqkDdyWL8wdA](https://search.google.com/local/writereview?placeid=ChIJ13yCwGSa_UYRqkDdyWL8wdA)
 
 ---
+
+
+- **Zautomatyzowany audyt testowy (`tests/test-v028-audit.js`):** Kompletny zestaw 33 testów automatycznych (100% PASS, 33/33) pokrywający kolejkę AI, blokady współbieżności, dynamiczną komunikację CX/PR, robocze godziny SLA (7:00-16:00), ochronę PII oraz Service API.
 
 ## Spis treści
 1. [Kontekst i cel projektu](#1-kontekst-i-cel-projektu)

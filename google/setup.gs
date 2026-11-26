@@ -233,7 +233,8 @@ function getFormulaSeparator(spreadsheet) {
 }
 
 /**
- * Parser dat obsługujący instancje Date, numery seryjne oraz stringi (YYYY-MM-DD i DD.MM.YYYY)
+ * Parser dat obsługujący instancje Date, numery seryjne oraz stringi
+ * (YYYY-MM-DD, DD.MM.YYYY, DD,MM,YY, DD.MM.YY z rozszerzeniem roku 2-cyfrowego)
  */
 function parseDateValue(val) {
   if (val === null || val === undefined || val === "") return null;
@@ -242,19 +243,115 @@ function parseDateValue(val) {
     return (val - 25569) * 86400 * 1000;
   }
   if (typeof val === "string") {
-    const s = val.trim();
+    let s = val.trim();
     if (!s) return null;
-    let d = new Date(s);
-    if (!isNaN(d.getTime())) return d.getTime();
-    const m1 = s.match(/^(\d{4})-(\d{2})-(\d{2})[\sT](\d{2}):(\d{2})(?::(\d{2}))?$/);
+    
+    // Normalizacja przecinków na kropki (np. "27,11,26" -> "27.11.26")
+    s = s.replace(/,/g, ".");
+    
+    // Format YYYY-MM-DD z opcjonalnym czasem
+    const m1 = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[\sT](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
     if (m1) {
-      d = new Date(Number(m1[1]), Number(m1[2]) - 1, Number(m1[3]), Number(m1[4]), Number(m1[5]), Number(m1[6] || 0));
+      const yr = Number(m1[1]);
+      const mo = Number(m1[2]) - 1;
+      const da = Number(m1[3]);
+      const hr = Number(m1[4] || 0);
+      const mi = Number(m1[5] || 0);
+      const se = Number(m1[6] || 0);
+      const d = new Date(yr, mo, da, hr, mi, se);
       if (!isNaN(d.getTime())) return d.getTime();
     }
-    const m2 = s.match(/^(\d{2})\.(\d{2})\.(\d{4})[\sT](\d{2}):(\d{2})(?::(\d{2}))?$/);
+    
+    // Format DD.MM.YYYY lub DD.MM.YY z opcjonalnym czasem
+    const m2 = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2}|\d{4})(?:[\sT](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
     if (m2) {
-      d = new Date(Number(m2[3]), Number(m2[2]) - 1, Number(m2[1]), Number(m2[4]), Number(m2[5]), Number(m2[6] || 0));
+      let yr = Number(m2[3]);
+      if (yr < 100) yr += 2000;
+      const mo = Number(m2[2]) - 1;
+      const da = Number(m2[1]);
+      const hr = Number(m2[4] || 0);
+      const mi = Number(m2[5] || 0);
+      const se = Number(m2[6] || 0);
+      const d = new Date(yr, mo, da, hr, mi, se);
       if (!isNaN(d.getTime())) return d.getTime();
+    }
+
+    let d = new Date(s);
+    if (!isNaN(d.getTime())) return d.getTime();
+  }
+  return null;
+}
+
+/**
+ * Oblicza termin SLA z uwzględnieniem roboczych godzin biura POK Kartuzy (Pon-Pt 07:00-16:00, 540 min/dzień)
+ * @param {Date|number} startDate Data początkowa (np. data zgłoszenia)
+ * @param {number} minutesMin Minuty SLA (np. PILNY: 15, WYSOKI: 60, STANDARDOWY: 240, NISKI: 1440)
+ * @returns {Date} Termin końcowy SLA
+ */
+function calculateBusinessHoursDeadline(startDate, minutesMin) {
+  const baseTime = startDate instanceof Date ? startDate.getTime() : (Number(startDate) || Date.now());
+  let current = new Date(baseTime);
+  let remainingMinutes = Math.max(1, Number(minutesMin) || 240);
+
+  const WORK_START_HOUR = 7;
+  const WORK_END_HOUR = 16;
+
+  while (remainingMinutes > 0) {
+    const day = current.getDay(); // 0: Nd, 6: Sob
+    if (day === 0) { // Niedziela -> przeskok do poniedziałku 07:00
+      current.setDate(current.getDate() + 1);
+      current.setHours(WORK_START_HOUR, 0, 0, 0);
+      continue;
+    }
+    if (day === 6) { // Sobota -> przeskok do poniedziałku 07:00
+      current.setDate(current.getDate() + 2);
+      current.setHours(WORK_START_HOUR, 0, 0, 0);
+      continue;
+    }
+
+    const currentMinuteOfDay = current.getHours() * 60 + current.getMinutes();
+    const startMinuteOfDay = WORK_START_HOUR * 60;
+    const endMinuteOfDay = WORK_END_HOUR * 60;
+
+    if (currentMinuteOfDay < startMinuteOfDay) {
+      current.setHours(WORK_START_HOUR, 0, 0, 0);
+      continue;
+    }
+    if (currentMinuteOfDay >= endMinuteOfDay) {
+      current.setDate(current.getDate() + 1);
+      current.setHours(WORK_START_HOUR, 0, 0, 0);
+      continue;
+    }
+
+    const remainingInWorkDay = endMinuteOfDay - currentMinuteOfDay;
+    if (remainingMinutes <= remainingInWorkDay) {
+      current = new Date(current.getTime() + remainingMinutes * 60 * 1000);
+      remainingMinutes = 0;
+    } else {
+      remainingMinutes -= remainingInWorkDay;
+      current.setDate(current.getDate() + 1);
+      current.setHours(WORK_START_HOUR, 0, 0, 0);
+    }
+  }
+  return current;
+}
+
+/**
+ * Bezpiecznie pobiera instancję arkusza SmartCare, również przy wywołaniach z wyzwalaczy czasowych
+ * bez aktywnego arkusza (zapisane ID w ScriptProperties)
+ */
+function getSmartCareSpreadsheet() {
+  try {
+    const active = SpreadsheetApp.getActiveSpreadsheet();
+    if (active) return active;
+  } catch (_) {}
+
+  const storedId = PropertiesService.getScriptProperties().getProperty("SMARTCARE_SPREADSHEET_ID");
+  if (storedId) {
+    try {
+      return SpreadsheetApp.openById(storedId);
+    } catch (e) {
+      Logger.log("Nie można otworzyć arkusza po zapisanym ID: " + e.toString());
     }
   }
   return null;
@@ -310,6 +407,9 @@ function calculateDashboardMetrics(ticketSheet) {
     pendingAiCount: 0,
     urgentHighCount: 0,
     overdueSlaCount: 0,
+    overdueFirstResponseSlaCount: 0,
+    overdueNextActionCount: 0,
+    historicalOverdueFirstResponseCount: 0,
     missingFirstResponseCount: 0,
     missingNextStepCount: 0,
     waitingResidentCount: 0,
@@ -475,10 +575,26 @@ function calculateDashboardMetrics(ticketSheet) {
         metrics.missingFirstResponseCount++;
       }
 
-      // Kontrola SLA
+      // Kontrola SLA 1. reakcji (v0.2.8):
+      // Nie oznaczamy jako przeterminowanego, jeśli pierwsza odpowiedź została udzielona w terminie!
       const slaTime = slaDeadlineIdx !== -1 ? parseDateValue(row[slaDeadlineIdx]) : null;
-      if (slaTime && now.getTime() > slaTime && !firstContactTime) {
-        metrics.overdueSlaCount++;
+      if (slaTime) {
+        if (!firstContactTime) {
+          if (now.getTime() > slaTime) {
+            metrics.overdueSlaCount++;
+            metrics.overdueFirstResponseSlaCount++;
+          }
+        } else {
+          if (firstContactTime > slaTime) {
+            metrics.historicalOverdueFirstResponseCount++;
+          }
+        }
+      }
+
+      // Kontrola terminu kolejnego działania (odrębnie od SLA pierwszej reakcji! v0.2.8)
+      const actDeadline = actionDeadlineIdx !== -1 ? parseDateValue(row[actionDeadlineIdx]) : null;
+      if (actDeadline && now.getTime() > actDeadline) {
+        metrics.overdueNextActionCount++;
       }
 
       // Brak kolejnego kroku
@@ -496,7 +612,6 @@ function calculateDashboardMetrics(ticketSheet) {
       }
 
       // Zaplanowane na dzisiaj
-      const actDeadline = actionDeadlineIdx !== -1 ? parseDateValue(row[actionDeadlineIdx]) : null;
       if (actDeadline) {
         const dStr = Utilities.formatDate(new Date(actDeadline), "Europe/Warsaw", "yyyy-MM-dd");
         if (dStr === todayStr) metrics.dueTodayCount++;
@@ -525,6 +640,13 @@ function calculateDashboardMetrics(ticketSheet) {
  * Konfiguruje zakładkę USTAWIENIA z autentycznym linkiem do opinii Google i regułami SLA
  */
 function setupSettingsSheet(spreadsheet) {
+  // Zapamiętanie ID arkusza dla wyzwalaczy czasowych
+  if (spreadsheet && spreadsheet.getId) {
+    try {
+      PropertiesService.getScriptProperties().setProperty("SMARTCARE_SPREADSHEET_ID", spreadsheet.getId());
+    } catch (_) {}
+  }
+
   let settingsSheet = spreadsheet.getSheetByName(SMARTCARE_SETUP_CONFIG.sheetTabs.settings);
   if (!settingsSheet) {
     settingsSheet = spreadsheet.insertSheet(SMARTCARE_SETUP_CONFIG.sheetTabs.settings);
@@ -1469,6 +1591,99 @@ function installFormSubmitTrigger(spreadsheet) {
 }
 
 /**
+ * Instaluje cykliczny wyzwalacz czasowy do automatycznego przetwarzania kolejki AI
+ * oraz odzyskiwania pominiętych zgłoszeń formularza (v0.2.8).
+ * Zapewnia dokładnie JEDEN wyzwalacz tego typu (deduplikacja).
+ */
+function installScheduledQueueTrigger(spreadsheet) {
+  const triggers = ScriptApp.getProjectTriggers();
+  let count = 0;
+
+  for (let t of triggers) {
+    if (t.getHandlerFunction() === "scheduledQueueAndReconcile") {
+      count++;
+      if (count > 1) {
+        ScriptApp.deleteTrigger(t);
+        Logger.log("Usunięto zduplikowany wyzwalacz scheduledQueueAndReconcile.");
+      }
+    }
+  }
+
+  if (count === 0) {
+    ScriptApp.newTrigger("scheduledQueueAndReconcile")
+      .timeBased()
+      .everyMinutes(1)
+      .create();
+    Logger.log("Zainstalowano cykliczny wyzwalacz scheduledQueueAndReconcile (co 1 minutę).");
+  }
+}
+
+/**
+ * Cykliczne zadanie uruchamiane przez wyzwalacz czasowy (oraz ręcznie z menu).
+ * Działa bez konieczności obecności aktywnego arkusza (używa getSmartCareSpreadsheet).
+ */
+function scheduledQueueAndReconcile() {
+  const ss = getSmartCareSpreadsheet();
+  if (!ss) {
+    Logger.log("[scheduledQueueAndReconcile] Brak dostępu do arkusza.");
+    return;
+  }
+  const ticketSheet = ss.getSheetByName(SMARTCARE_SETUP_CONFIG.sheetTabs.tickets);
+  if (!ticketSheet || ticketSheet.getLastRow() <= 1) return;
+
+  // 1. Odzyskanie zawieszonych analiz AI w stanie "W trakcie" (>10 min)
+  recoverStuckAiAnalyses(ticketSheet);
+
+  // 2. Automatyczne wykrycie i uzupełnienie brakujących zgłoszeń formularza
+  reconcileUnprocessedFormResponses(ticketSheet);
+
+  // 3. Przetworzenie kolejki AI z kontrolą limitu 15 RPM
+  if (typeof processAiAnalysisQueue === "function") {
+    processAiAnalysisQueue(3);
+  }
+}
+
+/**
+ * Odzyskuje zgłoszenia zawieszone w stanie "W trakcie" dłużej niż 10 minut
+ */
+function recoverStuckAiAnalyses(ticketSheet) {
+  if (!ticketSheet || ticketSheet.getLastRow() <= 1) return;
+  const lastRow = ticketSheet.getLastRow();
+  const lastCol = ticketSheet.getLastColumn();
+  const headers = ticketSheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim());
+
+  const idCol = headers.indexOf("ID Zgłoszenia") + 1;
+  const aiStateCol = headers.indexOf("Stan analizy AI") + 1;
+  const aiErrorCol = headers.indexOf("Szczegóły błędu AI") + 1;
+
+  if (aiStateCol <= 0) return;
+
+  const states = ticketSheet.getRange(2, aiStateCol, lastRow - 1, 1).getValues();
+  const props = PropertiesService.getScriptProperties();
+  const now = Date.now();
+  const TEN_MINUTES_MS = 10 * 60 * 1000;
+
+  for (let i = 0; i < states.length; i++) {
+    const stateVal = String(states[i][0] || "").trim();
+    if (stateVal === "W trakcie") {
+      const rowNum = i + 2;
+      const ticketId = idCol > 0 ? String(ticketSheet.getRange(rowNum, idCol).getValue() || "").trim() : `Wiersz ${rowNum}`;
+      const inProgressTime = Number(props.getProperty("AI_IN_PROGRESS_" + ticketId) || 0);
+
+      // Jeśli minęło ponad 10 minut (lub brak znacznika czasu), zresetuj do "Oczekuje"
+      if (!inProgressTime || (now - inProgressTime > TEN_MINUTES_MS)) {
+        ticketSheet.getRange(rowNum, aiStateCol).setValue("Oczekuje");
+        if (aiErrorCol > 0) {
+          ticketSheet.getRange(rowNum, aiErrorCol).setValue("Automatycznie wznowiono analizę po przekroczeniu limitu czasu (timeout > 10 min)");
+        }
+        props.deleteProperty("AI_IN_PROGRESS_" + ticketId);
+        Logger.log(`[Auto-Recovery] Zresetowano zawieszoną analizę dla zgłoszenia ${ticketId} (wiersz ${rowNum}) do stanu Oczekuje.`);
+      }
+    }
+  }
+}
+
+/**
  * Obsługa nowego zgłoszenia po wysłaniu formularza Google Forms (v0.2.7)
  * - Nadanie unikalnego ID
  * - Wyliczenie terminu SLA
@@ -1537,11 +1752,11 @@ function handleNewTicketSubmit(e) {
       sheet.getRange(row, opinionCol).setValue("NIE");
     }
 
-    // Wyliczenie wstępnego terminu SLA (4 godziny dla zgłoszenia Standardowego)
+    // Wyliczenie wstępnego terminu SLA w godzinach roboczych (4 godziny dla zgłoszenia Standardowego)
     if (slaDeadlineCol > 0 && !sheet.getRange(row, slaDeadlineCol).getValue()) {
       const now = new Date();
       const slaMinutes = SMARTCARE_SETUP_CONFIG.slaMinutes["STANDARDOWY"] || 240;
-      const slaDate = new Date(now.getTime() + slaMinutes * 60 * 1000);
+      const slaDate = calculateBusinessHoursDeadline(now, slaMinutes);
       sheet.getRange(row, slaDeadlineCol).setValue(slaDate).setNumberFormat("yyyy-MM-dd HH:mm");
     }
 
@@ -1750,8 +1965,9 @@ function updateSystemToV027() {
     // 3. Konfiguracja Dashboardu z metrykami CSI
     setupDashboardSheet(ss);
 
-    // 4. Aktualizacja wyzwalaczy
+    // 4. Aktualizacja wyzwalaczy (formularz + cykliczna kolejka AI v0.2.8)
     installFormSubmitTrigger(ss);
+    installScheduledQueueTrigger(ss);
 
     // 5. Aktualizacja rejestru testów dla scenariuszy A-J
     setupTestsSheet(ss);
@@ -1891,7 +2107,7 @@ function migrateTicketsDataV027(ticketSheet) {
     if (slaDeadlineIdx !== -1 && !data[r][slaDeadlineIdx]) {
       const created = timeIdx !== -1 ? parseDateValue(data[r][timeIdx]) : null;
       if (created) {
-        const slaDate = new Date(created + 240 * 60 * 1000); // 4h
+        const slaDate = calculateBusinessHoursDeadline(new Date(created), 240);
         ticketSheet.getRange(rowNum, slaDeadlineIdx + 1).setValue(slaDate).setNumberFormat("yyyy-MM-dd HH:mm");
       }
     }
@@ -1921,12 +2137,12 @@ function updateSystemToV026() {
  * @returns {{ reconciledCount: number, reconciledIds: string[] }}
  */
 function reconcileUnprocessedFormResponses(ticketSheet) {
-  const sheet = ticketSheet || SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SMARTCARE_SETUP_CONFIG.sheetTabs.tickets);
+  const ss = ticketSheet ? ticketSheet.getParent() : getSmartCareSpreadsheet();
+  const sheet = ticketSheet || (ss ? ss.getSheetByName(SMARTCARE_SETUP_CONFIG.sheetTabs.tickets) : null);
   if (!sheet || sheet.getLastRow() <= 1) {
     return { reconciledCount: 0, reconciledIds: [] };
   }
 
-  const lastRow = sheet.getLastRow();
   const lastCol = sheet.getLastColumn();
   const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim());
 
@@ -1957,22 +2173,28 @@ function reconcileUnprocessedFormResponses(ticketSheet) {
 
   if (idIdx === -1) return { reconciledCount: 0, reconciledIds: [] };
 
-  const data = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
   const reconciledIds = [];
-
   const lock = LockService.getScriptLock();
+
   try {
     lock.waitLock(10000);
 
+    // KRYTYCZNE (v0.2.8): Odczytujemy dane wiersza PO założeniu blokady!
+    const lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return { reconciledCount: 0, reconciledIds: [] };
+    const data = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+
     for (let i = 0; i < data.length; i++) {
       const rowNum = i + 2;
-      const currentId = String(data[i][idIdx] || "").trim();
+      // Pobieramy numer zgłoszenia bezpośrednio pod blokadą, sprawdzając również aktualną wartość w komórce
+      const currentCellVal = String(sheet.getRange(rowNum, idIdx + 1).getValue() || "").trim();
       const timestampVal = timeIdx !== -1 ? data[i][timeIdx] : "";
       const descVal = descIdx !== -1 ? String(data[i][descIdx] || "").trim() : "";
       const typeVal = typeIdx !== -1 ? String(data[i][typeIdx] || "").trim() : "";
 
       const hasFormData = Boolean(timestampVal || descVal || typeVal);
-      if (hasFormData && !currentId) {
+      // Jeśli zgłoszenie ma dane formularza, ale NIE ma jeszcze ID (nie zostało w międzyczasie nadane przez submit)
+      if (hasFormData && !currentCellVal) {
         const newId = getNextUniqueTicketId(sheet, idIdx + 1);
         sheet.getRange(rowNum, idIdx + 1).setValue(newId);
         PropertiesService.getScriptProperties().setProperty("LAST_ASSIGNED_TICKET_ID", newId);
@@ -1994,8 +2216,9 @@ function reconcileUnprocessedFormResponses(ticketSheet) {
         }
 
         if (slaIdx !== -1 && !data[i][slaIdx]) {
-          const createdDate = parseDateValue(timestampVal) || new Date();
-          const slaDate = new Date(createdDate.getTime() + 240 * 60 * 1000);
+          const createdParsed = parseDateValue(timestampVal);
+          const createdDate = createdParsed ? new Date(createdParsed) : new Date();
+          const slaDate = calculateBusinessHoursDeadline(createdDate, 240);
           sheet.getRange(rowNum, slaIdx + 1).setValue(slaDate).setNumberFormat("yyyy-MM-dd HH:mm");
         }
 
@@ -2015,6 +2238,7 @@ function reconcileUnprocessedFormResponses(ticketSheet) {
     } catch (_) {}
   }
 
+  // UWAGA: Nie wysyłamy powiadomień e-mail w reconciliation (zapobieganie spamowi dla historycznych spraw)
   return { reconciledCount: reconciledIds.length, reconciledIds: reconciledIds };
 }
 
@@ -2063,6 +2287,8 @@ function apiGetTicketsList(filters = {}) {
   const nextActionIdx = getIdx("Następne działanie");
   const sideIdx = getIdx("Strona odpowiedzialna");
   const slaIdx = getIdx("Termin SLA 1. reakcji");
+  const empIdx = getIdx("Pracownik odpowiedzialny");
+  const nextActionDeadlineIdx = getIdx("Termin następnego działania");
 
   const now = new Date();
   const list = [];
@@ -2097,11 +2323,12 @@ function apiGetTicketsList(filters = {}) {
 
     const slaDate = slaIdx !== -1 ? parseDateValue(row[slaIdx]) : null;
     const isClosed = statusVal === "Rozwiązane" || statusVal === "Zamknięte";
-    const isOverdue = Boolean(!isClosed && slaDate && slaDate < now);
+    const isOverdue = Boolean(!isClosed && slaDate && slaDate < now.getTime());
+    const nextActDeadlineTime = nextActionDeadlineIdx !== -1 ? parseDateValue(row[nextActionDeadlineIdx]) : null;
 
     list.push({
       ticketId: ticketId,
-      timestamp: timeIdx !== -1 && row[timeIdx] ? Utilities.formatDate(parseDateValue(row[timeIdx]) || new Date(), "Europe/Warsaw", "yyyy-MM-dd HH:mm") : "",
+      timestamp: timeIdx !== -1 && row[timeIdx] ? Utilities.formatDate(new Date(parseDateValue(row[timeIdx]) || Date.now()), "Europe/Warsaw", "yyyy-MM-dd HH:mm") : "",
       ticketType: typeIdx !== -1 ? String(row[typeIdx] || "") : "",
       wasteFraction: fractionIdx !== -1 ? String(row[fractionIdx] || "") : "",
       city: city,
@@ -2115,9 +2342,11 @@ function apiGetTicketsList(filters = {}) {
       priority: prioVal,
       aiState: aiStateVal,
       aiErrorDetails: aiErrorIdx !== -1 ? String(row[aiErrorIdx] || "") : "",
+      assignedEmployee: empIdx !== -1 ? String(row[empIdx] || "") : "",
       nextAction: nextActionIdx !== -1 ? String(row[nextActionIdx] || "") : "",
       responsibleSide: sideIdx !== -1 ? String(row[sideIdx] || "Przedsiębiorstwo") : "Przedsiębiorstwo",
-      slaDeadline: slaDate ? Utilities.formatDate(slaDate, "Europe/Warsaw", "yyyy-MM-dd HH:mm") : "",
+      nextActionDeadline: nextActDeadlineTime ? Utilities.formatDate(new Date(nextActDeadlineTime), "Europe/Warsaw", "yyyy-MM-dd HH:mm") : "",
+      slaDeadline: slaDate ? Utilities.formatDate(new Date(slaDate), "Europe/Warsaw", "yyyy-MM-dd HH:mm") : "",
       overdueSla: isOverdue
     });
   }
@@ -2351,6 +2580,25 @@ function apiUpdateTicket(ticketId, updates = {}) {
       residentContactResult: "Wynik kontaktu z mieszkańcem"
     };
 
+    // Sprawdzenie wymogu resolutionMethod przy zamykaniu (v0.2.8)
+    const targetStatus = updates.status ? String(updates.status).trim() : "";
+    const isClosing = targetStatus === "Rozwiązane" || targetStatus === "Zamknięte";
+    
+    if (isClosing) {
+      const resCol = headers.indexOf("Sposób rozwiązania sprawy") + 1;
+      const existingRes = resCol > 0 ? String(sheet.getRange(row, resCol).getValue() || "").trim() : "";
+      const updateRes = updates.resolutionMethod !== undefined ? String(updates.resolutionMethod).trim() : "";
+      const effectiveRes = updateRes || existingRes;
+
+      if (!effectiveRes || effectiveRes.length < 5) {
+        throw new Error("Nie można zamknąć zgłoszenia bez podania potwierdzonego sposobu rozwiązania sprawy (resolutionMethod).");
+      }
+    }
+
+    const statusCol = headers.indexOf("Status") + 1;
+    const existingStatus = statusCol > 0 ? String(sheet.getRange(row, statusCol).getValue() || "").trim() : "";
+    const wasAlreadyClosed = existingStatus === "Rozwiązane" || existingStatus === "Zamknięte";
+
     const updatedKeys = [];
     for (let k in updates) {
       if (allowedFields[k]) {
@@ -2359,8 +2607,24 @@ function apiUpdateTicket(ticketId, updates = {}) {
       }
     }
 
-    if (updates.status === "Rozwiązane" || updates.status === "Zamknięte") {
+    // Tylko przy przejściu ze statusu otwartego na zamknięty ustawiamy nową datę rozwiązania
+    if (isClosing && !wasAlreadyClosed) {
       setField("Data rozwiązania", new Date());
+    }
+
+    // Jeśli zaktualizowano priorytet, przelicz SLA na podstawie sygnatury czasowej zgłoszenia i godzin roboczych
+    if (updates.priority) {
+      const timeCol = headers.indexOf("Sygnatura czasowa") + 1;
+      const slaCol = headers.indexOf("Termin SLA 1. reakcji") + 1;
+      if (slaCol > 0) {
+        const timeVal = timeCol > 0 ? sheet.getRange(row, timeCol).getValue() : null;
+        const createdParsed = parseDateValue(timeVal);
+        const createdDate = createdParsed ? new Date(createdParsed) : new Date();
+        const pUpper = String(updates.priority).toUpperCase().trim();
+        const slaMinutes = SMARTCARE_SETUP_CONFIG.slaMinutes[pUpper] || 240;
+        const newSla = calculateBusinessHoursDeadline(createdDate, slaMinutes);
+        sheet.getRange(row, slaCol).setValue(newSla).setNumberFormat("yyyy-MM-dd HH:mm");
+      }
     }
 
     SpreadsheetApp.flush();
@@ -2377,10 +2641,11 @@ function apiUpdateTicket(ticketId, updates = {}) {
 /**
  * Uruchamia pojedynczą analizę AI dla danego zgłoszenia przez API
  * @param {string} ticketId Numer sprawy
- * @returns {{ success: boolean, message: string }}
+ * @returns {{ success: boolean, ticketId?: string, aiState?: string, message?: string, error?: string }}
  */
 function apiTriggerAiAnalysis(ticketId) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSmartCareSpreadsheet() || SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) return { success: false, error: "Brak arkusza kalkulacyjnego." };
   const sheet = ss.getSheetByName(SMARTCARE_SETUP_CONFIG.sheetTabs.tickets);
   if (!sheet) return { success: false, error: "Brak zakładki ZGŁOSZENIA." };
 
@@ -2402,10 +2667,30 @@ function apiTriggerAiAnalysis(ticketId) {
 
   if (typeof triggerAutoAiAnalysisForTicket === "function") {
     try {
-      triggerAutoAiAnalysisForTicket(sheet, targetRow, headers, ticketId);
-      return { success: true, message: `Pomyślnie uruchomiono analizę AI dla zgłoszenia ${ticketId}.` };
+      triggerAutoAiAnalysisForTicket(sheet, targetRow, headers, ticketId, true);
+
+      const aiStateCol = headers.indexOf("Stan analizy AI") + 1;
+      const aiErrorCol = headers.indexOf("Szczegóły błędu AI") + 1;
+      const finalState = aiStateCol > 0 ? String(sheet.getRange(targetRow, aiStateCol).getValue() || "").trim() : "";
+      const errorDetails = aiErrorCol > 0 ? String(sheet.getRange(targetRow, aiErrorCol).getValue() || "").trim() : "";
+
+      if (finalState === "Błąd") {
+        return {
+          success: false,
+          ticketId: ticketId,
+          aiState: "Błąd",
+          error: errorDetails || "Analiza AI zakończyła się błędem."
+        };
+      }
+
+      return {
+        success: true,
+        ticketId: ticketId,
+        aiState: finalState,
+        message: `Analiza AI dla ${ticketId} zakończona w stanie: ${finalState}.`
+      };
     } catch (e) {
-      return { success: false, error: e.toString() };
+      return { success: false, ticketId: ticketId, aiState: "Błąd", error: e.toString() };
     }
   }
   return { success: false, error: "Funkcja triggerAutoAiAnalysisForTicket nie jest dostępna." };
@@ -2454,8 +2739,9 @@ function updateSystemToV028() {
     // 3. Konfiguracja Dashboardu z sekcją Diagnostyki Silnika & AI
     setupDashboardSheet(ss);
 
-    // 4. Aktualizacja wyzwalaczy
+    // 4. Aktualizacja wyzwalaczy (formularz + cykliczna kolejka AI v0.2.8)
     installFormSubmitTrigger(ss);
+    installScheduledQueueTrigger(ss);
 
     // 5. Aktualizacja rejestru testów
     setupTestsSheet(ss);

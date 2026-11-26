@@ -88,3 +88,56 @@ Niniejsza procedura służy do zweryfikowania poprawności działania aplikacji 
 2. Każdy zrealizowany test należy oznaczyć statusem `Zaliczony` lub `Niezaliczony`.
 3. W kolumnie `Rzeczywisty rezultat` należy opisać faktyczne zachowanie systemu podczas testu.
 4. Wszelkie uwagi i spostrzeżenia należy zarejestrować w kolumnie `Uwagi`.
+
+---
+
+## 5. Zautomatyzowany Rejestr Testów Audytowych v0.2.8 (`tests/test-v028-audit.js`)
+
+W odpowiedzi na niezależny audyt kodu zaimplementowano pełny zestaw 33 testów automatycznych weryfikujących poprawność algorytmów silnika. Wszystkie testy są uruchamiane lokalnie w piaskownicy Node.js z atrapami usług Apps Script:
+
+```bash
+node tests/test-v028-audit.js
+```
+
+### Wyniki wykonania testów audytowych:
+
+| Moduł / Grupa audytowa | Liczba testów | Status | Kluczowe weryfikowane aspekty |
+|---|:---:|:---:|---|
+| **SUITE 1: Automatyczna kolejka AI i Rate Limiting** | 7 | **PASS (7/7)** | Minimalny odstęp 4200 ms (15 RPM), 60s 429 Cooldown backoff, limit 3 prób na ticket, reset zgłoszeń "W trakcie" >10 min, concurrency lock, unikalność wyzwalacza czasowego, odzyskiwanie arkusza przez `SMARTCARE_SPREADSHEET_ID` |
+| **SUITE 2: Rejestracja zgłoszeń & Reconciliation Lock Race** | 3 | **PASS (3/3)** | Odczyt komórki pod blokadą bez nadpisywania ID, brak e-maili dla opóźnionych zgłoszeń, zwalnianie blokady <200ms |
+| **SUITE 3: Komunikacja i Szablony Awaryjne** | 5 | **PASS (5/5)** | Dynamiczny tekst aktualizacji postępu (brak sztywnego dyspozytora), dedykowane szablony awaryjne (pochwała bez GPS, niekompletne z prośbą o dane, reklamacja z weryfikacją operacyjną), ignorowanie starego szkicu przy błędzie AI |
+| **SUITE 4: Priorytety i Robocze SLA (07:00-16:00)** | 4 | **PASS (4/4)** | Okno robocze 7:00-16:00 Pn-Pt (540 min/dzień), weekend startuje w poniedziałek o 7:00, brak fałszywego przeterminowania gdy odpowiedź w terminie, rozróżnienie SLA 1. reakcji od terminu kolejnego działania |
+| **SUITE 5: Walidacja danych i Edge Cases** | 7 | **PASS (7/7)** | Odrzucenie "niewiadoma" jako ulicy, brak miejscowości, metale i tworzywa sztuczne (case-insensitive), wykrywanie powtarzalności ("po raz siódmy", "znowu"), obsługa wniosku o kontakt, parser dat (`27,11,26`, `27.11.26`, `27,11,2026`) |
+| **SUITE 6: Ochrona danych osobowych (PII)** | 3 | **PASS (3/3)** | Maskowanie imienia, nazwiska, ulicy, telefonu i e-maila w opisie, PII High-Risk Guard (wstrzymanie wysyłki do AI przy wykryciu nr kart/dowodu osobistego), twarda blokada wysyłki poza `wsb.student.tester@gmail.com` |
+| **SUITE 7: Warstwa Service API** | 4 | **PASS (4/4)** | Blokada statusu Rozwiązane/Zamknięte bez `resolutionMethod`, brak nadpisywania daty rozwiązania przy kolejnych edycjach, poprawne obiekty Date w `apiGetTicketsList`, zwracanie rzeczywistego stanu i błędów w `apiTriggerAiAnalysis` |
+| **ŁĄCZNIE:** | **33** | **PASS (33/33)** | **100% ZALICZONE** |
+
+---
+
+## 6. Procedura weryfikacji manualnej na rzeczywistym koncie Google (`wsb.student.tester@gmail.com`)
+
+> [!IMPORTANT]
+> **Rozróżnienie środowisk testowych:**
+> - **Testy lokalne (`tests/test-v028-audit.js`):** Wykonywane w środowisku deweloperskim Node.js. Sprawdzają czystą logikę algorytmiczną, kalkulatory terminów SLA, mechanizmy blokad i pre-walidację bez angażowania usług zewnętrznych.
+> - **Testy w chmurze Google:** Wykonywane w arkuszu Google powiązanym z kontem `wsb.student.tester@gmail.com`. Weryfikują fizyczne działanie interfejsu użytkownika, menu, wyzwalaczy Apps Script, arkusza oraz wysyłki e-mail.
+
+### Instrukcja wdrożenia i weryfikacji krok po kroku:
+1. **Aktualizacja kodu w Google Apps Script:**
+   - Otwórz edytor Apps Script z poziomu arkusza CRM (*Rozszerzenia -> Apps Script*).
+   - Zastąp zawartość plików `setup.gs`, `ai.gs` i `communication.gs` zaktualizowanym kodem z repozytorium (katalog `google/`).
+   - Zapisz projekt (*Ctrl+S*).
+2. **Uruchomienie procedury aktualizacji:**
+   - Wybierz i uruchom jednorazowo funkcję `updateSystemToV028` lub odśwież arkusz i wybierz z menu *SmartCare -> 🚀 Aktualizuj system do v0.2.8*.
+   - Upewnij się, że wyświetlił się komunikat o pomyślnej aktualizacji, a identyfikator arkusza został trwale zapisany w Script Properties.
+3. **Weryfikacja wyzwalaczy cyklicznych:**
+   - Przejdź do zakładki *Wyzwalacze* (ikona zegara po lewej stronie w edytorze Apps Script).
+   - Zweryfikuj, że istnieje **dokładnie jeden** wyzwalacz czasowy `scheduledQueueAndReconcile` z interwałem co 5 minut oraz wyzwalacz formularza `handleNewTicketSubmit`.
+4. **Weryfikacja odzyskania pominiętego zgłoszenia:**
+   - W arkuszu *ZGŁOSZENIA* sprawdź wiersz z dnia 26.11.2026, 10:42:11 (uszkodzone koło pojemnika w Prokowie).
+   - Zgłoszenie powinno posiadać unikalne ID (np. `ELW-2026-0011`), status *Nowe*, priorytet *STANDARDOWY* oraz stan AI *Oczekuje* lub *Gotowa*.
+5. **Weryfikacja szablonów i komunikacji:**
+   - Zaznacz zgłoszenie będące pochwałą i wybierz *SmartCare -> Przygotuj potwierdzenie przyjęcia*. Upewnij się, że szablon nie zawiera wzmianki o weryfikacji GPS.
+   - Wybierz *SmartCare -> Przygotuj aktualizację postępu*. Upewnij się, że treść wiadomości bazuje na notatkach operacyjnych i nie zawiera sztywnej frazy o dyspozytorze.
+6. **Weryfikacja ochrony priorytetu pracownika:**
+   - Zmień ręcznie priorytet wybranego zgłoszenia na *PILNY*.
+   - Uruchom *SmartCare -> Analizuj zgłoszenie przez AI*. Upewnij się, że zatwierdzony przez pracownika priorytet *PILNY* nie został nadpisany przez sugestię AI.

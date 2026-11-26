@@ -5,64 +5,63 @@ Wszystkie istotne zmiany i wydania w projekcie **ELWOZ ECO SmartCare** są rejes
 ---
 
 ## [0.2.8] – 2026-11-26
-### Stabilizacja silnika CRM, obsługa limitów 15 RPM, eliminacja blokad rejestracji i przygotowanie warstwy Service API
+### Stabilizacja silnika CRM, obsługa limitów 15 RPM, eliminacja blokad rejestracji, audyt kolejki AI i warstwa Service API pod v0.3.0
 
-Wydanie **v0.2.8** stanowi kluczową aktualizację stabilizacyjną silnika przed planowaną budową aplikacji webowej *SmartCare Manager v0.3.0*. Wszystkie modyfikacje powstały na bazie rzeczywistych testów użytkowników przeprowadzonych na koncie Google.
+Wydanie **v0.2.8** stanowi kluczową aktualizację stabilizacyjną silnika przed planowaną budową aplikacji webowej *SmartCare Manager v0.3.0*. Wszystkie modyfikacje powstały na bazie rzeczywistych testów użytkowników oraz niezależnego audytu kodu, zapewniając bezwzględną niezawodność, eliminację zacięć kolejki AI, obsługę limitów bezpłatnego planu Gemini oraz pełną ochronę danych.
 
-#### Kluczowe poprawki i usprawnienia silnika:
-1. **Eliminacja blokady rejestracji zgłoszeń (LockService Decoupling):**
-   - **Problem:** W wersji v0.2.7 wywołanie powiadomień e-mail oraz synchronicznej analizy Gemini AI następowało wewnątrz sekcji LockService. Równoczesne przesłanie kolejnego formularza powodowało przekroczenie limitu czasu oczekiwania na blokadę (timeout 30s) i pominięcie rejestracji wiersza (brak ID, statusu, SLA).
-   - **Rozwiązanie:** Podział procedury `handleNewTicketSubmit` na dwie fazy:
-     - Faza 1: Błyskawiczna rejestracja ID, statusu ("Nowe"), priorytetu ("STANDARDOWY"), SLA (4h) i stanu AI ("Oczekuje") pod blokadą LockService (<200ms).
-     - Faza 2: Asynchroniczne wywołanie wysyłki e-mail i analizy AI bezwzględnie *poza* blokadą LockService w odizolowanych blokach `try/catch`.
-2. **Automatyczne przywracanie pominiętych zgłoszeń (`reconcileUnprocessedFormResponses`):**
-   - Moduł skanuje rejestr CRM i wykrywa odpowiedzi formularza posiadające treść, lecz pozbawione numeru ID (np. pominięte zgłoszenie z dnia 26.11.2026, godz. 10:42:11 dotyczące uszkodzonego koła pojemnika w Prokowie).
-   - Bezpiecznie nadaje kolejne unikalne identyfikatory (`ELW-2026-XXXX`), ustala wstępne SLA od daty wpłynięcia i kieruje sprawę do kolejki AI bez ponownego wysyłania historycznych powiadomień e-mail.
-3. **Nowa kolumna CRM `Szczegóły błędu AI` i zakaz pozorowanych wyników:**
-   - Wprowadzono dedykowaną kolumnę CRM rejestrującą dokładne, czytelne przyczyny błędów (np. limit 15 RPM, kod HTTP 429, timeout połączenia, brak klucza API).
-   - Zgodnie ze standardami jakości zrezygnowano z podstawiania szablonu awaryjnego jako autentycznego wyniku Gemini w przypadku wystąpienia błędu. Kolumny analizy AI nie są zanieczyszczane fałszywymi danymi.
-4. **Zarządzana kolejka analizy AI z ochroną limitu 15 RPM (`processAiAnalysisQueue`):**
-   - Ograniczenie bezpłatnego planu Google AI Studio wynosi 15 zapytań na minutę (15 RPM).
-   - Dodano funkcję `processAiAnalysisQueue(maxBatch = 5)` przetwarzającą zgłoszenia oczekujące i błędne z zachowaniem 2-sekundowego odstępu (`Utilities.sleep(2000)`) pomiędzy wywołaniami.
-   - Wdrożono zabezpieczenie przed duplikacją analizy (`forceRerun = false`).
-5. **Poprawa walidacji adresu i obsługa alfanumerycznych numerów posesji:**
-   - **Problem:** Kolumna formularza to `"Numer posesji lub identyfikator miejsca"`, a nie `"Numer posesji"`, co w v0.2.7 powodowało zwracanie wartości pustej i fałszywy komunikat o braku numeru posesji dla zgłoszeń `ELW-2026-0006`, `ELW-2026-0007`, `ELW-2026-0009`.
-   - **Rozwiązanie:** Wdrożenie funkcji `findHeaderIndex` z dynamiczną listą aliasów oraz funkcji `isHouseNumberPresent` akceptującej formaty alfanumeryczne (`15`, `24`, `4C`, `12A`, `1/2`, `3B/4`, `dz. 12`).
-   - **Ochrona prywatności (Privacy Rule):** Model Gemini otrzymuje wyłącznie status kompletności adresu (`KOMPLETNY` lub `NIEKOMPLETNY: brak numeru posesji`), bez surowych nazw ulic i numerów domów w prompcie.
-   - W przypadku kompletnego adresu model ma kategoryczny zakaz ponownego pytania mieszkańca o adres!
-6. **Rozszerzona pre-walidacja lokalna (`preValidateTicketData`):**
-   - Weryfikacja daty problemu: blokada dat w przyszłości oraz ostrzeżenie przy sprawach starszych niż 90 dni (wymóg weryfikacji archiwalnej).
-   - Weryfikacja wniosku o kontakt telefoniczny: wymóg obecności poprawnego numeru telefonu.
-   - Wykrywanie sprzeczności kategorii: pochwała z treścią reklamacji lub reklamacja z podziękowaniem.
-   - Wykrywanie sprzeczności frakcji oraz filtr pozorowanych odpowiedzi.
-7. **Dostosowanie rekomendacji AI do kategorii sprawy (CX/PR):**
-   - **Pochwała/Podziękowanie:** Sugerowany priorytet to **NISKI**. Sugerowane działanie to wpis do rejestru wyróżnień i przekazanie podziękowania załodze. Kategoryczny zakaz sugerowania kontroli GPS śmieciarki, kierowania do dyspozytora czy pytań o adres! Strona odpowiedzialna: *Przedsiębiorstwo*.
-   - **Zgłoszenie niekompletne:** Sugerowane działanie to kontakt z prośbą o doprecyzowanie danych. Strona odpowiedzialna: *Mieszkaniec*.
-   - **Zgłoszenie kompletne:** Sugerowane działanie to weryfikacja zlecenia i raportu GPS przez dyspozytora. Strona odpowiedzialna: *Przedsiębiorstwo*.
-   - Rozróżnienie działań planowanych od zrealizowanych: unikanie deklaracji o już wykonanych działaniach przed weryfikacją.
-8. **Struktura 4-punktowa pierwszej odpowiedzi (0 sekund oczekiwania):**
-   - Każda proponowana odpowiedź w otwartej sprawie jednoznacznie zawiera: (1) co zostało ustalone/zarejestrowane, (2) czego oczekujemy od mieszkańca (lub brak wymogów), (3) jaki jest kolejny krok przedsiębiorstwa, (4) kto jest stroną odpowiedzialną (ELWOZ ECO).
-9. **Ochrona manualnych decyzji pracownika o priorytecie:**
-   - Model AI sugeruje priorytet (`Sugerowany priorytet AI`), lecz nie nadpisuje ręcznie zatwierdzonego lub zmienionego przez pracownika priorytetu w kolumnie `Priorytet`.
-10. **Nowa Sekcja 4 Dashboardu: Diagnostyka Silnika & AI:**
-    - Monitorowanie: łączna liczba nadesłanych odpowiedzi formularza, liczba zarejestrowanych spraw, liczba nieprzetworzonych odpowiedzi (alarm na czerwono jeśli > 0), udane analizy AI, błędy AI oraz oczekujące w kolejce.
-    - Jeśli brak ocen satysfakcji, komórka średniej satysfakcji wyświetla czytelny napis `Brak ocen` zamiast wartości `0`.
-    - Funkcja `validateDashboardIntegrity` blokuje komunikat sukcesu, jeżeli wykryto nieprzetworzone odpowiedzi formularza lub błędy analizy AI.
-11. **Warstwa Service API dla przyszłej aplikacji SmartCare Manager v0.3.0:**
-    - Zaimplementowano bezstanowy interfejs programistyczny w Google Apps Script (`google.script.run`):
-      - `apiGetTicketsList(filters)` – pobieranie listy zgłoszeń z filtrowaniem,
-      - `apiGetTicketDetails(ticketId)` – pełne dane pojedynczego zgłoszenia,
-      - `apiGetAiAnalysis(ticketId)` – dane i diagnostyka analizy AI,
-      - `apiGetCommunicationHistory(ticketId)` – historia korespondencji,
-      - `apiGetDashboardStats()` – kompletne wskaźniki KPI,
-      - `apiGetNextActionsList()` – lista spraw wymagających pilnego działania,
-      - `apiGetDiagnostics()` – diagnostyka silnika, triggerów i konfiguracji,
-      - `apiUpdateTicket(ticketId, updates)` – bezpieczna modyfikacja pól operacyjnych,
-      - `apiTriggerAiAnalysis(ticketId)` – uruchomienie analizy AI dla sprawy,
-      - `apiReconcileUnprocessedTickets()` – automatyczne przywracanie pominiętych spraw.
-12. **Jednoklikowa aktualizacja do v0.2.8 (`updateSystemToV028`):**
-    - Dodaje kolumnę `Szczegóły błędu AI`, uruchamia automatyczne przywracanie pominiętych zgłoszeń, aktualizuje Dashboard z sekcją diagnostyczną oraz testy.
-    - Zachowuje 100% dotychczasowych danych, ustawień, zweryfikowanego linku Google Reviews oraz reguł serwerowych.
+#### Kluczowe poprawki i usprawnienia silnika (po audycie kodu v0.2.8):
+1. **Automatyczna cykliczna kolejka AI & Ochrona Limitów 15 RPM (`scheduledQueueAndReconcile`):**
+   - **Instalacja wyzwalacza czasowego:** Wprowadzono funkcję `installScheduledQueueTrigger` uruchamiającą cykliczne przetwarzanie kolejki i uzupełnianie pominiętych zgłoszeń co 5 minut.
+   - **Gwarancja unikalności wyzwalacza:** Mechanizm deduplikacji usuwa ewentualne zduplikowane wyzwalacze czasowe przed utworzeniem nowego (dokładnie 1 wyzwalacz typu `time-driven`).
+   - **Odporność na brak aktywnego arkusza (Trigger Context):** Funkcje wyzwalane czasowo odzyskują arkusz poprzez trwały identyfikator w Script Properties: `SMARTCARE_SPREADSHEET_ID` w funkcji `getSmartCareSpreadsheet()`.
+   - **Wspólna bariera Rate Limiting (4200 ms dla Flash 15 RPM):** Zaimplementowano funkcję `enforceGeminiRateLimit(modelName)` gwarantującą minimalny odstęp 4200 ms pomiędzy kolejnymi wywołaniami API Gemini, zapobiegając przekroczeniu limitu 15 RPM bezpłatnego planu.
+   - **Współbieżny Backoff po błędzie HTTP 429 (`RESOURCE_EXHAUSTED`):** W przypadku błędu 429 system zapisuje w Script Properties blokadę `GEMINI_429_COOLDOWN_UNTIL` na 60 sekund. W tym czasie wszystkie kolejne żądania są bezpiecznie odraczane bez zbędnego obciążania API.
+   - **Limit maksymalnie 3 prób na zgłoszenie (`AI_RETRY_COUNT_${ticketId}`):** Po 3 nieudanych próbach stan AI przyjmuje wartość `"Błąd"`, a w kolumnie `Szczegóły błędu AI` zapisywany jest komunikat `"Przekroczono limit prób (3/3)"`.
+   - **Automatyczne odzyskiwanie zawieszonych analiz (`recoverStuckAiAnalyses`):** Zgłoszenia pozostające w stanie `"W trakcie"` dłużej niż 10 minut są automatycznie resetowane do stanu `"Oczekuje"`.
+   - **Blokada współbieżnego przetwarzania pojedynczej sprawy:** Wprowadzono blokadę `AI_IN_PROGRESS_${ticketId}` chroniącą przed równoległym przetwarzaniem tego samego zgłoszenia przez proces w tle i kliknięcie użytkownika.
+
+2. **Rejestracja zgłoszeń & Eliminacja wyścigu LockService (Race Condition):**
+   - **Ponowny odczyt komórki pod blokadą:** W `reconcileUnprocessedFormResponses` komórka identyfikatora wiersza jest odczytywana *ponownie po* uzyskaniu blokady `LockService`. Zapobiega to nadpisaniu numeru ID, jeżeli `handleNewTicketSubmit` nadał identyfikator ułamek sekundy wcześniej.
+   - **Brak spamu e-mail dla opóźnionych zgłoszeń:** Procedura uzupełniająca nigdy nie wysyła powiadomień e-mail dla zgłoszeń z przeszłości.
+   - **Błyskawiczne zwalnianie blokady:** Czas trzymania blokady `LockService` ograniczono do <200ms; blokada nigdy nie obejmuje operacji sieciowych ani zapytań AI.
+
+3. **Komunikacja & Szablony Awaryjne (CX/PR):**
+   - **Dynamiczna treść `actionPrepareProgressUpdate`:** Całkowicie usunięto sztywny tekst dyspozytora. Treść jest generowana w 100% dynamicznie na podstawie rzeczywistych notatek pracownika (`employeeNote`), planowanego kroku (`nextAction`), strony odpowiedzialnej (`responsibleSide`) i wyniku kontaktu (`residentContactResult`).
+   - **Dedykowane szablony awaryjne (`generateTailoredEmergencyConfirmation`):**
+     - *Pochwała / Podziękowanie:* Ciepłe podziękowanie w imieniu załogi, informacja o rejestrze wyróżnień, bezwzględny zakaz wspominania o GPS śmieciarki lub dochodzeniu dyspozytorskim.
+     - *Zgłoszenie niekompletne:* Precyzyjna prośba o uzupełnienie brakujących danych (np. numer posesji, frakcja).
+     - *Kompletna reklamacja:* Potwierdzenie rejestracji i przekazanie do weryfikacji operacyjnej w rejonie Kartuz.
+   - **Ochrona przed błędnymi szkicami:** `actionPrepareConfirmation` ignoruje stary roboczy szkic CRM, jeśli `Stan analizy AI === "Błąd"`.
+
+4. **Priorytety & Robocze Godziny SLA (07:00-16:00):**
+   - **Podział priorytetów:** Rozróżniono domyślny (`STANDARDOWY`), sugerowany przez model (`Sugerowany priorytet AI`) oraz zatwierdzony/zmieniony przez człowieka (`Priorytet`). Model AI nigdy nie nadpisuje ręcznie zatwierdzonego priorytetu.
+   - **Kalkulacja SLA w godzinach roboczych (`calculateBusinessHoursDeadline`):** Terminy SLA są obliczane wyłącznie w oknie poniedziałek–piątek w godzinach 07:00–16:00 (540 min roboczych/dzień). Noce i weekendy są pomijane; zgłoszenie weekendowe startuje w poniedziałek o 07:00.
+   - **Liczenie SLA od daty zgłoszenia:** Przy ponownym przeliczaniu termin SLA bazuje na `Sygnaturze czasowej` zgłoszenia, a nie chwili uruchomienia skryptu.
+   - **Precyzja Dashboardu:** Pierwszy kontakt nie jest oznaczany jako przeterminowany, jeżeli faktyczna data pierwszego kontaktu mieściła się w terminie SLA (`firstContactTime <= slaDeadline`). Odróżniono przeterminowanie pierwszej reakcji (`overdueFirstResponseSlaCount`) od przekroczenia terminu następnego działania (`overdueNextActionCount`).
+
+5. **Rozszerzona Pre-walidacja & Edge Cases (`preValidateTicketData`):**
+   - Odrzucenie wartości `"niewiadoma"` jako poprawnej nazwy ulicy (flaga braku ulicy).
+   - Oflagowanie braku wskazania miejscowości w danych adresowych.
+   - Niewrażliwość na wielkość liter frakcji `"metale i tworzywa sztuczne"`.
+   - Wykrywanie fraz powtarzalności: `"po raz siódmy"`, `"po raz kolejny"`, `"kolejny raz"`, `"znowu"`.
+   - Prośba o kontakt: zaznaczenie `"Nie"` nie wymaga numeru telefonu ani e-maila; zaznaczenie `"Tak"` z poprawnym adresem e-mail jest akceptowane bez wymuszania telefonu.
+   - Elastyczny parser dat `parseDateValue` obsługujący formaty dwucyfrowe i separatory przecinkowe: `"27,11,26"`, `"27.11.26"`, `"27,11,2026"`.
+
+6. **Ochrona Danych Osobowych (PII Guard & Strict Whitelist):**
+   - **Lokalne maskowanie PII (`anonymizeSensitiveInfo`):** Skuteczne wycinanie z opisu imienia, nazwiska, nazwy ulicy, numeru posesji, telefonu i adresu e-mail zgłaszającego.
+   - **PII High-Risk Guard:** Wykrycie w opisie danych wysokiego ryzyka (np. 16-cyfrowy numer karty płatniczej, seria i numer dowodu osobistego) bezwzględnie wstrzymuje wysyłkę do API Gemini i ustawia `Stan analizy AI = "Wymaga weryfikacji"`.
+   - **Strict Whitelist Guard:** Serwer bezwarunkowo ogranicza wysyłkę e-mail do `APPROVED_TEST_RECIPIENT = "wsb.student.tester@gmail.com"`. Każda próba przekierowania jest blokowana i logowana.
+
+7. **Warstwa Service API pod SmartCare Manager v0.3.0:**
+   - `apiUpdateTicket`: bezwzględna blokada przejścia w stan `"Rozwiązane"` lub `"Zamknięte"` bez wypełnionego pola `resolutionMethod` (Sposób rozwiązania sprawy).
+   - `apiUpdateTicket`: zabezpieczenie przed nadpisywaniem `Data rozwiązania` przy kolejnych edycjach już zamkniętej sprawy.
+   - `apiGetTicketsList`: rozszerzenie zwracanego obiektu o pola `assignedEmployee` i `nextActionDeadline`.
+   - `apiTriggerAiAnalysis`: zwracanie rzeczywistego stanu operacji i szczegółów błędu.
+   - Pełna zgodność typów `Utilities.formatDate` (wymuszenie poprawnych instancji obiektów `Date`).
+
+8. **Zautomatyzowany Zestaw Testów Audytowych (`tests/test-v028-audit.js`):**
+   - 33 testy jednostkowe i integracyjne w 7 modułach audytowych, 100% PASS (33/33).
+   - Repozytorium zachowuje kompletny kod testowy do weryfikacji przez zespół oceniający.
 
 ---
 

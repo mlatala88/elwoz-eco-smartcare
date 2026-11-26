@@ -129,3 +129,23 @@ W arkuszu przygotowany jest zintegrowany moduł `google/ai.gs` oraz `google/comm
 - **Centralny Panel Obsługi:** Dostępny z menu **📋 SmartCare -> 1. 🎯 Obsłuż zgłoszenie (Centrum Obsługi)**.
 - **Przeglądarka Kolejki:** Dostępna z menu **📋 SmartCare -> 2. 📊 Kolejka spraw i filtry operacyjne**.
 - **Diagnostyka API:** Dostępna w menu **📋 SmartCare -> 🔍 Test diagnostyczny Gemini API**.
+
+---
+
+## 7. Mechanizmy stabilizacyjne silnika AI i ochrona limitów (v0.2.8)
+
+W wersji **v0.2.8** wdrożono rygorystyczne mechanizmy ochrony silnika AI:
+1. **Ochrona limitu 15 RPM bezpłatnego planu Gemini:**
+   - Funkcja `enforceGeminiRateLimit(modelName)` wymusza minimalny odstęp 4200 ms pomiędzy zapytaniami do API, gwarantując maksymalnie 14 zapytań na minutę.
+   - Wspólna kontrola czasu ostatniego wywołania w Script Properties chroni API przed równoległym przeciążeniem przez procesy w tle i kliknięcia użytkowników.
+2. **Obsługa błędu HTTP 429 (`RESOURCE_EXHAUSTED`):**
+   - Po wystąpieniu błędu limitu zapytań (kod 429) system aktywuje 60-sekundowy okres kwarantanny (`GEMINI_429_COOLDOWN_UNTIL`).
+   - Zapytania nadsyłane w trakcie cooldownu są natychmiast odraczane, co zapobiega dalszej eskalacji blokad po stronie Google AI Studio.
+3. **Ochrona przed pętlami ponowień i zawieszeniem:**
+   - Każde zgłoszenie może być analizowane maksymalnie 3 razy (`AI_RETRY_COUNT_${ticketId}`). Po przekroczeniu limitu sprawa otrzymuje trwały stan *Błąd* z czytelnym wyjaśnieniem w CRM.
+   - Automatyczny mechanizm `recoverStuckAiAnalyses` wykrywa analizy pozostające w stanie *W trakcie* powyżej 10 minut i resetuje je do ponownego przetworzenia.
+4. **PII High-Risk Guard:**
+   - Przed przekazaniem opisu do API następuje kontrola obecności danych wysokiego ryzyka (np. 16-cyfrowe numery kart, serie dowodów osobistych).
+   - W przypadku wykrycia takich danych system bezwzględnie wstrzymuje odpytanie Gemini i ustawia stan *Wymaga weryfikacji*, chroniąc dane mieszkańca.
+5. **Dedykowane szablony awaryjne:**
+   - Przy braku połączenia z API generowane są bezpieczne szablony dopasowane do kategorii sprawy (Pochwała – podziękowanie bez GPS; Niekompletne – prośba o doprecyzowanie; Reklamacja – weryfikacja operacyjna).

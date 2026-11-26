@@ -252,6 +252,31 @@ function configureGeminiApiKey() {
  * Sprawdza kompletność danych w zależności od kategorii, rozbieżności,
  * słowa kluczowe zagrożeń i powtarzalności oraz chroni dane PII.
  */
+/**
+ * Pomocniczy parser dat dla modułu AI
+ */
+function parseDateValueAi(val) {
+  if (typeof parseDateValue === "function") {
+    const res = parseDateValue(val);
+    if (res) return res;
+  }
+  if (!val) return null;
+  if (val instanceof Date) return isNaN(val.getTime()) ? null : val.getTime();
+  if (typeof val === "string") {
+    let s = val.trim().replace(/,/g, ".");
+    const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2}|\d{4})(?:[\sT](\d{1,2}):(\d{2}))?$/);
+    if (m) {
+      let yr = Number(m[3]);
+      if (yr < 100) yr += 2000;
+      const d = new Date(yr, Number(m[2]) - 1, Number(m[1]), Number(m[4] || 0), Number(m[5] || 0));
+      if (!isNaN(d.getTime())) return d.getTime();
+    }
+    const d2 = new Date(s);
+    if (!isNaN(d2.getTime())) return d2.getTime();
+  }
+  return null;
+}
+
 function preValidateTicketData(ticketData) {
   const issues = [];
   const warnings = [];
@@ -259,6 +284,7 @@ function preValidateTicketData(ticketData) {
   let urgencyDetected = false;
   let recurrenceDetected = false;
   let requiresResidentInput = false;
+  let requiresManualPiiVerification = false;
 
   const type = String(ticketData.ticketType || "").trim();
   const fraction = String(ticketData.wasteFraction || "").trim();
@@ -280,14 +306,23 @@ function preValidateTicketData(ticketData) {
   let addressIssue = "";
 
   if (isAddressVitalCategory) {
+    const isPlaceholderCity = !city || /^(brak|nie wiem|niewiadoma|nieznana|brak miejscowości|-|\.|\?)$/i.test(city);
+    if (isPlaceholderCity) {
+      issues.push("Brak wskazania miejscowości");
+      requiresResidentInput = true;
+      isAddressComplete = false;
+      addressIssue = "brak miejscowości";
+    }
+
     const hasHouse = isHouseNumberPresent(houseNumber);
-    const hasStreet = Boolean(street && !/^(brak|nie wiem|-|\.|\?)$/i.test(street));
+    const isPlaceholderStreet = /^(brak|nie wiem|niewiadoma|nieznana|brak ulicy|-|\.|\?)$/i.test(street);
+    const hasStreet = Boolean(street && !isPlaceholderStreet);
 
     if (!hasHouse) {
       issues.push("Brak numeru posesji (niezbędny do weryfikacji w terenie)");
       requiresResidentInput = true;
       isAddressComplete = false;
-      addressIssue = "brak numeru posesji";
+      addressIssue = addressIssue ? (addressIssue + ", brak numeru posesji") : "brak numeru posesji";
     }
     if (!hasStreet) {
       issues.push("Brak nazwy ulicy lub precyzyjnej lokalizacji");
@@ -313,15 +348,16 @@ function preValidateTicketData(ticketData) {
     }
   }
 
-  // Weryfikacja wniosku o kontakt telefoniczny (v0.2.8)
-  if (contactReq && !hasValidPhone) {
-    issues.push("Mieszkaniec wnioskował o kontakt telefoniczny, lecz nie podano poprawnego numeru telefonu");
+  // Weryfikacja wniosku o kontakt ze strony pracownika (v0.2.8)
+  // Jeśli mieszkaniec wnioskował o kontakt, wystarczy poprawny telefon LUB adres e-mail
+  if (contactReq && !hasValidPhone && !hasValidEmail) {
+    issues.push("Mieszkaniec wnioskował o kontakt, lecz nie podano poprawnego numeru telefonu ani adresu e-mail");
     requiresResidentInput = true;
   }
 
   // 3. Weryfikacja daty problemu (v0.2.8: blokada przyszłych dat i kontrola zgłoszeń historycznych)
   if (problemDateStr) {
-    const probTime = typeof parseDateValue === "function" ? parseDateValue(problemDateStr) : (new Date(problemDateStr)).getTime();
+    const probTime = parseDateValueAi(problemDateStr);
     if (probTime && !isNaN(probTime)) {
       const probDateObj = new Date(probTime);
       const nowTime = (new Date()).getTime();
@@ -358,13 +394,14 @@ function preValidateTicketData(ticketData) {
     }
   }
 
-  // Sprzeczność frakcji
+  // Sprzeczność frakcji (case-insensitive v0.2.8)
   if (!contradiction) {
-    if (fraction === "BIO (brązowy pojemnik)" || fraction.includes("BIO")) {
+    const fractionLower = fraction.toLowerCase();
+    if (fractionLower.includes("bio")) {
       if (descLower.includes("plastik") || descLower.includes("papier") || descLower.includes("szkło") || descLower.includes("zmieszan")) {
         contradiction = "Rozbieżność: wybrano frakcję BIO, lecz treść opisu wspomina o innych odpadach (tworzywa/szkło/papier/zmieszane)";
       }
-    } else if (fraction.includes("Metale i tworzywa") || fraction.includes("żółty")) {
+    } else if (fractionLower.includes("metal") || fractionLower.includes("tworzyw") || fractionLower.includes("żółty")) {
       if (descLower.includes("bio") || descLower.includes("trawa") || descLower.includes("gałęzie") || descLower.includes("szkło")) {
         contradiction = "Rozbieżność: wybrano frakcję Tworzywa sztuczne, lecz treść opisu wskazuje na odpady zielone/szkło";
       }
@@ -375,8 +412,14 @@ function preValidateTicketData(ticketData) {
   if (/fetor|smród|odór|szczur|gryzon|larw|robak|zagrożeni|sanitarn|gnije/i.test(descLower)) {
     urgencyDetected = true;
   }
-  if (/kolejny raz|znowu|notoryczn|trzeci raz|drugi raz|wielokrot|od tygodni|od 2 tygodni|od miesiąca/i.test(descLower)) {
+  if (/kolejny raz|znowu|notoryczn|trzeci raz|drugi raz|po raz siódmy|po raz kolejny|po raz [a-ząćęłńóśźż0-9]+|kolejny raz z rzędu|wielokrot|od tygodni|od 2 tygodni|od miesiąca/i.test(descLower)) {
     recurrenceDetected = true;
+  }
+
+  // 7. Kontrola ochrony danych (PII High-Risk Guard v0.2.8)
+  if (/\b\d{4}[ -]?\d{4}[ -]?\d{4}[ -]?\d{4}\b/.test(desc) || /[A-Z]{3}\s*\d{6}/.test(desc)) {
+    requiresManualPiiVerification = true;
+    issues.push("Wykryto dane wrażliwe (seria dowodu/nr karty) - wymagana weryfikacja ręczna przed wysłaniem do AI");
   }
 
   let summary = "";
@@ -400,6 +443,7 @@ function preValidateTicketData(ticketData) {
     urgencyDetected: urgencyDetected,
     recurrenceDetected: recurrenceDetected,
     requiresResidentInput: requiresResidentInput,
+    requiresManualPiiVerification: requiresManualPiiVerification,
     isAddressComplete: isAddressComplete,
     addressIssue: addressIssue,
     summary: summary
@@ -452,6 +496,15 @@ function triggerAutoAiAnalysisForTicket(sheet, rowNum, headers, ticketIdParam, f
     sheet.getRange(rowNum, localControlCol).setValue(validation.summary);
   }
 
+  // Kontrola PII (v0.2.8): Jeśli wykryto krytyczne dane wrażliwe, wstrzymaj wysyłkę do AI
+  if (validation.requiresManualPiiVerification) {
+    const piiMsg = "Wstrzymano wysyłkę do AI ze względów ochrony danych (PII) - skierowano do weryfikacji ręcznej";
+    Logger.log(`[PII Guard] ${piiMsg} dla ${ticketId}.`);
+    if (aiStateCol > 0) sheet.getRange(rowNum, aiStateCol).setValue("Wymaga weryfikacji");
+    if (aiErrorCol > 0) sheet.getRange(rowNum, aiErrorCol).setValue(piiMsg);
+    return;
+  }
+
   if (aiStateCol > 0) {
     sheet.getRange(rowNum, aiStateCol).setValue("W trakcie");
   }
@@ -469,7 +522,7 @@ function triggerAutoAiAnalysisForTicket(sheet, rowNum, headers, ticketIdParam, f
     return;
   }
 
-  // 3. Wywołanie Gemini API (zgodnie z zasadą prywatności v0.2.8: bez surowej ulicy/nr domu)
+  // 3. Wywołanie Gemini API (zgodnie z zasadą prywatności v0.2.8: zanonimizowane dane mieszkańca)
   try {
     const addressStatus = validation.isAddressComplete
       ? "KOMPLETNY - adres jest w pełni zweryfikowany w bazie CRM (nie pytaj o adres!)"
@@ -481,7 +534,7 @@ function triggerAutoAiAnalysisForTicket(sheet, rowNum, headers, ticketIdParam, f
       wasteFraction: ticketData.wasteFraction,
       city: ticketData.city,
       addressCompletenessStatus: addressStatus,
-      verifiedDescription: anonymizeSensitiveInfo(ticketData.description),
+      verifiedDescription: anonymizeSensitiveInfo(ticketData.description, ticketData),
       preValidationSummary: validation.summary,
       issuesList: validation.issues.join(", "),
       contradiction: validation.contradiction
@@ -507,28 +560,35 @@ function triggerAutoAiAnalysisForTicket(sheet, rowNum, headers, ticketIdParam, f
     setValByHeader(sheet, rowNum, headers, "Rekomendowany kolejny krok AI", aiResult.rekomendowanyKrok.trim());
     setValByHeader(sheet, rowNum, headers, "Proponowana odpowiedź AI", aiResult.proponowanaOdpowiedz.trim());
 
-    // 5. Priorytet i SLA (v0.2.8: NIE nadpisujemy ręcznych decyzji pracownika)
+    // 5. Priorytet i SLA (v0.2.8: Rozróżnienie domyślnego, sugerowanego i zatwierdzonego priorytetu)
     const currentPriority = getVal(["Priorytet"]);
     let targetPriority = currentPriority;
 
-    if (!currentPriority) {
-      targetPriority = aiResult.sugerowanyPriorytet || "STANDARDOWY";
-      setValByHeader(sheet, rowNum, headers, "Priorytet", targetPriority);
-    } else if (currentPriority === "STANDARDOWY" && (validation.urgencyDetected || aiResult.sugerowanyPriorytet === "PILNY")) {
-      targetPriority = "PILNY";
-      setValByHeader(sheet, rowNum, headers, "Priorytet", "PILNY");
+    if (!currentPriority || currentPriority === "STANDARDOWY") {
+      if (validation.urgencyDetected || aiResult.sugerowanyPriorytet === "PILNY") {
+        targetPriority = "PILNY";
+        setValByHeader(sheet, rowNum, headers, "Priorytet", "PILNY");
+      } else if (!currentPriority) {
+        targetPriority = aiResult.sugerowanyPriorytet || "STANDARDOWY";
+        setValByHeader(sheet, rowNum, headers, "Priorytet", targetPriority);
+      }
     }
+    // Jeśli pracownik ręcznie ustawił inny priorytet (np. WYSOKI, NISKI), NIE NADPISUJEMY GO!
 
-    // Aktualizacja SLA 1. reakcji zależnie od priorytetu
+    // Wyliczenie terminu SLA na podstawie daty zgłoszenia i godzin roboczych
     const slaDeadlineCol = getCol(["Termin SLA 1. reakcji", "Termin SLA"]);
-    if (slaDeadlineCol > 0 && targetPriority && !sheet.getRange(rowNum, slaDeadlineCol).getValue()) {
-      const now = new Date();
+    if (slaDeadlineCol > 0 && targetPriority) {
+      const timeVal = getVal(["Sygnatura czasowa", "Timestamp", "Data"]);
+      const createdParsed = parseDateValueAi(timeVal);
+      const createdDate = createdParsed ? new Date(createdParsed) : new Date();
       let slaMinutes = 240;
       if (targetPriority === "PILNY") slaMinutes = 15;
       else if (targetPriority === "WYSOKI") slaMinutes = 60;
       else if (targetPriority === "NISKI") slaMinutes = 1440;
 
-      const newSla = new Date(now.getTime() + slaMinutes * 60 * 1000);
+      const newSla = typeof calculateBusinessHoursDeadline === "function"
+        ? calculateBusinessHoursDeadline(createdDate, slaMinutes)
+        : new Date(createdDate.getTime() + slaMinutes * 60 * 1000);
       sheet.getRange(rowNum, slaDeadlineCol).setValue(newSla).setNumberFormat("yyyy-MM-dd HH:mm");
     }
 
@@ -594,23 +654,48 @@ function applyFallbackAiAnalysis(sheet, rowNum, headers, ticketData, validation,
 }
 
 /**
- * Generuje bezpieczną treść roboczą pierwszej odpowiedzi bez korzystania z zewnętrznego API
+ * Generuje bezpieczną treść roboczą pierwszej odpowiedzi bez korzystania z zewnętrznego API (v0.2.8)
+ * Dopasowana do kategorii: Pochwała (podziękowanie, brak GPS), Niekompletne (prośba o dane), Kompletne (weryfikacja operacyjna)
  */
 function generateFallbackDraftResponse(ticketData, validation) {
   const name = ticketData.residentName || "Mieszkańcu";
   const id = ticketData.ticketId || "Zgłoszenie";
-  let body = `Dzień dobry, ${name},\n\n` +
-    `Potwierdzamy zarejestrowanie zgłoszenia ${id} dotyczącego: ${ticketData.ticketType || "obsługi komunalnej"} (${ticketData.city || "rejon Kartuzy"}).\n\n`;
+  const type = String(ticketData.ticketType || "").trim();
+  const isPraise = /pochwał|podzięk/i.test(type);
 
-  if (validation.issues.length > 0) {
-    body += `W celu sprawnego przekazania sprawy do załogi w terenie uprzejmie prosimy o doprecyzowanie poniższych informacji:\n` +
-      `• ${validation.issues.join("\n• ")}\n\n`;
-  } else {
-    body += `Zgłoszenie zostało przekazane do dyspozytora Punktu Obsługi Klienta w Kartuzach w celu weryfikacji.\n\n`;
+  if (isPraise) {
+    return (
+      `Dzień dobry, ${name},\n\n` +
+      `Serdecznie dziękujemy za przekazane miłe słowa oraz docenienie rzetelnej pracy naszej załogi.\n` +
+      `Pana/Pani opinia została zarejestrowana w naszym rejestrze wyróżnień i przekazana bezpośrednio pracownikom oraz kierownikowi rejonu Kartuzy.\n\n` +
+      `Tego typu sygnały są dla całego zespołu ELWOZ ECO ogromną motywacją do codziennej pracy.\n\n` +
+      `Z poważaniem,\n` +
+      `ELWOZ ECO SmartCare – POK Kartuzy\n` +
+      `Tel. 58 681 22 99 | kartuzy@elwozeco.pl`
+    );
   }
 
-  body += `Z poważaniem,\nELWOZ ECO SmartCare – POK Kartuzy\nTel. 58 681 22 99 | kartuzy@elwozeco.pl`;
-  return body;
+  if (validation && validation.issues && validation.issues.length > 0) {
+    return (
+      `Dzień dobry, ${name},\n\n` +
+      `Potwierdzamy wpłynięcie zgłoszenia ${id} dotyczącego: ${type || "obsługi komunalnej"} (${ticketData.city || "rejon Kartuzy"}).\n\n` +
+      `W celu sprawnego podjęcia działań operacyjnych w terenie uprzejmie prosimy o doprecyzowanie poniższych danych:\n` +
+      `• ${validation.issues.join("\n• ")}\n\n` +
+      `Po uzupełnieniu informacji sprawa zostanie niezwłocznie skierowana do realizacji.\n\n` +
+      `Z poważaniem,\n` +
+      `ELWOZ ECO SmartCare – POK Kartuzy\n` +
+      `Tel. 58 681 22 99 | kartuzy@elwozeco.pl`
+    );
+  }
+
+  return (
+    `Dzień dobry, ${name},\n\n` +
+    `Potwierdzamy zarejestrowanie zgłoszenia reklamacyjnego ${id} dotyczącego: ${type || "obsługi komunalnej"} (${ticketData.city || "rejon Kartuzy"}).\n\n` +
+    `Dyspozytor Punktu Obsługi Klienta w Kartuzach weryfikuje zlecenie oraz raporty tras śmieciarek. O ustaleniach i sposobie załatwienia sprawy powiadomimy w kolejnej wiadomości.\n\n` +
+    `Z poważaniem,\n` +
+    `ELWOZ ECO SmartCare – POK Kartuzy\n` +
+    `Tel. 58 681 22 99 | kartuzy@elwozeco.pl`
+  );
 }
 
 /**
@@ -926,6 +1011,47 @@ function processAiTicketAnalysis(ticketId, verifiedText) {
   }
 }
 
+/**
+ * Globalna kontrola limitu zapytań (Rate Limiting) Gemini API (v0.2.8)
+ * Wymusza wspólny odstęp 4200 ms pomiędzy zapytaniami dla bezpłatnego planu Gemini Flash (15 RPM)
+ * oraz obsługuje blokadę po błędach limitu (HTTP 429 backoff).
+ *
+ * @param {string} modelName Nazwa modelu (np. gemini-2.5-flash)
+ */
+function enforceGeminiRateLimit(modelName) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(15000);
+    const props = PropertiesService.getScriptProperties();
+    const now = Date.now();
+
+    // 1. Sprawdzenie blokady cooldown po HTTP 429
+    const backoffUntil = Number(props.getProperty("GEMINI_BACKOFF_UNTIL") || 0);
+    if (backoffUntil && now < backoffUntil) {
+      const waitSec = Math.ceil((backoffUntil - now) / 1000);
+      throw new Error(`Aktywny cooldown po przekroczeniu limitu zapytań Gemini (HTTP 429). Pozostało ${waitSec}s do wznowienia.`);
+    }
+
+    // 2. Kontrola odstępu czasu (4200ms dla Flash / 15 RPM, 6000ms dla modeli Pro)
+    const isPro = modelName && modelName.toLowerCase().includes("pro");
+    const minSpacing = isPro ? 6000 : 4200;
+    const lastCall = Number(props.getProperty("LAST_GEMINI_CALL_TIMESTAMP") || 0);
+    const elapsed = now - lastCall;
+
+    if (elapsed < minSpacing) {
+      const sleepTime = minSpacing - elapsed;
+      Logger.log(`[Rate Limiter v0.2.8] Odczekanie ${sleepTime}ms przed wywołaniem ${modelName} dla zachowania limitu 15 RPM.`);
+      Utilities.sleep(sleepTime);
+    }
+
+    props.setProperty("LAST_GEMINI_CALL_TIMESTAMP", String(Date.now()));
+  } finally {
+    try {
+      lock.releaseLock();
+    } catch (_) {}
+  }
+}
+
 function callGeminiApiWithRetry(apiKey, ticketData, maxRetries = 1) {
   let lastError = null;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -938,7 +1064,7 @@ function callGeminiApiWithRetry(apiKey, ticketData, maxRetries = 1) {
     } catch (err) {
       lastError = err;
       const errMsg = err.message || String(err);
-      if (errMsg.includes("401") || errMsg.includes("403") || errMsg.includes("SAFETY") || errMsg.includes("RECITATION")) {
+      if (errMsg.includes("401") || errMsg.includes("403") || errMsg.includes("SAFETY") || errMsg.includes("RECITATION") || errMsg.includes("429")) {
         throw err;
       }
       Logger.log(`Próba ${attempt + 1} nie powiodła się: ${maskApiKey(errMsg)}`);
@@ -1013,6 +1139,9 @@ function callGeminiApi(apiKey, ticketData) {
 
   const endpointUrl = `${SMARTCARE_AI_CONFIG.apiBaseUrl}/models/${encodeURIComponent(activeModel)}:generateContent?key=${apiKey}`;
   
+  // Wymuszenie globalnego limitu zapytań (15 RPM barrier) przed strzałem HTTP (v0.2.8)
+  enforceGeminiRateLimit(activeModel);
+
   let response;
   try {
     response = UrlFetchApp.fetch(endpointUrl, options);
@@ -1024,8 +1153,11 @@ function callGeminiApi(apiKey, ticketData) {
   const responseText = response.getContentText();
 
   // 1. Rozróżnienie warstwy HTTP API od treści modelu
-  if (responseCode === 429) {
-    throw new Error("Przekroczono limit zapytań Gemini API (Quota Exceeded / Rate Limit). Odczekaj chwilę i spróbuj ponownie.");
+  if (responseCode === 429 || responseText.includes("RESOURCE_EXHAUSTED")) {
+    try {
+      PropertiesService.getScriptProperties().setProperty("GEMINI_BACKOFF_UNTIL", String(Date.now() + 60000));
+    } catch (_) {}
+    throw new Error("Przekroczono limit zapytań Gemini API (Quota Exceeded / Rate Limit HTTP 429). Uruchomiono 60s cooldown.");
   }
   if (responseCode === 401 || responseCode === 403) {
     throw new Error("Błąd autoryzacji Gemini API (kod 401/403). Sprawdź poprawność klucza API w menu SmartCare -> Ustawienia / Klucz Gemini API.");
@@ -1209,14 +1341,64 @@ function validateAiAnalysisResult(data) {
 }
 
 /**
- * Automatyczna anonimizacja danych wrażliwych z tekstu
+ * Automatyczna anonimizacja danych wrażliwych z tekstu (v0.2.8)
+ * Maskuje e-maile, telefony, PESEL oraz dane zgłaszającego mieszkańca
+ * (imię, nazwisko, nazwę ulicy, numer posesji, numer telefonu, adres e-mail)
  */
-function anonymizeSensitiveInfo(text) {
+function anonymizeSensitiveInfo(text, ticketData) {
   if (!text) return "";
-  return String(text)
+  let sanitized = String(text)
     .replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, "[E-MAIL USUNIĘTO]")
     .replace(/\b\d{11}\b/g, "[IDENTYFIKATOR USUNIĘTO]")
     .replace(/(?:\+?48[\s-]?)?(?:\b\d{3}[\s-]?\d{3}[\s-]?\d{3}\b|\b\d{9}\b)/g, "[NUMER TELEFONU USUNIĘTO]");
+
+  if (ticketData) {
+    // Maskowanie adresu e-mail zgłaszającego
+    if (ticketData.residentEmail && ticketData.residentEmail.includes("@")) {
+      const emailEsc = escapeRegExpAi(ticketData.residentEmail.trim());
+      sanitized = sanitized.replace(new RegExp(emailEsc, "gi"), "[E-MAIL MIESZKAŃCA]");
+    }
+
+    // Maskowanie telefonu zgłaszającego
+    if (ticketData.residentPhone) {
+      const cleanPhone = ticketData.residentPhone.replace(/[\s\-\+\(\)]/g, "");
+      if (cleanPhone.length >= 7) {
+        sanitized = sanitized.replace(new RegExp(escapeRegExpAi(ticketData.residentPhone.trim()), "g"), "[TELEFON MIESZKAŃCA]");
+      }
+    }
+
+    // Maskowanie imienia i nazwiska
+    if (ticketData.residentName) {
+      const nameParts = ticketData.residentName.trim().split(/\s+/);
+      for (let part of nameParts) {
+        if (part.length >= 3 && !/^(pan|pani|mieszkaniec|kartuzy)$/i.test(part)) {
+          sanitized = sanitized.replace(new RegExp("\\b" + escapeRegExpAi(part) + "\\b", "gi"), "[MIESZKANIEC]");
+        }
+      }
+    }
+
+    // Maskowanie ulicy zgłaszającego
+    if (ticketData.street) {
+      const streetClean = ticketData.street.trim().replace(/^(ul\.|ulica)\s*/i, "");
+      if (streetClean.length >= 4 && !/^(brak|nie wiem|nieznana|niewiadoma)$/i.test(streetClean)) {
+        sanitized = sanitized.replace(new RegExp("\\b" + escapeRegExpAi(streetClean) + "\\b", "gi"), "[ULICA]");
+      }
+    }
+
+    // Maskowanie numeru posesji
+    if (ticketData.houseNumber) {
+      const houseClean = ticketData.houseNumber.trim();
+      if (houseClean.length >= 1 && !/^(brak|nie wiem)$/i.test(houseClean)) {
+        sanitized = sanitized.replace(new RegExp("(?:posesja|posesji|nr|numer|domu|dom)?\\s*\\b" + escapeRegExpAi(houseClean) + "\\b", "gi"), "[NR_POSESJI]");
+      }
+    }
+  }
+
+  return sanitized;
+}
+
+function escapeRegExpAi(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /**
@@ -1386,17 +1568,38 @@ function showDiagnosticResultDialog(data) {
  */
 
 /**
- * Przetwarza oczekujące zgłoszenia z kolejki analizy AI z zachowaniem odstępów 2-sekundowych
- * zapobiegających przekroczeniu limitu zapytań (15 RPM) bezpłatnego planu Gemini.
+ * Przetwarza oczekujące zgłoszenia z kolejki analizy AI z kontrolą limitu 15 RPM (v0.2.8)
+ * - globalny rate limiter enforceGeminiRateLimit (4200 ms pomiędzy strzałami)
+ * - obsługa 429 backoff cooldown
+ * - maksymalnie 3 próby na zgłoszenie (retry limit)
+ * - per-ticket lock współbieżności (AI_IN_PROGRESS_X)
+ * - obsługa wywołań bez aktywnego arkusza (getSmartCareSpreadsheet)
  *
  * @param {number} [maxBatch=5] Maksymalna liczba zgłoszeń do przetworzenia w jednej partii
  * @returns {{ processedCount: number, successCount: number, errorCount: number, errors: string[] }}
  */
 function processAiAnalysisQueue(maxBatch = 5) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = (typeof getSmartCareSpreadsheet === "function" ? getSmartCareSpreadsheet() : null) || SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) {
+    return { processedCount: 0, successCount: 0, errorCount: 0, errors: ["Brak dostępu do arkusza."] };
+  }
   const sheet = ss.getSheetByName(SMARTCARE_SETUP_CONFIG.sheetTabs.tickets);
   if (!sheet || sheet.getLastRow() <= 1) {
     return { processedCount: 0, successCount: 0, errorCount: 0, errors: [] };
+  }
+
+  const props = PropertiesService.getScriptProperties();
+  const backoffUntil = Number(props.getProperty("GEMINI_BACKOFF_UNTIL") || 0);
+  const now = Date.now();
+  if (backoffUntil && now < backoffUntil) {
+    const waitSec = Math.ceil((backoffUntil - now) / 1000);
+    Logger.log(`[Kolejka AI] Wstrzymano przetwarzanie kolejki - aktywny cooldown po HTTP 429 (${waitSec}s).`);
+    return {
+      processedCount: 0,
+      successCount: 0,
+      errorCount: 1,
+      errors: [`Aktywny cooldown po HTTP 429. Pozostało ${waitSec}s do odblokowania.`]
+    };
   }
 
   const lastRow = sheet.getLastRow();
@@ -1405,6 +1608,7 @@ function processAiAnalysisQueue(maxBatch = 5) {
 
   const aiStateIdx = findHeaderIndex(headers, ["Stan analizy AI", "Status AI"]);
   const idIdx = findHeaderIndex(headers, ["ID Zgłoszenia", "Numer zgłoszenia", "ID"]);
+  const aiErrorIdx = findHeaderIndex(headers, ["Szczegóły błędu AI", "Błąd AI"]);
 
   if (aiStateIdx === -1) {
     return { processedCount: 0, successCount: 0, errorCount: 0, errors: ["Brak kolumny Stan analizy AI w arkuszu ZGŁOSZENIA."] };
@@ -1423,30 +1627,64 @@ function processAiAnalysisQueue(maxBatch = 5) {
 
     // Przetwarzaj zgłoszenia ze statusem "Oczekuje" lub po wcześniejszym błędzie "Błąd"
     if (state === "Oczekuje" || state === "Błąd") {
-      processedCount++;
-
-      // Odstęp 2-sekundowy (2000 ms) pomiędzy zapytaniami dla ochrony przed limitem 15 RPM
-      if (processedCount > 1) {
-        Utilities.sleep(2000);
+      // 1. Sprawdź limit prób (maksymalnie 3 próby na zgłoszenie)
+      const retryKey = "AI_RETRY_COUNT_" + ticketId;
+      const retryCount = Number(props.getProperty(retryKey) || 0);
+      if (retryCount >= 3) {
+        if (state !== "Błąd") {
+          sheet.getRange(rowNum, aiStateIdx + 1).setValue("Błąd");
+        }
+        if (aiErrorIdx !== -1) {
+          sheet.getRange(rowNum, aiErrorIdx + 1).setValue("Przekroczono limit prób (3/3)");
+        }
+        continue; // Pomiń to zgłoszenie, nie ponawiaj w nieskończoność
       }
 
+      // 2. Blokada współbieżności per-ticket (zapobieganie równoległemu przetwarzaniu tej samej sprawy)
+      const lockKey = "AI_IN_PROGRESS_" + ticketId;
+      const lockTime = Number(props.getProperty(lockKey) || 0);
+      if (lockTime && (Date.now() - lockTime < 120000)) {
+        Logger.log(`[Kolejka AI] Zgłoszenie ${ticketId} jest już przetwarzane przez inny wątek - pomijam.`);
+        continue;
+      }
+
+      props.setProperty(lockKey, String(Date.now()));
+      sheet.getRange(rowNum, aiStateIdx + 1).setValue("W trakcie");
+      SpreadsheetApp.flush();
+
+      processedCount++;
+
       try {
-        Logger.log(`[Kolejka AI v0.2.8] Rozpoczynam przetwarzanie zgłoszenia ${ticketId} w wierszu ${rowNum}...`);
+        Logger.log(`[Kolejka AI v0.2.8] Przetwarzam zgłoszenie ${ticketId} w wierszu ${rowNum} (próba ${retryCount + 1}/3)...`);
         triggerAutoAiAnalysisForTicket(sheet, rowNum, headers, ticketId, true);
 
         const updatedState = String(sheet.getRange(rowNum, aiStateIdx + 1).getValue() || "").trim();
         if (updatedState === "Błąd") {
           errorCount++;
-          const errCol = findHeaderIndex(headers, ["Szczegóły błędu AI", "Błąd AI"]) + 1;
-          const errReason = errCol > 0 ? String(sheet.getRange(rowNum, errCol).getValue() || "") : "Nieznany błąd AI";
+          const newRetries = retryCount + 1;
+          props.setProperty(retryKey, String(newRetries));
+          const errReason = aiErrorIdx !== -1 ? String(sheet.getRange(rowNum, aiErrorIdx + 1).getValue() || "") : "Nieznany błąd AI";
+          if (newRetries >= 3 && aiErrorIdx !== -1) {
+            sheet.getRange(rowNum, aiErrorIdx + 1).setValue(`Przekroczono limit prób (3/3): ${errReason}`);
+          }
           errors.push(`${ticketId}: ${errReason}`);
         } else {
           successCount++;
+          props.deleteProperty(retryKey); // Reset licznika po sukcesie
         }
       } catch (qErr) {
         errorCount++;
+        const newRetries = retryCount + 1;
+        props.setProperty(retryKey, String(newRetries));
         const safeErr = maskApiKey(qErr.toString());
+        sheet.getRange(rowNum, aiStateIdx + 1).setValue("Błąd");
+        if (aiErrorIdx !== -1) {
+          const prefix = newRetries >= 3 ? "Przekroczono limit prób (3/3): " : `Próba ${newRetries}/3: `;
+          sheet.getRange(rowNum, aiErrorIdx + 1).setValue(prefix + safeErr);
+        }
         errors.push(`${ticketId}: ${safeErr}`);
+      } finally {
+        props.deleteProperty(lockKey);
       }
     }
   }
