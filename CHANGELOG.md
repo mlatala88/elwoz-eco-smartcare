@@ -25,8 +25,14 @@ Wszystkie istotne zmiany i wydania w projekcie **ELWOZ ECO SmartCare** są rejes
    - Usunięto sztywne wpisy „PASSED” – pakiet diagnostyczny wykonuje rzeczywisty test zapisu/odczytu magazynu, weryfikację 43 kolumn CSI, sprawdzenie reguł CX/PR oraz integralności cyklu życia z pomiarem realnych opóźnień w milisekundach.
 8. **Rzetelne szablony komunikacji:**
    - Oczyszczono gotowe szablony z niezweryfikowanych godzin otwarcia PSZOK i deklaracji proceduralnych, odsyłając bezpośrednio do kontaktu z POK Kartuzy (tel. 58 681 22 99).
-9. **Rozbudowany pakiet testów:**
-   - 65 testów jednostkowych i integracyjnych Node.js zaliczonych w 100% (65 PASSED, 0 FAILED).
+9. **Rozbudowany pakiet 157 testów automatycznych:**
+   - 65 testów jednostkowych i integracyjnych menedżera (`manager/tests/runTests.js`);
+   - 48 testów audytowych silnika v0.2.8 (`tests/test-v028-audit.js`);
+   - 44 testy integracyjne Scenariuszy A-O łączące menedżera z silnikiem CRM (`tests/test-v030-integration.js`).
+   - Łącznie: 157 PASSED, 0 FAILED (100% sukcesu).
+10. **Backend Web App i szablon Google Apps Script:**
+   - Utworzono moduł `google/webapp.gs` implementujący kontroler Web App (doGet/doPost), RPC bridge oraz obsługę sesji 5 członków zespołu (Michał Latała, Barbara Seroka, Diana Skierka, Anna Fedoruk, Michał Wadyński) z autoryzacją PIN `1926`.
+   - Zbudowano skompilowany szablon `google/webapp.html` gotowy do jednoklikowego wdrożenia w Google Apps Script.
 
 #### Główne innowacje i moduły v0.3.0:
 1. **Dwa niezależne tryby pracy:**

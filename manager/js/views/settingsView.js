@@ -24,10 +24,45 @@ export class SettingsView {
           <div class="view-description">Parametry operacyjne POK Kartuzy, progi SLA, konfiguracja personelu i asystenta AI</div>
         </div>
         <div class="view-actions">
+          ${this.state.mode !== 'connected' ? `
           <button class="btn btn-danger btn-sm" id="btn-reset-demo-factory">
             <i data-lucide="rotate-ccw" style="width: 14px; height: 14px;"></i>
             <span>Przywróć dane fabryczne demo</span>
           </button>
+          ` : `
+          <span class="badge badge-ai-przeanalizowano" style="padding: 6px 12px; font-size: 12px;">
+            Połączono z CRM (Google Sheets)
+          </span>
+          `}
+        </div>
+      </div>
+
+      <!-- Karta Dual Mode Architecture -->
+      <div class="card" style="margin-bottom: 20px;">
+        <div class="card-header">
+          <div class="card-title">
+            <i data-lucide="network" style="width: 16px; height: 16px;"></i>
+            <span>Tryb działania aplikacji (Dual Mode Architecture)</span>
+          </div>
+          <span class="badge ${this.state.mode === 'connected' ? 'badge-ai-przeanalizowano' : 'badge-prio-wysoki'}">
+            ${this.state.mode === 'connected' ? 'CONNECTED (Google Sheets CRM)' : 'DEMO (30 syntetycznych zgłoszeń)'}
+          </span>
+        </div>
+        <div class="card-body">
+          <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 16px; align-items: end;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label">Aktywny tryb danych</label>
+              <select class="form-select" id="set-app-mode">
+                <option value="demo" ${this.state.mode !== 'connected' ? 'selected' : ''}>Tryb DEMO (Syntetyczny symulator)</option>
+                <option value="connected" ${this.state.mode === 'connected' ? 'selected' : ''}>Tryb CONNECTED (Rzeczywisty CRM Google Sheets)</option>
+              </select>
+            </div>
+            <div class="form-group" id="group-gas-endpoint" style="margin-bottom: 0; display: ${this.state.mode === 'connected' ? 'block' : 'none'};">
+              <label class="form-label">Adres URL Web App Google Apps Script (Wariant B)</label>
+              <input type="url" class="form-control" id="set-gas-endpoint" value="${typeof localStorage !== 'undefined' ? (localStorage.getItem('smartcare_gas_endpoint') || '') : ''}" placeholder="https://script.google.com/macros/s/.../exec" />
+              <span class="form-hint">W środowisku Web App (Wariant A) aplikacja korzysta bezpośrednio z google.script.run.</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -226,25 +261,55 @@ export class SettingsView {
   }
 
   bindEvents() {
+    const modeSelect = this.container.querySelector("#set-app-mode");
+    const endpointInput = this.container.querySelector("#set-gas-endpoint");
+    const endpointGroup = this.container.querySelector("#group-gas-endpoint");
+
+    if (modeSelect) {
+      modeSelect.onchange = () => {
+        const selected = modeSelect.value;
+        if (endpointGroup) endpointGroup.style.display = selected === "connected" ? "block" : "none";
+        if (typeof localStorage !== "undefined") {
+          localStorage.setItem("smartcare_mode", selected);
+        }
+        import("../components/toast.js").then(({ Toast }) => {
+          Toast.info(`Zmieniono tryb na: ${selected === 'connected' ? 'CONNECTED' : 'DEMO'}. Przeładowywanie...`);
+        });
+        setTimeout(() => {
+          if (typeof window !== "undefined") window.location.reload();
+        }, 800);
+      };
+    }
+
+    if (endpointInput) {
+      endpointInput.onchange = () => {
+        if (typeof localStorage !== "undefined") {
+          localStorage.setItem("smartcare_gas_endpoint", endpointInput.value.trim());
+        }
+      };
+    }
+
     const resetBtn = this.container.querySelector("#btn-reset-demo-factory");
-    resetBtn.onclick = () => {
-      import("../components/modal.js").then(({ Modal }) => {
-        Modal.confirm(
-          "Czy na pewno chcesz przywrócić fabryczny zbiór danych demonstracyjnych?<br><br>Wszystkie lokalne zmiany, dodane zgłoszenia i edycje zostaną cofnięte do stanu początkowego (30 zweryfikowanych zgłoszeń testowych).",
-          async () => {
-            await this.dataProvider.resetDemoData();
-            import("../components/toast.js").then(({ Toast }) => {
-              Toast.success("Przywrócono fabryczny zbiór danych demonstracyjnych.");
-            });
-            this.router.navigate("dashboard");
-          },
-          "Przywracanie danych demonstracyjnych",
-          "Przywróć dane",
-          "Anuluj",
-          true
-        );
-      });
-    };
+    if (resetBtn) {
+      resetBtn.onclick = () => {
+        import("../components/modal.js").then(({ Modal }) => {
+          Modal.confirm(
+            "Czy na pewno chcesz przywrócić fabryczny zbiór danych demonstracyjnych?<br><br>Wszystkie lokalne zmiany, dodane zgłoszenia i edycje zostaną cofnięte do stanu początkowego (30 zweryfikowanych zgłoszeń testowych).",
+            async () => {
+              await this.dataProvider.resetDemoData();
+              import("../components/toast.js").then(({ Toast }) => {
+                Toast.success("Przywrócono fabryczny zbiór danych demonstracyjnych.");
+              });
+              this.router.navigate("dashboard");
+            },
+            "Przywracanie danych demonstracyjnych",
+            "Przywróć dane",
+            "Anuluj",
+            true
+          );
+        });
+      };
+    }
 
     const saveBtn = this.container.querySelector("#btn-save-settings");
     saveBtn.onclick = async () => {

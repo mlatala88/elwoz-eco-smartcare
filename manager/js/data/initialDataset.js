@@ -6,10 +6,11 @@
  */
 
 export const INITIAL_STAFF = [
-  { id: "staff-1", name: "Anna Nowak", role: "Dyspozytor Główny", email: "a.nowak@example.com", active: true },
-  { id: "staff-2", name: "Piotr Wiśniewski", role: "Specjalista ds. Obsługi Mieszkańców", email: "p.wisniewski@example.com", active: true },
-  { id: "staff-3", name: "Katarzyna Wójcik", role: "Koordynator Reklamacji i Tras", email: "k.wojcik@example.com", active: true },
-  { id: "staff-4", name: "Marek Lewandowski", role: "Kierownik POK Kartuzy", email: "m.lewandowski@example.com", active: true }
+  { id: "staff-1", name: "Michał Latała", role: "Administrator", email: "wsb.student.tester@gmail.com", active: true },
+  { id: "staff-2", name: "Barbara Seroka", role: "Pracownik obsługi klienta", email: "barbara.seroka@example.com", active: true },
+  { id: "staff-3", name: "Diana Skierka", role: "Pracownik obsługi klienta", email: "diana.skierka@example.com", active: true },
+  { id: "staff-4", name: "Anna Fedoruk", role: "Pracownik obsługi klienta", email: "anna.fedoruk@example.com", active: true },
+  { id: "staff-5", name: "Michał Wadyński", role: "Obserwator", email: "michal.wadynski@example.com", active: true }
 ];
 
 export const INITIAL_SETTINGS = {
@@ -20,7 +21,7 @@ export const INITIAL_SETTINGS = {
   address: "ul. Gdańska 30, 83-300 Kartuzy",
   workingHours: "Pn-Pt 07:00 - 15:00",
   googleReviewUrl: "https://search.google.com/local/writereview?placeid=ChIJ13yCwGSa_UYRqkDdyWL8wdA",
-  testEmailWhitelist: "tester@example.com",
+  testEmailWhitelist: "wsb.student.tester@gmail.com",
   slaHours: {
     PILNY: { responseMinutes: 15, resolutionHours: 4 },
     WYSOKI: { responseMinutes: 120, resolutionHours: 24 },

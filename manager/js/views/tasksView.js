@@ -141,7 +141,13 @@ export class TasksView {
     const todayStr = now.toISOString().split("T")[0];
 
     // Dynamiczny sprawdzian SLA bez opierania się na historycznej fladze
-    const isOverdueCheck = t => (t.slaDeadline && new Date(t.slaDeadline) < now) || (t.nextActionDeadline && new Date(t.nextActionDeadline) < now);
+    // Zgłoszenie z udzieloną odpowiedzią NIE JEST oznaczane jako zalegające z 1. reakcją
+    const isOverdueCheck = t => {
+      const hasFirst = Boolean(t.hasFirstContact || t.firstContactDate);
+      const isFirstOverdue = !hasFirst && Boolean(t.slaDeadline && new Date(t.slaDeadline) < now);
+      const isNextOverdue = Boolean(t.nextActionDeadline && new Date(t.nextActionDeadline) < now);
+      return isFirstOverdue || isNextOverdue;
+    };
 
     // Oblicz liczebności zakładek
     const counts = {
@@ -222,7 +228,8 @@ export class TasksView {
     }
 
     tbody.innerHTML = filtered.map(t => {
-      const isOverdue = (t.slaDeadline && new Date(t.slaDeadline) < now) || (t.nextActionDeadline && new Date(t.nextActionDeadline) < now);
+      const hasFirst = Boolean(t.hasFirstContact || t.firstContactDate);
+      const isOverdue = (!hasFirst && t.slaDeadline && new Date(t.slaDeadline) < now) || (t.nextActionDeadline && new Date(t.nextActionDeadline) < now);
       const isMine = t.assignee === currentUserName;
 
       return `

@@ -21,8 +21,12 @@ W ramach wydania **v0.3.0** przygotowano kompletną, niezależną aplikację web
 - 📑 **Wszystkie zgłoszenia:** Kompaktowa tabela operacyjna, multi-kryterialne filtry, modal konfiguracji widoczności kolumn oraz eksport do CSV.
 - 🎯 **Trzykolumnowe Centrum Obsługi Zgłoszenia:** Pełny widok danych mieszkańca (lewy panel), asystent AI i kreator wiadomości z korektą stylu CX/PR (środkowy panel) oraz zarządzanie statusem, SLA, kolejnym krokiem i notatkami poufnymi (prawy panel).
 - 💬 **Komunikacja & Satysfakcja:** Centralny dziennik audytu korespondencji i rozmów telefonicznych oraz panel monitorowania ocen CSAT z etycznym modułem zaproszeń do Google Reviews.
-- 🔍 **Diagnostyka & Bezpieczeństwo:** Telemetria połączeń, symulator błędów API do testów QA, zero kluczy API po stronie przeglądarki i brak modyfikacji produkcyjnej wersji v0.2.8.
+- 🔍 **Diagnostyka & Bezpieczeństwo:** Telemetria połączeń, symulator błędów API do testów QA, zero kluczy API po stronie przeglądarki, twardy Whitelist Guard (`wsb.student.tester@gmail.com`) i serwerowy Pre-Send Guardrail.
+- ⚡ **Wdrożenie jako Google Apps Script Web App:** Dedykowany szablon `google/webapp.html` oraz kontroler `google/webapp.gs` umożliwiający natywne uruchomienie menedżera w chmurze Google Apps Script za pośrednictwem `HtmlService` i `google.script.run`.
+- 👥 **Dostęp zespołowy i role (5 osób):** Obsługa 5 zweryfikowanych członków zespołu (Michał Latała, Barbara Seroka, Diana Skierka, Anna Fedoruk, Michał Wadyński) z bezpieczną autoryzacją PIN (`1926`) w środowisku kont konsumenckich `@gmail.com`.
+- 🧪 **157 testów automatycznych (100% PASS):** 65 testów jednostkowych UI, 48 testów audytowych silnika v0.2.8 oraz 44 testy integracyjne Scenariuszy A-O (`tests/test-v030-integration.js`).
 - 📚 **Kompletna dokumentacja techniczna:**
+  - [Instrukcja Wdrożenia v0.3.0 (docs/INSTRUKCJA-WDROZENIA-V030.md)](docs/INSTRUKCJA-WDROZENIA-V030.md)
   - [Dokumentacja Architektury (docs/ARCHITEKTURA.md)](docs/ARCHITEKTURA.md)
   - [Kontrakt Integracji z Backendem Google Apps Script (docs/KONTRAKT-INTEGRACJI.md)](docs/KONTRAKT-INTEGRACJI.md)
   - [Raport z Testów – 30/30 PASSED (docs/RAPORT-TESTOW.md)](docs/RAPORT-TESTOW.md)

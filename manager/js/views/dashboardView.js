@@ -232,11 +232,17 @@ export class DashboardView {
     // Wszystkie pilne
     const viewAllUrgentBtn = this.container.querySelector("#btn-view-all-urgent");
     if (viewAllUrgentBtn) {
-      viewAllUrgentBtn.onclick = () => this.router.navigate("tickets", { 
-        metricKey: "urgent",
-        period: this.currentPeriod,
-        customRange: this.customRange
-      });
+      viewAllUrgentBtn.onclick = () => {
+        const navParams = { 
+          metricKey: "urgent",
+          period: this.currentPeriod
+        };
+        if (this.currentPeriod === "custom" && this.customRange) {
+          navParams.from = this.customRange.from;
+          navParams.to = this.customRange.to;
+        }
+        this.router.navigate("tickets", navParams);
+      };
     }
   }
 
@@ -291,11 +297,15 @@ export class DashboardView {
     kpiGrid.querySelectorAll(".kpi-card").forEach(card => {
       card.onclick = () => {
         const metric = card.getAttribute("data-metric");
-        this.router.navigate("tickets", { 
+        const navParams = { 
           metricKey: metric,
-          period: this.currentPeriod,
-          customRange: this.customRange
-        });
+          period: this.currentPeriod
+        };
+        if (this.currentPeriod === "custom" && this.customRange) {
+          navParams.from = this.customRange.from;
+          navParams.to = this.customRange.to;
+        }
+        this.router.navigate("tickets", navParams);
       };
     });
   }

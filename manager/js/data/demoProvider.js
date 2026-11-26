@@ -25,7 +25,8 @@ export function isClosedStatus(status) {
 export function isTicketOverdue(ticket, dateNow = new Date()) {
   if (!ticket || isClosedStatus(ticket.status)) return false;
 
-  if (ticket.slaDeadline && !isNaN(new Date(ticket.slaDeadline).getTime())) {
+  const hasFirstContact = Boolean(ticket.hasFirstContact || ticket.firstContactDate);
+  if (!hasFirstContact && ticket.slaDeadline && !isNaN(new Date(ticket.slaDeadline).getTime())) {
     if (new Date(ticket.slaDeadline) < dateNow) return true;
   }
   if (ticket.nextActionDeadline && !isNaN(new Date(ticket.nextActionDeadline).getTime())) {

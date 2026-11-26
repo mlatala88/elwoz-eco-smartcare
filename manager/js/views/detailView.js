@@ -56,9 +56,13 @@ export class DetailView {
     const currentUserName = this.state.currentUser ? this.state.currentUser.name : "Anna Nowak";
 
     // Wyliczenie SLA (dynamiczne, spójne z isClosedStatus i terminami)
+    // Zgłoszenie z udzieloną już odpowiedzią NIE JEST oznaczane jako zalegające z 1. reakcją
     const now = new Date();
     const isClosed = this.ticket.status === "Rozwiązane" || this.ticket.status === "Zamknięte";
-    const isOverdue = !isClosed && ((this.ticket.slaDeadline && new Date(this.ticket.slaDeadline) < now) || (this.ticket.nextActionDeadline && new Date(this.ticket.nextActionDeadline) < now));
+    const hasFirstContact = Boolean(this.ticket.hasFirstContact || this.ticket.firstContactDate);
+    const isFirstOverdue = !hasFirstContact && !isClosed && Boolean(this.ticket.slaDeadline && new Date(this.ticket.slaDeadline) < now);
+    const isNextOverdue = !isClosed && Boolean(this.ticket.nextActionDeadline && new Date(this.ticket.nextActionDeadline) < now);
+    const isOverdue = isFirstOverdue || isNextOverdue;
     let slaDisplay = "Zgodne z normą";
     if (isOverdue) slaDisplay = "⚠️ PRZEKROCZONO SLA";
     else if (this.ticket.slaDeadline) slaDisplay = `Termin: ${this.ticket.slaDeadline}`;
@@ -597,13 +601,32 @@ export class DetailView {
         return;
       }
 
-      // Pre-Send Quality Control Guardrail (bezwarunkowa kontrola przed wysyłką)
-      const quality = evaluateMessageQuality(content);
+      // Pre-Send Quality Control Guardrail (bezwarunkowa kontrola przed wysyłką tematu i treści)
+      const fullMessageText = `${subject} ${content}`;
+      const quality = evaluateMessageQuality(fullMessageText);
       if (!quality.isValid) {
         import("../components/toast.js").then(({ Toast }) => {
-          Toast.error(quality.blockedReason || "Wiadomość nie spełnia standardów komunikacji z mieszkańcem. Popraw treść lub skorzystaj z asystenta AI.");
+          Toast.error(quality.blockedReason || "Wiadomość nie spełnia standardów komunikacji z mieszkańcem (CX/PR). Popraw treść lub skorzystaj z asystenta AI.");
         });
         return;
+      }
+
+      // Blokada wysłania komunikatu o rozwiązaniu sprawy, jeśli opis podjętych działań zawiera placeholdery lub jest pusty/za krótki
+      const isResolutionNotice = subject.includes("rozwiązani") || subject.includes("zrealizowan");
+      if (isResolutionNotice) {
+        const placeholderRegex = /\[(opis|wpisz|wstaw|uzupełnij).*?\]/i;
+        if (placeholderRegex.test(content) || placeholderRegex.test(subject)) {
+          import("../components/toast.js").then(({ Toast }) => {
+            Toast.error("Błąd: Wiadomość o rozwiązaniu zawiera tekst zastępczy (placeholder). Podaj faktyczny opis wykonanych działań.");
+          });
+          return;
+        }
+        if (content.length < 30) {
+          import("../components/toast.js").then(({ Toast }) => {
+            Toast.error("Błąd: Opis wykonanych działań w wiadomości o rozwiązaniu sprawy jest zbyt krótki (<30 znaków).");
+          });
+          return;
+        }
       }
 
       const commData = {
@@ -613,14 +636,21 @@ export class DetailView {
         subject,
         content,
         author: currentUserName,
-        actionType: subject.includes("Potwierdzenie") ? "Potwierdzenie przyjęcia" : (subject.includes("opini") ? "Zaproszenie do opinii Google" : (subject.includes("rozwiązani") ? "Informacja o rozwiązaniu" : "Odpowiedź do mieszkańca")),
+        actionType: subject.includes("Potwierdzenie") ? "Potwierdzenie przyjęcia" : (subject.includes("opini") ? "Zaproszenie do opinii Google" : (isResolutionNotice ? "Informacja o rozwiązaniu" : "Odpowiedź do mieszkańca")),
         status: "Wysłano"
       };
 
-      await this.dataProvider.addCommunication(commData);
-      import("../components/toast.js").then(({ Toast }) => {
-        Toast.success(`[SYMULACJA] Wysłano wiadomość do: ${recipient}`);
-      });
+      try {
+        await this.dataProvider.addCommunication(commData);
+        import("../components/toast.js").then(({ Toast }) => {
+          Toast.success(`Wysłano wiadomość do: ${recipient} (Testowy odbiorca: wsb.student.tester@gmail.com)`);
+        });
+      } catch (err) {
+        import("../components/toast.js").then(({ Toast }) => {
+          Toast.error(err.message || "Błąd wysyłki wiadomości.");
+        });
+        return;
+      }
 
       // Odśwież widok
       this.render({ id: this.ticket.id });
@@ -711,12 +741,23 @@ export class DetailView {
 
       // Walidacja zamykania zgłoszenia (wymóg z promptu i testy.md TEST-07)
       const isClosing = newStatus === "Rozwiązane" || newStatus === "Zamknięte";
-      if (isClosing && !resolutionMethod) {
-        import("../components/toast.js").then(({ Toast }) => {
-          Toast.error("Błąd: Przed oznaczeniem sprawy jako rozwiązana lub zamknięta musisz wpisać rzeczywisty sposób rozwiązania sprawy.");
-        });
-        this.container.querySelector("#detail-resolution-method").focus();
-        return;
+      if (isClosing) {
+        if (!resolutionMethod || resolutionMethod.length < 5) {
+          import("../components/toast.js").then(({ Toast }) => {
+            Toast.error("Błąd: Przed oznaczeniem sprawy jako rozwiązana lub zamknięta musisz wpisać rzeczywisty sposób rozwiązania sprawy (minimum 5 znaków).");
+          });
+          this.container.querySelector("#detail-resolution-method").focus();
+          return;
+        }
+
+        const placeholderRegex = /\[(opis|wpisz|wstaw|uzupełnij).*?\]/i;
+        if (placeholderRegex.test(resolutionMethod)) {
+          import("../components/toast.js").then(({ Toast }) => {
+            Toast.error("Błąd: Sposób rozwiązania sprawy zawiera tekst zastępczy (placeholder). Podaj rzeczywiste ustalenia.");
+          });
+          this.container.querySelector("#detail-resolution-method").focus();
+          return;
+        }
       }
 
       // Ostrzeżenie przy braku kolejnego kroku w otwartej sprawie

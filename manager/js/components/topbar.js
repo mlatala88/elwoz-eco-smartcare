@@ -108,11 +108,17 @@ export class Topbar {
       </div>
 
       <div class="topbar-right">
-        <!-- Status połączenia i tryb demo -->
+        <!-- Status połączenia i tryb pracy -->
         <div class="system-status-indicator" id="system-status-btn" style="cursor: pointer;" title="Kliknij, aby otworzyć panel diagnostyki">
-          <span class="status-dot"></span>
-          <span>Tryb Demo • Gemini 3.6 Flash</span>
+          <span class="status-dot" id="system-status-dot"></span>
+          <span id="system-status-label">Ładowanie...</span>
         </div>
+
+        <!-- Przycisk ręcznego odświeżenia danych -->
+        <button class="btn btn-secondary btn-xs" id="btn-manual-sync" style="display: flex; align-items: center; gap: 4px; padding: 6px 10px;" title="Ręczne odświeżenie danych z CRM">
+          <i data-lucide="refresh-cw" style="width: 13px; height: 13px;"></i>
+          <span style="font-size: 11px;">Odśwież</span>
+        </button>
 
         <!-- Centrum Powiadomień -->
         <div style="position: relative;">
@@ -157,6 +163,25 @@ export class Topbar {
     const statusBtn = this.container.querySelector("#system-status-btn");
     statusBtn.onclick = () => this.router.navigate("diagnostics");
 
+    // Obsługa ręcznego odświeżenia
+    const syncBtn = this.container.querySelector("#btn-manual-sync");
+    if (syncBtn) {
+      syncBtn.onclick = async () => {
+        syncBtn.disabled = true;
+        try {
+          if (typeof this.dataProvider.notify === "function") this.dataProvider.notify();
+          await this.loadNotifications();
+          this.updateSystemStatus();
+          this.router.refreshCurrent();
+          import("./toast.js").then(({ Toast }) => Toast.success("Dane zostały zsynchronizowane."));
+        } catch (err) {
+          import("./toast.js").then(({ Toast }) => Toast.error("Błąd odświeżania: " + err.message));
+        } finally {
+          syncBtn.disabled = false;
+        }
+      };
+    }
+
     // Obsługa powiadomień
     const notifBtn = this.container.querySelector("#notif-toggle-btn");
     notifBtn.onclick = (e) => {
@@ -181,6 +206,22 @@ export class Topbar {
 
     this.loadStaff();
     this.loadNotifications();
+    this.updateSystemStatus();
+  }
+
+  updateSystemStatus() {
+    const dot = this.container.querySelector("#system-status-dot");
+    const label = this.container.querySelector("#system-status-label");
+    if (!dot || !label) return;
+
+    const isConnected = Boolean(this.dataProvider && (this.dataProvider.isEmbeddedGas || (this.dataProvider.constructor && this.dataProvider.constructor.name === "AppsScriptDataProvider")));
+    if (isConnected) {
+      dot.className = "status-dot";
+      label.textContent = "Połączono z CRM (Google Sheets)";
+    } else {
+      dot.className = "status-dot dot-warning";
+      label.textContent = "Tryb DEMO (30 zgłoszeń)";
+    }
   }
 
   showStaffSwitchModal() {

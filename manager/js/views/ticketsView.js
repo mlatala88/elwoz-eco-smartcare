@@ -50,7 +50,20 @@ export class TicketsView {
     if (params.search) this.filters.search = params.search;
     if (params.metricKey) this.filters.metricKey = params.metricKey;
     if (params.period) this.filters.period = params.period;
-    if (params.customRange) this.filters.customRange = params.customRange;
+    if (params.from && params.to) {
+      this.filters.customRange = { from: params.from, to: params.to };
+      this.filters.period = "custom";
+    } else if (params.customRange) {
+      if (typeof params.customRange === "string") {
+        try {
+          this.filters.customRange = JSON.parse(params.customRange);
+        } catch (_) {
+          this.filters.customRange = null;
+        }
+      } else {
+        this.filters.customRange = params.customRange;
+      }
+    }
 
     const staffList = await this.dataProvider.getStaff();
 
