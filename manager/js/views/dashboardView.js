@@ -593,7 +593,7 @@ export class DashboardView {
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
               <div class="form-group">
                 <label class="form-label">Adres e-mail</label>
-                <input type="email" class="form-control" id="new-email" placeholder="mieszkaniec@przyklad.pl" />
+                <input type="email" class="form-control" id="new-email" placeholder="mieszkaniec@example.com" />
               </div>
 
               <div class="form-group">

@@ -262,7 +262,7 @@ export class SettingsView {
             </div>
             <div class="form-group">
               <label class="form-label form-label-required">Adres e-mail</label>
-              <input type="email" class="form-control" id="staff-new-email" placeholder="j.kowalczyk@elwozeco.pl" />
+              <input type="email" class="form-control" id="staff-new-email" placeholder="j.kowalczyk@example.com" />
             </div>
           `,
           footer: `

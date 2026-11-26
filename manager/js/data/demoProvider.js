@@ -716,7 +716,7 @@ export class DemoDataProvider extends DataProviderInterface {
 
     // Reguła 3: Zapewnienie podziękowania za kontakt i podpisu POK Kartuzy
     if (!polished.includes("POK Kartuzy") && !polished.includes("Punkt Obsługi Klienta")) {
-      polished += "\n\nZ poważaniem,\nPunkt Obsługi Klienta w Kartuzach\nELWOZ ECO Sp. z o.o.\ntel. 58 681 22 99 | kartuzy@elwozeco.pl";
+      polished += "\n\nZ poważaniem,\nPunkt Obsługi Klienta w Kartuzach\nELWOZ ECO Sp. z o.o.\ntel. 58 681 22 99 | kontakt@example.com";
     }
 
     return polished;

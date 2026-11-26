@@ -93,7 +93,7 @@ async function run() {
   console.log("\n5. Dziennik komunikacji i audyt");
   const comm = await provider.addCommunication({
     ticketId: newTicket.id,
-    recipient: "tester@przyklad.pl",
+    recipient: "tester@example.com",
     channel: "E-mail",
     subject: "Potwierdzenie przyjęcia zgłoszenia",
     content: "Dzień dobry, potwierdzamy przyjęcie.",
