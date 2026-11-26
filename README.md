@@ -1,5 +1,5 @@
 # ELWOZ ECO SmartCare – Cyfrowy Punkt Obsługi Mieszkańca
-**Wersja:** 0.2.7 (Customer Service Intelligence: Centralny Panel Obsługi, Kolejka spraw, Gotowa 1. odpowiedź 0s, 4 poziomy priorytetów i SLA, lokalna kontrola danych, automatyczna analiza w tle)  
+**Wersja:** 0.2.8 (Customer Service Intelligence: Stabilizacja silnika CRM, eliminacja blokad LockService, kolejka AI 15 RPM, warstwa Service API pod v0.3.0)  
 **Projekt zaliczeniowy:** *Nowoczesne technologie w marketingu i sprzedaży* – Uniwersytet WSB Merito w Gdańsku  
 **Przedsiębiorstwo:** ELWOZ ECO Sp. z o.o.  
 **Obszar wdrożenia:** Rejon Kartuz i okoliczne sołectwa  
@@ -193,20 +193,45 @@ W arkuszu kalkulacyjnym na koncie `wsb.student.tester@gmail.com` dostępne jest 
 
 | Opcja menu | Rola i działanie |
 |---|---|
-| **1. 🎯 Obsłuż zgłoszenie (Centrum Obsługi)** | Otwiera Centralny Panel Obsługi Zgłoszenia (widok 360°, inteligencja AI, edycja priorytetu, kolejnego kroku operacyjnego i notatek). |
+| **1. 🎯 Obsłuż zgłoszenie (Centrum Obsługi)** | Otwiera Centralny Panel Obsługi Zgłoszenia (widok 360°, inteligencja AI, edycja priorytetu, planowanie kolejnego kroku, wgląd w błędy AI, akcje natychmiastowe). |
 | **2. 📊 Kolejka spraw i filtry operacyjne** | Otwiera interaktywną przeglądarkę zgłoszeń filtrującą sprawy po SLA, priorytecie PILNY/WYSOKI, braku odpowiedzi lub oczekiwaniu na mieszkańca. |
 | **3. 🤖 Analizuj zgłoszenie przez AI** | Otwiera okno weryfikacji zanonimizowanego opisu (Human-in-the-Loop) i ręcznie uruchamia/ponawia analizę przez **Gemini Flash**. |
-| **4. ✉️ Przygotuj pierwszą odpowiedź / potwierdzenie** | Błyskawiczny kreator pierwszej odpowiedzi (0s wait!) zasilany pre-generowaną przez AI treścią z CRM. |
+| **⚡ Przetwórz kolejkę AI (v0.2.8)** | Przetwarza oczekujące i błędne analizy z bezpiecznym 2-sekundowym odstępem zapobiegającym przekroczeniu limitu 15 RPM. |
+| **🔧 Wykryj i uzupełnij brakujące zgłoszenia (v0.2.8)** | Wyszukuje nieprzetworzone odpowiedzi z formularza (np. po awarii LockService), nadaje kolejne unikalne ID oraz ustala status i SLA bez ponownej wysyłki e-maili. |
+| **4. ✉️ Przygotuj pierwszą odpowiedź / potwierdzenie** | Błyskawiczny kreator pierwszej odpowiedzi (0s wait!) zasilany pre-generowaną przez AI treścią z CRM o ustrukturyzowanym formacie 4-punktowym. |
 | **5. ✉️ Przygotuj informację o postępach** | Generuje szablon B informujący o weryfikacji okoliczności zgłoszenia. |
 | **6. ✉️ Przygotuj informację o rozwiązaniu** | Wymaga uzupełnienia pola *Sposób rozwiązania sprawy*; generuje szablon C ze zweryfikowanym linkiem do opinii. |
 | **7. ⭐ Przygotuj prośbę o opinię Google** | Generuje szablon D z bezpośrednim linkiem Google (`placeid=ChIJ13yCwGSa_UYRqkDdyWL8wdA`); chroni przed duplikacją. |
 | **8. 📞 Odnotuj kontakt telefoniczny** | Rejestruje notatkę z rozmowy i aktualizuje daty kontaktu oraz statusy w CRM. |
 | **9. 📜 Wyświetl historię komunikacji** | Prezentuje pełny dziennik zdarzeń dla wybranego zgłoszenia. |
+| **🔍 Kontrola spójności systemu (v0.2.8)** | Weryfikuje poprawność wskaźników Dashboardu, wykresów, nieprzetworzonych zgłoszeń i błędów AI. |
 | **🔍 Test diagnostyczny Gemini API** | Testuje integrację z modelem Gemini Flash na danych mockowych (schemat 10 pól) i wyświetla diagnostykę tokenów. |
-| **🚀 Aktualizuj system do v0.2.7** | Idempotentna funkcja aktualizacji struktury CRM, Dashboardu, wykresów, formatowania i ustawień do v0.2.7. |
+| **🚀 Aktualizuj system do v0.2.8** | Idempotentna funkcja aktualizacji struktury CRM (kolumna `Szczegóły błędu AI`), Dashboardu (Sekcja 4: Diagnostyka), warstwy Service API i przywracania spraw. |
 | **⚙️ Ustawienia / Klucz Gemini API** | Pozwala bezpiecznie zapisać klucz API w Script Properties bez umieszczania go w kodzie. |
 
 ---
+
+
+
+---
+
+## 9a. Warstwa Service API dla aplikacji webowej SmartCare Manager (v0.3.0)
+
+W ramach wersji **v0.2.8** zaimplementowano kompletną warstwę bezstanowego interfejsu programistycznego (Service API) w Google Apps Script, która uniezależnia logikę biznesową od interfejsu arkusza kalkulacyjnego i przygotowuje system na budowę profesjonalnej aplikacji webowej w kolejnym etapie:
+
+- `apiGetTicketsList(filters)` – pobieranie listy zgłoszeń z filtrowaniem po statusie, priorytecie, stanie AI oraz wyszukiwaniem tekstowym,
+- `apiGetTicketDetails(ticketId)` – pobieranie pełnych danych i metadanych operacyjnych pojedynczego zgłoszenia,
+- `apiGetAiAnalysis(ticketId)` – pobieranie struktury wniosków Gemini AI, sugestii priorytetu, ustaleń pre-walidacji oraz szczegółów błędów,
+- `apiGetCommunicationHistory(ticketId)` – pobieranie wpisów z dziennika komunikacji dla wybranej sprawy,
+- `apiGetDashboardStats()` – pobieranie kompletnego zestawu metryk KPI i wskaźników operacyjnych,
+- `apiGetNextActionsList()` – pobieranie listy spraw wymagających natychmiastowego działania (brak kroku, zagrożenie SLA, błędy AI),
+- `apiGetDiagnostics()` – pobieranie diagnostyki środowiska (trigger, klucz API, liczba odpowiedzi vs zarejestrowanych zgłoszeń),
+- `apiUpdateTicket(ticketId, updates)` – bezpieczna modyfikacja pól sprawy pod ochroną LockService z automatyczną aktualizacją znaczników czasu,
+- `apiTriggerAiAnalysis(ticketId)` – uruchomienie analizy AI dla wskazanego zgłoszenia,
+- `apiReconcileUnprocessedTickets()` – automatyczne wykrycie i uzupełnienie brakujących zgłoszeń.
+
+> [!NOTE]
+> Funkcje Service API operują w bezpiecznym kontekście kontenera Google Apps Script (`google.script.run`) i nie wystawiają publicznych, nieuwierzytelnionych endpointów HTTP na świat zewnętrzny.
 
 ## 10. Rzetelne szablony wiadomości i procedura komunikacji
 

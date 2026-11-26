@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  * ELWOZ ECO SmartCare - Moduł Komunikacji & Customer Service Intelligence (communication.gs)
- * Wersja: 0.2.7 (CSI - Centrum Obsługi, Kolejka spraw, Gotowa 1. odpowiedź 0s, 4 poziomy priorytetów)
+ * Wersja: 0.2.8 (CSI - Centrum Obsługi, Stabilizacja silnika, Kolejka AI 15 RPM, Instant Composer 0s)
  * Projekt edukacyjny: Uniwersytet WSB Merito w Gdańsku
  * Dedykowane konto testowe: wsb.student.tester@gmail.com
  * ============================================================================
@@ -36,6 +36,8 @@ function onOpen() {
     .addItem("1. 🎯 Obsłuż zgłoszenie (Centrum Obsługi)", "actionOpenCentralTicketHub")
     .addItem("2. 📊 Kolejka spraw i filtry operacyjne", "actionOpenQueueBrowser")
     .addItem("3. 🤖 Analizuj zgłoszenie przez AI", "actionAnalyzeWithAi")
+    .addItem("⚡ Przetwórz kolejkę AI (v0.2.8)", "actionProcessAiQueue")
+    .addItem("🔧 Wykryj i uzupełnij brakujące zgłoszenia (v0.2.8)", "actionReconcileTickets")
     .addSeparator()
     .addItem("4. ✉️ Przygotuj pierwszą odpowiedź / potwierdzenie", "actionPrepareConfirmation")
     .addItem("5. ✉️ Przygotuj informację o postępach", "actionPrepareProgressUpdate")
@@ -45,8 +47,9 @@ function onOpen() {
     .addItem("8. 📞 Odnotuj kontakt telefoniczny", "actionLogPhoneCall")
     .addItem("9. 📜 Wyświetl historię komunikacji", "actionViewCommunicationHistory")
     .addSeparator()
+    .addItem("🔍 Kontrola spójności systemu (v0.2.8)", "actionValidateSystem")
     .addItem("🔍 Test diagnostyczny Gemini API", "testGeminiApiIntegration")
-    .addItem("🚀 Aktualizuj system do v0.2.7", "updateSystemToV027")
+    .addItem("🚀 Aktualizuj system do v0.2.8", "updateSystemToV028")
     .addItem("⚙️ Ustawienia / Klucz Gemini API", "configureGeminiApiKeyFromComm")
     .addToUi();
 }
@@ -55,7 +58,9 @@ function onOpen() {
  * Kompatybilność wsteczna - wywołanie aktualizacji do najnowszej wersji
  */
 function updateDashboardKpiFormulasOnly() {
-  if (typeof updateSystemToV027 === "function") {
+  if (typeof updateSystemToV028 === "function") {
+    updateSystemToV028();
+  } else if (typeof updateSystemToV027 === "function") {
     updateSystemToV027();
   } else if (typeof updateSystemToV026 === "function") {
     updateSystemToV026();
@@ -163,14 +168,19 @@ function getTicketDataByRow(sheet, row) {
   const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim());
   const values = sheet.getRange(row, 1, 1, lastCol).getValues()[0];
 
-  const getV = (colName) => {
-    for (let i = 0; i < headers.length; i++) {
-      if (headers[i] === colName || headers[i].startsWith(colName)) {
-        const val = values[i];
-        if (val instanceof Date) {
-          return Utilities.formatDate(val, "Europe/Warsaw", "yyyy-MM-dd HH:mm");
+  const getV = (possibleNames) => {
+    const list = Array.isArray(possibleNames) ? possibleNames : [possibleNames];
+    for (let name of list) {
+      const target = String(name).trim().toLowerCase();
+      for (let i = 0; i < headers.length; i++) {
+        const h = String(headers[i] || "").trim().toLowerCase();
+        if (h === target || h.startsWith(target) || h.includes(target)) {
+          const val = values[i];
+          if (val instanceof Date) {
+            return Utilities.formatDate(val, "Europe/Warsaw", "yyyy-MM-dd HH:mm");
+          }
+          return (val !== null && val !== undefined) ? String(val).trim() : "";
         }
-        return (val !== null && val !== undefined) ? String(val).trim() : "";
       }
     }
     return "";
@@ -185,7 +195,7 @@ function getTicketDataByRow(sheet, row) {
   const wasteFraction = getV("Rodzaj odpadów");
   const city = getV("Miejscowość");
   const street = getV("Ulica lub lokalizacja");
-  const houseNumber = getV("Numer posesji");
+  const houseNumber = getV(["Numer posesji lub identyfikator miejsca", "Numer posesji", "Nr posesji", "Numer domu"]);
   const contactRequest = getV("Prośba o kontakt ze strony pracownika");
   const description = getV("Opis zgłoszenia");
 
@@ -223,6 +233,7 @@ function getTicketDataByRow(sheet, row) {
   const aiSuggestedAction = getV("Sugerowane działanie AI");
   const aiDraftResponse = getV("Proponowana odpowiedź AI");
   const aiRecommendedNextStep = getV("Rekomendowany kolejny krok AI");
+  const aiErrorDetails = getV(["Szczegóły błędu AI", "Błąd AI"]);
 
   let fullLocation = city;
   if (street) fullLocation += `, ul. ${street}`;
@@ -794,7 +805,10 @@ Potwierdzamy zarejestrowanie zgłoszenia w systemie ELWOZ ECO SmartCare:
 • Frakcja odpadów: ${ticket.wasteFraction}
 • Wskazana ulica / rejon: ${ticket.location}
 
-Zgłoszenie oczekuje na weryfikację przez dyspozytora Punktu Obsługi Klienta w Kartuzach.
+1. Ustalenia wstępne: Zgłoszenie zostało poprawnie zarejestrowane w naszym systemie CRM.
+2. Działania ze strony Mieszkańca: Ze strony Mieszkańca na ten moment nie są wymagane żadne dodatkowe działania.
+3. Kolejny krok przedsiębiorstwa: Dyspozytor POK Kartuzy dokonuje weryfikacji trasy śmieciarki w systemie GPS oraz w dziennym raporcie załogi.
+4. Strona odpowiedzialna za realizację: Przedsiębiorstwo ELWOZ ECO.
 
 W przypadku pytań prosimy o kontakt z biurem POK Kartuzy (tel. ${settings.contactPhone}, e-mail: ${settings.contactEmail}), powołując się na numer sprawy ${ticket.ticketId}.
 
@@ -1915,5 +1929,87 @@ function configureGeminiApiKeyFromComm() {
         ui.alert("Sukces", "Klucz Gemini zapisany w Script Properties.", ui.ButtonSet.OK);
       }
     }
+  }
+}
+
+
+/**
+ * ============================================================================
+ * AKCJE MENU SMARTCARE v0.2.8
+ * ============================================================================
+ */
+
+/**
+ * Akcja menu: Uruchomienie przetwarzania kolejki AI (v0.2.8)
+ */
+function actionProcessAiQueue() {
+  const ui = SpreadsheetApp.getUi();
+  if (typeof processAiAnalysisQueue !== "function") {
+    ui.alert("Błąd", "Funkcja processAiAnalysisQueue nie jest dostępna w module ai.gs.", ui.ButtonSet.OK);
+    return;
+  }
+  const res = processAiAnalysisQueue(5);
+  const msg = `Przetworzono z kolejki AI: ${res.processedCount} zgłoszeń.\n` +
+    `• Zakończone sukcesem: ${res.successCount}\n` +
+    `• Błędy / ponowienia: ${res.errorCount}` +
+    (res.errors && res.errors.length > 0 ? `\n\nSzczegóły:\n• ${res.errors.join("\n• ")}` : "");
+  ui.alert("Kolejka analizy AI (v0.2.8)", msg, ui.ButtonSet.OK);
+}
+
+/**
+ * Akcja menu: Wykrycie i uzupełnienie brakujących zgłoszeń formularza (v0.2.8)
+ */
+function actionReconcileTickets() {
+  const ui = SpreadsheetApp.getUi();
+  if (typeof reconcileUnprocessedFormResponses !== "function") {
+    ui.alert("Błąd", "Funkcja reconcileUnprocessedFormResponses nie jest dostępna w setup.gs.", ui.ButtonSet.OK);
+    return;
+  }
+  const res = reconcileUnprocessedFormResponses();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (typeof refreshDashboardStats === "function") {
+    try { refreshDashboardStats(ss); } catch (_) {}
+  }
+
+  if (res.reconciledCount > 0) {
+    ui.alert(
+      "Uzupełniono brakujące zgłoszenia (v0.2.8)",
+      `Wykryto i pomyślnie uzupełniono ${res.reconciledCount} brakujące(-ych) zgłoszeń z formularza.\n\n` +
+      `Nadane identyfikatory: ${res.reconciledIds.join(", ")}\n\n` +
+      `Wszystkie sprawy otrzymały status 'Nowe', priorytet 'STANDARDOWY' oraz wstępny termin SLA. Zgłoszenia oczekują na analizę w kolejce AI.`,
+      ui.ButtonSet.OK
+    );
+  } else {
+    ui.alert("Kontrola zgłoszeń (v0.2.8)", "Wszystkie odpowiedzi z formularza posiadają już przypisane numery zgłoszeń i dane operacyjne. Nie wykryto braków.", ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Akcja menu: Weryfikacja integralności Dashboardu i CRM (v0.2.8)
+ */
+function actionValidateSystem() {
+  const ui = SpreadsheetApp.getUi();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (typeof validateDashboardIntegrity !== "function") {
+    ui.alert("Błąd", "Funkcja validateDashboardIntegrity nie jest dostępna w setup.gs.", ui.ButtonSet.OK);
+    return;
+  }
+  const validation = validateDashboardIntegrity(ss);
+  if (validation.isValid) {
+    ui.alert(
+      "Kontrola spójności systemu (v0.2.8)",
+      `Weryfikacja zakończona pełnym sukcesem!\n\n` +
+      `Liczba zgłoszeń w CRM: ${validation.actualTickets}\n` +
+      `Wykresy: ${validation.chartsCount}\n` +
+      `Ustawienia regionalne: ${validation.locale}\n` +
+      `Brak błędów formuł i wskaźników.`,
+      ui.ButtonSet.OK
+    );
+  } else {
+    ui.alert(
+      "Ostrzeżenie integralności systemu (v0.2.8)",
+      `Wykryto następujące uwagi do rozwiązania:\n• ${validation.errors.join("\n• ")}`,
+      ui.ButtonSet.OK
+    );
   }
 }

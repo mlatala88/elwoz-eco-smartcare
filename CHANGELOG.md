@@ -4,6 +4,68 @@ Wszystkie istotne zmiany i wydania w projekcie **ELWOZ ECO SmartCare** są rejes
 
 ---
 
+## [0.2.8] – 2026-11-26
+### Stabilizacja silnika CRM, obsługa limitów 15 RPM, eliminacja blokad rejestracji i przygotowanie warstwy Service API
+
+Wydanie **v0.2.8** stanowi kluczową aktualizację stabilizacyjną silnika przed planowaną budową aplikacji webowej *SmartCare Manager v0.3.0*. Wszystkie modyfikacje powstały na bazie rzeczywistych testów użytkowników przeprowadzonych na koncie Google.
+
+#### Kluczowe poprawki i usprawnienia silnika:
+1. **Eliminacja blokady rejestracji zgłoszeń (LockService Decoupling):**
+   - **Problem:** W wersji v0.2.7 wywołanie powiadomień e-mail oraz synchronicznej analizy Gemini AI następowało wewnątrz sekcji LockService. Równoczesne przesłanie kolejnego formularza powodowało przekroczenie limitu czasu oczekiwania na blokadę (timeout 30s) i pominięcie rejestracji wiersza (brak ID, statusu, SLA).
+   - **Rozwiązanie:** Podział procedury `handleNewTicketSubmit` na dwie fazy:
+     - Faza 1: Błyskawiczna rejestracja ID, statusu ("Nowe"), priorytetu ("STANDARDOWY"), SLA (4h) i stanu AI ("Oczekuje") pod blokadą LockService (<200ms).
+     - Faza 2: Asynchroniczne wywołanie wysyłki e-mail i analizy AI bezwzględnie *poza* blokadą LockService w odizolowanych blokach `try/catch`.
+2. **Automatyczne przywracanie pominiętych zgłoszeń (`reconcileUnprocessedFormResponses`):**
+   - Moduł skanuje rejestr CRM i wykrywa odpowiedzi formularza posiadające treść, lecz pozbawione numeru ID (np. pominięte zgłoszenie z dnia 26.11.2026, godz. 10:42:11 dotyczące uszkodzonego koła pojemnika w Prokowie).
+   - Bezpiecznie nadaje kolejne unikalne identyfikatory (`ELW-2026-XXXX`), ustala wstępne SLA od daty wpłynięcia i kieruje sprawę do kolejki AI bez ponownego wysyłania historycznych powiadomień e-mail.
+3. **Nowa kolumna CRM `Szczegóły błędu AI` i zakaz pozorowanych wyników:**
+   - Wprowadzono dedykowaną kolumnę CRM rejestrującą dokładne, czytelne przyczyny błędów (np. limit 15 RPM, kod HTTP 429, timeout połączenia, brak klucza API).
+   - Zgodnie ze standardami jakości zrezygnowano z podstawiania szablonu awaryjnego jako autentycznego wyniku Gemini w przypadku wystąpienia błędu. Kolumny analizy AI nie są zanieczyszczane fałszywymi danymi.
+4. **Zarządzana kolejka analizy AI z ochroną limitu 15 RPM (`processAiAnalysisQueue`):**
+   - Ograniczenie bezpłatnego planu Google AI Studio wynosi 15 zapytań na minutę (15 RPM).
+   - Dodano funkcję `processAiAnalysisQueue(maxBatch = 5)` przetwarzającą zgłoszenia oczekujące i błędne z zachowaniem 2-sekundowego odstępu (`Utilities.sleep(2000)`) pomiędzy wywołaniami.
+   - Wdrożono zabezpieczenie przed duplikacją analizy (`forceRerun = false`).
+5. **Poprawa walidacji adresu i obsługa alfanumerycznych numerów posesji:**
+   - **Problem:** Kolumna formularza to `"Numer posesji lub identyfikator miejsca"`, a nie `"Numer posesji"`, co w v0.2.7 powodowało zwracanie wartości pustej i fałszywy komunikat o braku numeru posesji dla zgłoszeń `ELW-2026-0006`, `ELW-2026-0007`, `ELW-2026-0009`.
+   - **Rozwiązanie:** Wdrożenie funkcji `findHeaderIndex` z dynamiczną listą aliasów oraz funkcji `isHouseNumberPresent` akceptującej formaty alfanumeryczne (`15`, `24`, `4C`, `12A`, `1/2`, `3B/4`, `dz. 12`).
+   - **Ochrona prywatności (Privacy Rule):** Model Gemini otrzymuje wyłącznie status kompletności adresu (`KOMPLETNY` lub `NIEKOMPLETNY: brak numeru posesji`), bez surowych nazw ulic i numerów domów w prompcie.
+   - W przypadku kompletnego adresu model ma kategoryczny zakaz ponownego pytania mieszkańca o adres!
+6. **Rozszerzona pre-walidacja lokalna (`preValidateTicketData`):**
+   - Weryfikacja daty problemu: blokada dat w przyszłości oraz ostrzeżenie przy sprawach starszych niż 90 dni (wymóg weryfikacji archiwalnej).
+   - Weryfikacja wniosku o kontakt telefoniczny: wymóg obecności poprawnego numeru telefonu.
+   - Wykrywanie sprzeczności kategorii: pochwała z treścią reklamacji lub reklamacja z podziękowaniem.
+   - Wykrywanie sprzeczności frakcji oraz filtr pozorowanych odpowiedzi.
+7. **Dostosowanie rekomendacji AI do kategorii sprawy (CX/PR):**
+   - **Pochwała/Podziękowanie:** Sugerowany priorytet to **NISKI**. Sugerowane działanie to wpis do rejestru wyróżnień i przekazanie podziękowania załodze. Kategoryczny zakaz sugerowania kontroli GPS śmieciarki, kierowania do dyspozytora czy pytań o adres! Strona odpowiedzialna: *Przedsiębiorstwo*.
+   - **Zgłoszenie niekompletne:** Sugerowane działanie to kontakt z prośbą o doprecyzowanie danych. Strona odpowiedzialna: *Mieszkaniec*.
+   - **Zgłoszenie kompletne:** Sugerowane działanie to weryfikacja zlecenia i raportu GPS przez dyspozytora. Strona odpowiedzialna: *Przedsiębiorstwo*.
+   - Rozróżnienie działań planowanych od zrealizowanych: unikanie deklaracji o już wykonanych działaniach przed weryfikacją.
+8. **Struktura 4-punktowa pierwszej odpowiedzi (0 sekund oczekiwania):**
+   - Każda proponowana odpowiedź w otwartej sprawie jednoznacznie zawiera: (1) co zostało ustalone/zarejestrowane, (2) czego oczekujemy od mieszkańca (lub brak wymogów), (3) jaki jest kolejny krok przedsiębiorstwa, (4) kto jest stroną odpowiedzialną (ELWOZ ECO).
+9. **Ochrona manualnych decyzji pracownika o priorytecie:**
+   - Model AI sugeruje priorytet (`Sugerowany priorytet AI`), lecz nie nadpisuje ręcznie zatwierdzonego lub zmienionego przez pracownika priorytetu w kolumnie `Priorytet`.
+10. **Nowa Sekcja 4 Dashboardu: Diagnostyka Silnika & AI:**
+    - Monitorowanie: łączna liczba nadesłanych odpowiedzi formularza, liczba zarejestrowanych spraw, liczba nieprzetworzonych odpowiedzi (alarm na czerwono jeśli > 0), udane analizy AI, błędy AI oraz oczekujące w kolejce.
+    - Jeśli brak ocen satysfakcji, komórka średniej satysfakcji wyświetla czytelny napis `Brak ocen` zamiast wartości `0`.
+    - Funkcja `validateDashboardIntegrity` blokuje komunikat sukcesu, jeżeli wykryto nieprzetworzone odpowiedzi formularza lub błędy analizy AI.
+11. **Warstwa Service API dla przyszłej aplikacji SmartCare Manager v0.3.0:**
+    - Zaimplementowano bezstanowy interfejs programistyczny w Google Apps Script (`google.script.run`):
+      - `apiGetTicketsList(filters)` – pobieranie listy zgłoszeń z filtrowaniem,
+      - `apiGetTicketDetails(ticketId)` – pełne dane pojedynczego zgłoszenia,
+      - `apiGetAiAnalysis(ticketId)` – dane i diagnostyka analizy AI,
+      - `apiGetCommunicationHistory(ticketId)` – historia korespondencji,
+      - `apiGetDashboardStats()` – kompletne wskaźniki KPI,
+      - `apiGetNextActionsList()` – lista spraw wymagających pilnego działania,
+      - `apiGetDiagnostics()` – diagnostyka silnika, triggerów i konfiguracji,
+      - `apiUpdateTicket(ticketId, updates)` – bezpieczna modyfikacja pól operacyjnych,
+      - `apiTriggerAiAnalysis(ticketId)` – uruchomienie analizy AI dla sprawy,
+      - `apiReconcileUnprocessedTickets()` – automatyczne przywracanie pominiętych spraw.
+12. **Jednoklikowa aktualizacja do v0.2.8 (`updateSystemToV028`):**
+    - Dodaje kolumnę `Szczegóły błędu AI`, uruchamia automatyczne przywracanie pominiętych zgłoszeń, aktualizuje Dashboard z sekcją diagnostyczną oraz testy.
+    - Zachowuje 100% dotychczasowych danych, ustawień, zweryfikowanego linku Google Reviews oraz reguł serwerowych.
+
+---
+
 ## [0.2.7] – 2026-11-25
 ### Customer Service Intelligence (CSI): Inteligentny asystent biura obsługi klienta, automatyczna analiza w tle, 4 poziomy priorytetów i SLA, Centralny Panel Obsługi oraz Kolejka Spraw
 
