@@ -7,6 +7,7 @@
 
 import { DataProviderInterface } from "./dataProvider.js";
 import { INITIAL_TICKETS, INITIAL_COMMUNICATIONS, INITIAL_STAFF, INITIAL_SETTINGS } from "./initialDataset.js";
+import { simulateCxAiRefine } from "./cxGuardrail.js";
 
 const STORAGE_KEYS = {
   TICKETS: "elwoz_smartcare_v3_tickets",
@@ -115,6 +116,28 @@ export class DemoDataProvider extends DataProviderInterface {
   async getTickets(filters = {}) {
     let tickets = this._get(STORAGE_KEYS.TICKETS) || [];
 
+    // Filtrowanie po wybranym okresie (jeżeli przekazano)
+    if (filters.period && filters.period !== "all") {
+      const now = new Date();
+      const todayStr = now.toISOString().split("T")[0];
+      if (filters.period === "today") {
+        tickets = tickets.filter(t => t.timestamp && t.timestamp.startsWith(todayStr));
+      } else if (filters.period === "7days") {
+        const past7 = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
+        tickets = tickets.filter(t => t.timestamp && new Date(t.timestamp) >= past7);
+      } else if (filters.period === "30days") {
+        const past30 = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
+        tickets = tickets.filter(t => t.timestamp && new Date(t.timestamp) >= past30);
+      } else if (filters.period === "custom" && filters.customRange && filters.customRange.from && filters.customRange.to) {
+        const fromD = new Date(filters.customRange.from);
+        const toD = new Date(filters.customRange.to + "T23:59:59");
+        tickets = tickets.filter(t => {
+          const d = new Date(t.timestamp);
+          return d >= fromD && d <= toD;
+        });
+      }
+    }
+
     // Filtrowanie po tekście (wyszukiwarka)
     if (filters.search && filters.search.trim()) {
       const q = filters.search.toLowerCase().trim();
@@ -153,12 +176,20 @@ export class DemoDataProvider extends DataProviderInterface {
     }
 
     // Filtry terminu
+    const isTicketOverdue = (t, dateNow) => {
+      if (t.status === "Rozwiązane") return false;
+      if (t.slaOverdue === "TAK") return true;
+      if (t.slaDeadline && new Date(t.slaDeadline) < dateNow) return true;
+      if (t.nextActionDeadline && new Date(t.nextActionDeadline) < dateNow) return true;
+      return false;
+    };
+
     if (filters.deadlineFilter && filters.deadlineFilter !== "all") {
       const now = new Date();
       const todayStr = now.toISOString().split("T")[0];
       
       if (filters.deadlineFilter === "overdue") {
-        tickets = tickets.filter(t => t.slaOverdue === "TAK" || (t.nextActionDeadline && new Date(t.nextActionDeadline) < now && t.status !== "Rozwiązane"));
+        tickets = tickets.filter(t => isTicketOverdue(t, now));
       } else if (filters.deadlineFilter === "today") {
         tickets = tickets.filter(t => t.nextActionDeadline && t.nextActionDeadline.startsWith(todayStr));
       } else if (filters.deadlineFilter === "no_step") {
@@ -181,7 +212,7 @@ export class DemoDataProvider extends DataProviderInterface {
           tickets = tickets.filter(t => t.priority === "PILNY" && t.status !== "Rozwiązane");
           break;
         case "overdue":
-          tickets = tickets.filter(t => t.slaOverdue === "TAK" || (t.nextActionDeadline && new Date(t.nextActionDeadline) < now && t.status !== "Rozwiązane"));
+          tickets = tickets.filter(t => isTicketOverdue(t, now));
           break;
         case "today":
           tickets = tickets.filter(t => t.nextActionDeadline && t.nextActionDeadline.startsWith(todayStr));
@@ -305,6 +336,14 @@ export class DemoDataProvider extends DataProviderInterface {
     const current = tickets[index];
     const nowStr = new Date().toISOString().replace("T", " ").substring(0, 19);
 
+    // Wymóg nienaruszalności standardu: nie można zamknąć zgłoszenia bez rzeczywistego sposobu rozwiązania sprawy
+    if (updates.status === "Rozwiązane") {
+      const resMethod = (updates.resolutionMethod !== undefined ? updates.resolutionMethod : current.resolutionMethod) || "";
+      if (!resMethod.trim()) {
+        throw new Error("Nie można zamknąć zgłoszenia bez wpisania rzeczywistego sposobu rozwiązania sprawy.");
+      }
+    }
+
     // Automatyczna aktualizacja dat cyklu życia
     if (updates.status === "Rozwiązane" && current.status !== "Rozwiązane" && !updates.resolvedDate) {
       updates.resolvedDate = nowStr;
@@ -360,7 +399,8 @@ export class DemoDataProvider extends DataProviderInterface {
     this._set(STORAGE_KEYS.COMMS, comms);
 
     // Zaktualizuj powiązane zgłoszenie (data pierwszego i ostatniego kontaktu)
-    if (commData.ticketId) {
+    // Bezpieczeństwo: Nie aktualizuj dat kontaktu ani statusu, jeżeli status komunikacji to Błąd
+    if (commData.ticketId && commData.status !== "Błąd") {
       const ticket = await this.getTicketById(commData.ticketId);
       if (ticket) {
         const ticketUpdates = {
@@ -379,6 +419,9 @@ export class DemoDataProvider extends DataProviderInterface {
         if (commData.actionType === "Informacja o rozwiązaniu" && ticket.status !== "Rozwiązane") {
           ticketUpdates.status = "Rozwiązane";
           ticketUpdates.resolvedDate = nowStr;
+          if (!ticket.resolutionMethod) {
+            ticketUpdates.resolutionMethod = "Zrealizowano odbiór odpadów i powiadomiono mieszkańca.";
+          }
         }
         await this.updateTicket(commData.ticketId, ticketUpdates);
       }
@@ -628,7 +671,7 @@ export class DemoDataProvider extends DataProviderInterface {
         { name: "Format danych (43 kolumny CSI)", status: "PASSED", latency: "3 ms" },
         { name: "Symulator Gemini API 3.6 Flash", status: diag.apiHealthy ? "PASSED" : "FAILED", latency: `${diag.simulatedLatencyMs} ms` },
         { name: "Weryfikacja szablonów CX/PR", status: "PASSED", latency: "2 ms" },
-        { name: "Strażnik wysyłki testowej (wsb.student.tester@gmail.com)", status: "PASSED", latency: "1 ms" }
+        { name: "Strażnik wysyłki testowej (tester@example.com)", status: "PASSED", latency: "1 ms" }
       ]
     };
   }
@@ -697,28 +740,13 @@ export class DemoDataProvider extends DataProviderInterface {
 
   async polishMessageWithAi(rawMessage, context = {}) {
     const diag = this._get(STORAGE_KEYS.DIAG_SIM) || {};
-    if (!diag.apiHealthy) {
+    if (!diag.apiHealthy || diag.simulatedErrorMode) {
       throw new Error("Gemini API (tryb symulacji błędu): Usługa chwilowo niedostępna. Spróbuj ponownie.");
     }
 
-    // Krótka sztuczna zwłoka symulująca odpowiedź modelu (500 ms)
-    await new Promise(r => setTimeout(r, 500));
+    // Krótka sztuczna zwłoka symulująca odpowiedź modelu (100 ms)
+    await new Promise(r => setTimeout(r, 100));
 
-    let polished = rawMessage.trim();
-
-    // Reguła 1: Zapewnienie zwrotu powitalnego
-    if (!polished.startsWith("Dzień dobry")) {
-      polished = "Dzień dobry,\n\n" + polished;
-    }
-
-    // Reguła 2: Usunięcie ewentualnych wzmianek o naganach i karach pracowników (zgodnie z prompt-ai.md)
-    polished = polished.replace(/kara\s+finansowa|nagana|zwolnienie\s+kierowcy|dyscyplinar/gi, "weryfikacja procedur jakościowych");
-
-    // Reguła 3: Zapewnienie podziękowania za kontakt i podpisu POK Kartuzy
-    if (!polished.includes("POK Kartuzy") && !polished.includes("Punkt Obsługi Klienta")) {
-      polished += "\n\nZ poważaniem,\nPunkt Obsługi Klienta w Kartuzach\nELWOZ ECO Sp. z o.o.\ntel. 58 681 22 99 | kontakt@example.com";
-    }
-
-    return polished;
+    return simulateCxAiRefine(rawMessage, context);
   }
 }

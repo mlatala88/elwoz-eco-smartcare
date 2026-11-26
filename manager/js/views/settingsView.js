@@ -157,35 +157,54 @@ export class SettingsView {
             </div>
           </div>
 
-          <!-- Konfiguracja Asystenta AI -->
+          <!-- Konfiguracja Asystenta AI i Architektura Multi-Provider -->
           <div class="card">
             <div class="card-header">
               <div class="card-title">
                 <i data-lucide="sparkles" style="width: 16px; height: 16px; color: var(--brand-green);"></i>
-                <span>Konfiguracja modelu Gemini Flash (AI)</span>
+                <span>Konfiguracja sztucznej inteligencji (AI Multi-Provider)</span>
               </div>
+              <span class="badge badge-ai-przeanalizowano" style="font-size: 10px;">Symulacja lokalna v0.3.0</span>
             </div>
             <div class="card-body">
               <div class="form-group">
-                <label class="form-label">Silnik językowy</label>
-                <input type="text" class="form-control" value="gemini-3.6-flash (zapasowy: gemini-3.5-flash)" disabled />
-                <span class="form-hint">Wykorzystuje bezpłatną pulę modeli Flash ze Structured Outputs.</span>
+                <label class="form-label">Dostawca sztucznej inteligencji (AI Provider)</label>
+                <select class="form-select" id="set-ai-provider">
+                  <option value="gemini" selected>Google Gemini (Aktywny dostawca v0.3.0 backend)</option>
+                  <option value="openai" disabled>OpenAI ChatGPT (Planowana integracja v0.4.0)</option>
+                  <option value="claude" disabled>Anthropic Claude (Planowana integracja v0.4.0)</option>
+                </select>
+                <span class="form-hint">Docelowa architektura umożliwia wybór dostawcy przez administratora. Obecnie aktywny: Google Gemini.</span>
               </div>
 
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                <div class="form-group">
-                  <label class="form-label">Budżet tokenów wyjścia</label>
-                  <input type="text" class="form-control" value="8192 tokenów" disabled />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Thinking Level</label>
-                  <input type="text" class="form-control" value="MINIMAL (filtr części thought)" disabled />
-                </div>
+              <div class="form-group">
+                <label class="form-label">Aktywny model językowy (Backend Google Apps Script)</label>
+                <input type="text" class="form-control" value="gemini-2.5-flash / gemini-1.5-flash (Zweryfikowany w ScriptProperties)" disabled />
+                <span class="form-hint">Model pobierany dynamicznie z konfiguracji backendu. Aplikacja frontendowa nie wpisuje nazw na sztywno.</span>
               </div>
 
-              <div style="padding: 12px; background-color: var(--brand-green-light); border: 1px solid var(--prio-low-border); border-radius: var(--radius-sm); font-size: 12px; line-height: 1.4; color: var(--brand-green-dark);">
-                <i data-lucide="shield-check" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle; margin-right: 4px;"></i>
-                <strong>Zasada bezpieczeństwa kluczy API:</strong> Klucze dostępowe do Gemini API nie są i nigdy nie będą przechowywane w kodzie JavaScript działającym w przeglądarce klienta. W trybie produkcyjnym zapytania są wykonywane po stronie backendu Google Apps Script.
+              <div class="form-group">
+                <label class="form-label">Centralne zarządzanie kluczem API</label>
+                <input type="password" class="form-control" value="••••••••••••••••••••••••••••••••" disabled />
+                <span class="form-hint">Zarządzany centralnie przez administratora w ScriptProperties backendu. Niedostępny w przeglądarce.</span>
+              </div>
+
+              <div class="form-group" style="margin-bottom: 12px;">
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                  <input type="checkbox" id="set-allow-employee-keys" ${this.settings.allowEmployeeApiKeys ? 'checked' : ''} />
+                  <span>Zezwalaj pracownikom na indywidualny klucz API (jeżeli administrator zezwoli)</span>
+                </label>
+                <span class="form-hint" style="margin-left: 22px;">Umożliwia zaawansowanym pracownikom użycie własnego klucza sesyjnego bez ujawniania go w localStorage.</span>
+              </div>
+
+              <div style="padding: 10px 12px; background-color: #FEF0C7; border: 1px solid #FEDF89; border-radius: var(--radius-sm); font-size: 12px; line-height: 1.45; color: #B54708; margin-bottom: 10px;">
+                <i data-lucide="alert-circle" style="width: 14px; height: 14px; display: inline-block; vertical-align: middle; margin-right: 4px;"></i>
+                <strong>Ważna uwaga:</strong> Abonament konsumencki ChatGPT Plus lub Gemini Advanced <u>nie zapewnia</u> dostępu do API. Dostęp wymaga konta w Google AI Studio lub OpenAI Platform i rozliczenia per-token.
+              </div>
+
+              <div style="padding: 10px 12px; background-color: var(--brand-green-light); border: 1px solid var(--prio-low-border); border-radius: var(--radius-sm); font-size: 12px; line-height: 1.45; color: var(--brand-green-dark);">
+                <i data-lucide="shield-check" style="width: 15px; height: 15px; display: inline-block; vertical-align: middle; margin-right: 4px;"></i>
+                <strong>Polityka bezpieczeństwa:</strong> Klucze API nie są przechowywane w localStorage, ciasteczkach ani publicznym kodzie. W trybie demo działanie AI jest symulowane lokalnie przez DemoDataProvider.
               </div>
 
               <button class="btn btn-navy btn-sm" id="btn-save-settings" style="margin-top: 16px; width: 100%;">
@@ -229,6 +248,7 @@ export class SettingsView {
 
     const saveBtn = this.container.querySelector("#btn-save-settings");
     saveBtn.onclick = async () => {
+      const allowKeysEl = this.container.querySelector("#set-allow-employee-keys");
       const updatedSettings = {
         ...this.settings,
         companyName: this.container.querySelector("#set-company").value.trim(),
@@ -236,7 +256,8 @@ export class SettingsView {
         email: this.container.querySelector("#set-email").value.trim(),
         phone: this.container.querySelector("#set-phone").value.trim(),
         workingHours: this.container.querySelector("#set-hours").value.trim(),
-        googleReviewUrl: this.container.querySelector("#set-google-url").value.trim()
+        googleReviewUrl: this.container.querySelector("#set-google-url").value.trim(),
+        allowEmployeeApiKeys: allowKeysEl ? allowKeysEl.checked : false
       };
 
       await this.dataProvider.updateSettings(updatedSettings);

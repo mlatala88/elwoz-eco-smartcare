@@ -17,22 +17,23 @@ Wszystkie istotne zmiany i wydania w projekcie **ELWOZ ECO SmartCare** są rejes
    - `DemoDataProvider`: w pełni działający adapter demonstracyjny z trwałością w `localStorage`, zaawansowaną analityką metryk CSI w czasie rzeczywistym i symulacją AI.
    - `AppsScriptDataProvider`: w pełni udokumentowany kontrakt i adapter docelowy dla przyszłej integracji z backendem Google Apps Script.
 3. **8 funkcjonalnych modułów operacyjnych:**
-   - **1. Pulpit (Customer Service Intelligence):** 16 klikalnych kafelków KPI, filtry okresu (Dzisiaj, 7 dni, 30 dni, Wszystkie, Własny zakres), 6 interaktywnych wykresów Chart.js oraz tabela Top 5 najważniejszych spraw wymagających działania.
+   - **1. Pulpit (Customer Service Intelligence):** 16 klikalnych kafelków KPI, filtry okresu (Dzisiaj, 7 dni, 30 dni, Wszystkie, Własny zakres) z zachowaniem filtra przy przejściu do zgłoszeń, 6 interaktywnych wykresów Chart.js oraz tabela Top 5 najważniejszych spraw wymagających działania.
    - **2. Moje zadania:** Zaawansowana kolejka CRM podzielona na 7 sekcji (Natychmiastowa reakcja, Przeterminowane, Dzisiaj, Zaplanowane, Oczekujące na mieszkańca, Bez opiekuna, Bez kolejnego kroku) z filtrem spraw przypisanych do aktywnego pracownika.
    - **3. Wszystkie zgłoszenia:** Kompaktowa tabela z wyszukiwarką wielopolową, sortowaniem, filtrami wielokryterialnymi (status, priorytet, kategoria, opiekun, termin, stan AI), modalem wyboru widoczności kolumn oraz eksportem do CSV.
    - **4. Centrum obsługi pojedynczego zgłoszenia (3-kolumnowe):**
      - Panel lewy: dane mieszkańca, lokalizacja, frakcja, oryginalny opis i historia wcześniejszych kontaktów.
-     - Panel środkowy: analiza CSI Asystenta AI (streszczenie, braki danych, sprzeczności, priorytet, rekomendowany krok) oraz kreator wiadomości z szybkimi szablonami, przyciskiem korekty AI (CX/PR) i rejestracją rozmów telefonicznych.
-     - Panel prawy: zarządzanie statusem, zatwierdzonym priorytetem, opiekunem, kolejnym krokiem (z ostrzeżeniem gdy puste), terminem działania, licznikiem SLA i poufnymi notatkami wewnętrznymi.
-   - **5. Komunikacja:** Centralny dziennik korespondencji i notatek telefonicznych z filtrowaniem po kanale i podglądem pełnej treści.
+     - Panel środkowy: analiza CSI Asystenta AI oraz ulepszony kreator wiadomości: wyeliminowano poziomy pasek przewijania szablonów na rzecz ergonomicznej siatki 2 rzędów przycisków (3 kolumny) + rozwijane menu „Więcej”, powiększono pole edycji wiadomości do min. 140 px, wdrożono niezależny Pre-Send Guardrail blokujący niecenzuralne lub agresywne treści.
+     - Panel prawy: zarządzanie statusem z wymogiem opisu rozwiązania przy zamykaniu (brak domyślnego fikcyjnego tekstu), pracownik odpowiedzialny i strona odpowiedzialna bez obcinania treści, automatycznie rozszerzające się pole tekstowe kolejnego działania (`textarea`), dynamiczny licznik SLA.
+   - **5. Komunikacja:** Centralny dziennik korespondencji i notatek telefonicznych; błędy doręczenia nie powodują fałszywego odnotowania pierwszego kontaktu z mieszkańcem.
    - **6. Satysfakcja & Reputacja:** Analiza ocen CSAT (skala 1–5), rozkład gwiazdek, komentarze, alerty spraw z niską oceną (1–2 ★) oraz etyczny moduł zaproszeń do Google Reviews ze zweryfikowanym linkiem.
    - **7. Raporty i analityka:** Zestawienie efektywności, obciążenia i skuteczności personelu POK, powtarzających się problemów i udziału kategorii z eksportem CSV.
-   - **8. Diagnostyka & Ustawienia:** Panel telemetrii (stan CRM, Gemini API, opóźnienia, błędy), uruchamianie automatycznego testu API, symulator awarii API dla testów QA, zarządzanie personelem oraz fabryczny reset bazy demonstracyjnej.
+   - **8. Diagnostyka & Ustawienia:** Architektura Multi-Provider AI (Gemini aktywny w v0.3.0, OpenAI i Claude oznaczone jako planowane w v0.4.0), przełącznik zezwolenia na indywidualne klucze API dla pracowników, centralne zarządzanie kluczem w backendzie, ostrzeżenie licencyjne o braku API w abonamentach ChatGPT Plus/Gemini Advanced, reset danych fabrycznych.
 4. **Syntetyczny zbiór danych (30 spraw):**
-   - 30 realistycznych spraw z rejonu Kartuz i gmin ościennych (Sierakowice, Żukowo, Somonino, Chmielno, Przodkowo, Stężyca) odzwierciedlających wszystkie kluczowe scenariusze (uszkodzenia pojemników, pominięcia, brak worków, fetor, zanieczyszczenia, pochwały, sugestie, sprzeczności, przeterminowania i błędy AI).
+   - 30 realistycznych spraw z rejonu Kartuz i gmin ościennych; wszystkie adresy e-mail bezwzględnie w fikcyjnej domenie `example.com`.
 5. **Jakość, testy i bezpieczeństwo:**
-   - 30 zautomatyzowanych testów jednostkowych i integracyjnych zaliczonych na 100% (0 błędów).
-   - Zweryfikowana responsywność na ekranach 1920×1080 oraz 1366×768 (11 zapisanych zrzutów ekranu w `docs/screenshots/`).
+   - 49 zautomatyzowanych testów jednostkowych i integracyjnych zaliczonych na 100% (49 PASSED, 0 błędów).
+   - Pełna weryfikacja scenariuszy akceptacyjnych CX/PR A–H oraz Pre-Send Guardrail.
+   - Zweryfikowana responsywność na ekranach 1920×1080 oraz 1366×768 (11 zaktualizowanych zrzutów ekranu w `docs/screenshots/`).
    - Brak jakichkolwiek kluczy API po stronie przeglądarki, twardy filtr PII i brak modyfikacji produkcyjnego arkusza/kodu Apps Script v0.2.8.
 
 ---

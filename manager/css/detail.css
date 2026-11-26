@@ -211,23 +211,34 @@
   flex: 1;
 }
 
-.quick-templates-bar {
+/* Ergonomia szablonów: 2 rzędy przycisków, brak poziomego przewijania */
+.quick-templates-wrapper {
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.quick-templates-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: 6px;
-  overflow-x: auto;
-  padding-bottom: 4px;
 }
 
 .template-pill {
   background-color: var(--bg-muted);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
-  padding: 4px 10px;
+  padding: 6px 8px;
   font-size: 11px;
   font-weight: 600;
   color: var(--text-primary);
   cursor: pointer;
-  white-space: nowrap;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.25;
+  min-height: 32px;
   transition: all var(--transition-fast);
 }
 
@@ -235,6 +246,96 @@
   background-color: var(--prio-standard-bg);
   border-color: var(--brand-navy);
   color: var(--brand-navy);
+}
+
+.templates-more-container {
+  display: flex;
+  justify-content: flex-end;
+  position: relative;
+}
+
+.dropdown-templates-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background-color: #FFFFFF;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  z-index: 50;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.dropdown-templates-menu button {
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border-light);
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.dropdown-templates-menu button:last-child {
+  border-bottom: none;
+}
+
+.dropdown-templates-menu button:hover {
+  background-color: var(--bg-muted);
+  color: var(--brand-navy);
+}
+
+/* Edytor wiadomości z powiększonym oknem */
+#msg-content {
+  min-height: 140px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+/* Pole kolejnego kroku - automatyczne rozszerzanie i czytelność */
+#detail-next-action {
+  min-height: 48px;
+  resize: vertical;
+  line-height: 1.4;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+/* Zapewnienie czytelności i braku obcinania nazwisk oraz stron */
+#detail-assignee {
+  width: 100%;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+#detail-responsible-side {
+  width: 100%;
+}
+
+/* Ujednolicenie pasków przewijania w panelach */
+.detail-panel-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.detail-panel-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.detail-panel-body::-webkit-scrollbar-thumb {
+  background-color: #DCE0E5;
+  border-radius: 3px;
+}
+
+.detail-panel-body::-webkit-scrollbar-thumb:hover {
+  background-color: #B0B7C3;
 }
 
 .ai-refine-banner {

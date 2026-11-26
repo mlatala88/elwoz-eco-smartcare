@@ -3,6 +3,8 @@
  * Ticket Detail View (Centrum obsługi pojedynczego zgłoszenia – 3 kolumny)
  */
 
+import { evaluateMessageQuality, simulateCxAiRefine } from "../data/cxGuardrail.js";
+
 export class DetailView {
   constructor(container, router, dataProvider, state) {
     this.container = container;
@@ -238,14 +240,28 @@ export class DetailView {
                   <span style="font-size: 11px; color: var(--text-secondary);">Wybierz szablon, aby wstawić treść:</span>
                 </div>
 
-                <!-- Pasek szybkich szablonów -->
-                <div class="quick-templates-bar">
-                  <button class="template-pill" data-template="confirm">Potwierdzenie przyjęcia</button>
-                  <button class="template-pill" data-template="missing">Prośba o uzupełnienie</button>
-                  <button class="template-pill" data-template="progress">Informacja o postępach</button>
-                  <button class="template-pill" data-template="resolved">Informacja o rozwiązaniu</button>
-                  <button class="template-pill" data-template="thanks">Podziękowanie</button>
-                  <button class="template-pill" data-template="review">Zaproszenie do opinii Google</button>
+                <!-- Pasek szybkich szablonów: Siatka 2x3 przyciski bez poziomego paska + menu Więcej -->
+                <div class="quick-templates-wrapper">
+                  <div class="quick-templates-grid">
+                    <!-- Rząd 1 -->
+                    <button class="template-pill" data-template="confirm" type="button">Potwierdzenie przyjęcia</button>
+                    <button class="template-pill" data-template="missing" type="button">Uzupełnienie danych</button>
+                    <button class="template-pill" data-template="progress" type="button">Informacja o postępach</button>
+                    <!-- Rząd 2 -->
+                    <button class="template-pill" data-template="resolved" type="button">Informacja o rozwiązaniu</button>
+                    <button class="template-pill" data-template="thanks" type="button">Podziękowanie</button>
+                    <button class="template-pill" data-template="review" type="button">Prośba o ocenę</button>
+                  </div>
+                  <div class="templates-more-container">
+                    <button class="btn btn-secondary btn-xs" id="btn-toggle-more-templates" type="button">
+                      <span>Więcej szablonów ▾</span>
+                    </button>
+                    <div class="dropdown-templates-menu" id="more-templates-dropdown" style="display: none;">
+                      <button type="button" class="more-tmpl-btn" data-template="google_review">⭐ Zaproszenie do opinii Google</button>
+                      <button type="button" class="more-tmpl-btn" data-template="refusal_pszok">📋 Odmowa regulaminowa i PSZOK</button>
+                      <button type="button" class="more-tmpl-btn" data-template="pszok_info">📍 Informacja o PSZOK Kartuzy</button>
+                    </div>
+                  </div>
                 </div>
 
                 <!-- Formularz edytora wiadomości -->
@@ -359,9 +375,8 @@ export class DetailView {
               <!-- Kolejny krok (Wymóg operacyjny) -->
               <div class="form-group">
                 <label class="form-label form-label-required">Następne działanie (Kolejny krok)</label>
-                <input type="text" class="form-control" id="detail-next-action" 
-                       value="${this.ticket.nextAction || ''}" 
-                       placeholder="np. Weryfikacja zapisu kamer trasy..." />
+                <textarea class="form-control" id="detail-next-action" rows="2" 
+                          placeholder="np. Weryfikacja zapisu kamer trasy...">${this.ticket.nextAction || ''}</textarea>
                 ${!this.ticket.nextAction && this.ticket.status !== 'Rozwiązane' ? `
                   <div class="warning-no-step" style="margin-top: 6px;">
                     <i data-lucide="alert-octagon" style="width: 14px; height: 14px; flex-shrink: 0;"></i>
@@ -457,30 +472,73 @@ export class DetailView {
       }
     };
 
+    // Auto-rozszerzanie pola kolejnego działania
+    const nextActionEl = this.container.querySelector("#detail-next-action");
+    if (nextActionEl) {
+      const autoExpand = () => {
+        nextActionEl.style.height = "auto";
+        nextActionEl.style.height = (nextActionEl.scrollHeight) + "px";
+      };
+      nextActionEl.addEventListener("input", autoExpand);
+      setTimeout(autoExpand, 50);
+    }
+
+    // Obsługa menu "Więcej szablonów"
+    const moreToggleBtn = this.container.querySelector("#btn-toggle-more-templates");
+    const moreMenu = this.container.querySelector("#more-templates-dropdown");
+    if (moreToggleBtn && moreMenu) {
+      moreToggleBtn.onclick = (e) => {
+        e.stopPropagation();
+        moreMenu.style.display = moreMenu.style.display === "none" ? "flex" : "none";
+      };
+      document.addEventListener("click", () => {
+        if (moreMenu) moreMenu.style.display = "none";
+      }, { once: false });
+    }
+
     // Szablony wiadomości
+    const currentUserName = this.state.currentUser ? this.state.currentUser.name : "Anna Nowak";
     const templates = {
-      confirm: `Dzień dobry,\n\nDziękujemy za kontakt z Punktem Obsługi Klienta ELWOZ ECO w Kartuzach.\nPotwierdzamy zarejestrowanie zgłoszenia nr ${this.ticket.id} dotyczącego: ${this.ticket.type} (${this.ticket.fraction}) pod adresem: ${this.ticket.city}, ul. ${this.ticket.street} ${this.ticket.houseNumber || ''}.\n\nSprawa została przekazana do dyspozytorni w celu weryfikacji. O dalszych krokach poinformujemy w kolejnej wiadomości.\n\nZ poważaniem,\n${this.state.currentUser ? this.state.currentUser.name : 'Anna Nowak'}\nPunkt Obsługi Klienta Kartuzy\nELWOZ ECO Sp. z o.o.\ntel. 58 681 22 99 | kontakt@example.com`,
-      missing: `Dzień dobry,\n\nDziękujemy za kontakt z POK Kartuzy w sprawie zgłoszenia nr ${this.ticket.id}.\n\nAbyśmy mogli skierować załogę bezpośrednio pod Państwa nieruchomość i szybko zrealizować usługę, uprzejmie prosimy o doprecyzowanie brakujących danych:\n- ${this.ticket.aiMissingInfo && this.ticket.aiMissingInfo !== 'Brak braków' ? this.ticket.aiMissingInfo : 'dokładny numer posesji / frakcja odpadów'}\n\nOdpowiedź można przesłać zwrotnie na tę wiadomość lub przekazać telefonicznie pod numerem 58 681 22 99.\n\nZ poważaniem,\n${this.state.currentUser ? this.state.currentUser.name : 'Anna Nowak'}\nPOK Kartuzy`,
-      progress: `Dzień dobry,\n\nInformujemy o postępach w obsłudze zgłoszenia nr ${this.ticket.id}.\nPodjęto następujące działania: zweryfikowano trasę brygady oraz zaplanowano realizację zadania (${this.ticket.nextAction || 'podjazd pojazdu interwencyjnego'}).\n\nPrzewidywany termin realizacji: ${this.ticket.nextActionDeadline || 'w najbliższy dzień roboczy'}.\n\nZ poważaniem,\nZespół POK Kartuzy`,
-      resolved: `Dzień dobry,\n\nInformujemy, że zgłoszenie nr ${this.ticket.id} dotyczące adresu ${this.ticket.city}, ul. ${this.ticket.street} ${this.ticket.houseNumber || ''} zostało pomyślnie zrealizowane.\n\nWykonane działania: ${this.ticket.resolutionMethod || 'Zrealizowano odbiór odpadów przez brygadę interwencyjną.'}\n\nDziękujemy za wyrozumiałość i współpracę.\n\nZ poważaniem,\n${this.state.currentUser ? this.state.currentUser.name : 'Anna Nowak'}\nELWOZ ECO Sp. z o.o.`,
-      thanks: `Dzień dobry,\n\nSerdecznie dziękujemy za kontakt z Punktem Obsługi Klienta ELWOZ ECO w Kartuzach oraz za przekazane miłe słowa uznania dla naszej pracy.\n\nPaństwa opinia została przekazana pracownikom oraz kierownictwu bazy w Kartuzach. Takie sygnały są dla całego zespołu ogromną motywacją do codziennej rzetelnej pracy na rzecz czystości naszego regionu.\n\nZ poważaniem,\n${this.state.currentUser ? this.state.currentUser.name : 'Anna Nowak'}\nPOK Kartuzy`,
-      review: `Dzień dobry,\n\nDziękujemy za współpracę z ELWOZ ECO w ramach obsługi zgłoszenia nr ${this.ticket.id}.\n\nNieustannie dbamy o najwyższy standard obsługi mieszkańców rejonu Kartuz i okolic. Będziemy niezwykle wdzięczni za podzielenie się swoją opinią w wizytówce Google:\nhttps://search.google.com/local/writereview?placeid=ChIJ13yCwGSa_UYRqkDdyWL8wdA\n\nKażda szczera recenzja pomaga nam lepiej dopasować usługi do potrzeb mieszkańców.\n\nZ poważaniem,\nZespół Obsługi Klienta ELWOZ ECO`
+      confirm: `Dzień dobry,\n\nDziękujemy za kontakt z Punktem Obsługi Klienta ELWOZ ECO w Kartuzach.\nPotwierdzamy zarejestrowanie zgłoszenia nr ${this.ticket.id} dotyczącego: ${this.ticket.type} (${this.ticket.fraction}) pod adresem: ${this.ticket.city}, ul. ${this.ticket.street} ${this.ticket.houseNumber || ''}.\n\nSprawa została przekazana do dyspozytorni w celu weryfikacji. O dalszych krokach poinformujemy w kolejnej wiadomości.\n\nZ poważaniem,\n${currentUserName}\nPunkt Obsługi Klienta Kartuzy\nELWOZ ECO Sp. z o.o.\ntel. 58 681 22 99 | kontakt@example.com`,
+      missing: `Dzień dobry,\n\nDziękujemy za kontakt z POK Kartuzy w sprawie zgłoszenia nr ${this.ticket.id}.\n\nAbyśmy mogli skierować załogę bezpośrednio pod Państwa nieruchomość i szybko zrealizować usługę, uprzejmie prosimy o doprecyzowanie brakujących danych (dokładny numer posesji lub frakcja odpadów).\n\nOdpowiedź można przesłać zwrotnie na tę wiadomość lub przekazać telefonicznie pod numerem 58 681 22 99.\n\nZ poważaniem,\n${currentUserName}\nPOK Kartuzy\nELWOZ ECO Sp. z o.o.`,
+      progress: `Dzień dobry,\n\nInformujemy o postępach w obsłudze zgłoszenia nr ${this.ticket.id}.\nPodjęto następujące działania: zweryfikowano trasę brygady oraz zaplanowano realizację zadania (${this.ticket.nextAction || 'podjazd kontrolny'}).\n\nPrzewidywany termin realizacji: ${this.ticket.nextActionDeadline || 'w najbliższy dzień roboczy'}.\n\nZ poważaniem,\n${currentUserName}\nPOK Kartuzy\nELWOZ ECO Sp. z o.o.`,
+      resolved: `Dzień dobry,\n\nInformujemy, że zgłoszenie nr ${this.ticket.id} dotyczące adresu ${this.ticket.city}, ul. ${this.ticket.street} ${this.ticket.houseNumber || ''} zostało pomyślnie zrealizowane.\n\nWykonane działania: ${this.ticket.resolutionMethod || 'Zrealizowano odbiór odpadów przez brygadę interwencyjną.'}\n\nDziękujemy za wyrozumiałość i współpracę.\n\nZ poważaniem,\n${currentUserName}\nELWOZ ECO Sp. z o.o.`,
+      thanks: `Dzień dobry,\n\nSerdecznie dziękujemy za kontakt z Punktem Obsługi Klienta ELWOZ ECO w Kartuzach oraz za przekazane słowa podziękowania.\n\nPaństwa opinia została przekazana pracownikom oraz kierownictwu bazy w Kartuzach. Takie sygnały są dla całego zespołu ogromną motywacją do codziennej rzetelnej pracy na rzecz czystości naszego regionu.\n\nZ poważaniem,\n${currentUserName}\nPOK Kartuzy\nELWOZ ECO Sp. z o.o.`,
+      review: `Dzień dobry,\n\nDziękujemy za współpracę z ELWOZ ECO w ramach obsługi zgłoszenia nr ${this.ticket.id}.\n\nZależy nam na ciągłym podnoszeniu jakości naszych usług komunalnych. Będziemy niezwykle wdzięczni za poświęcenie minuty na podzielenie się swoją opinią o obsłudze:\nhttps://search.google.com/local/writereview?placeid=ChIJ13yCwGSa_UYRqkDdyWL8wdA\n\nKażda szczera opinia pomaga nam lepiej dopasować usługi do potrzeb mieszkańców.\n\nZ poważaniem,\nZespół Obsługi Klienta ELWOZ ECO`,
+      google_review: `Dzień dobry,\n\nDziękujemy za kontakt z Punktem Obsługi Klienta ELWOZ ECO w Kartuzach w sprawie zgłoszenia nr ${this.ticket.id}.\n\nBędziemy bardzo wdzięczni za wystawienie oceny w profilu Google naszej firmy:\nhttps://search.google.com/local/writereview?placeid=ChIJ13yCwGSa_UYRqkDdyWL8wdA\n\nZ poważaniem,\nZespół Obsługi Klienta ELWOZ ECO`,
+      refusal_pszok: `Dzień dobry,\n\nDziękujemy za kontakt z Punktem Obsługi Klienta ELWOZ ECO w Kartuzach w sprawie zgłoszenia nr ${this.ticket.id}.\n\nUprzejmie informujemy, że z przyczyn formalno-regulaminowych oraz obowiązującego regulaminu utrzymania czystości nie mamy możliwości zrealizowania wnioskowanej usługi w ramach standardowego odbioru.\n\nW celu bezpłatnego i bezpiecznego zagospodarowania tych odpadów serdecznie zachęcamy do skorzystania z Punktu Selektywnej Zbiórki Odpadów Komunalnych (PSZOK) w Kartuzach.\n\nZ poważaniem,\n${currentUserName}\nPOK Kartuzy\nELWOZ ECO Sp. z o.o.`,
+      pszok_info: `Dzień dobry,\n\nInformujemy, że Punkt Selektywnej Zbiórki Odpadów Komunalnych (PSZOK) w Kartuzach przyjmuje odpady selektywne od mieszkańców gminy bezpłatnie.\n\nGodziny otwarcia PSZOK:\n- Wtorek – Piątek: 09:00 – 17:00\n- Sobota: 08:00 – 14:00\n\nW razie pytań zapraszamy do kontaktu z POK Kartuzy pod numerem tel. 58 681 22 99.\n\nZ poważaniem,\nZespół POK Kartuzy\nELWOZ ECO Sp. z o.o.`
+    };
+
+    const applyTemplate = (key) => {
+      if (templates[key]) {
+        this.container.querySelector("#msg-content").value = templates[key];
+        if (key === "review" || key === "google_review") {
+          this.container.querySelector("#msg-subject").value = `Podziel się swoją opinią o obsłudze zgłoszenia ${this.ticket.id} – ELWOZ ECO`;
+        } else if (key === "resolved") {
+          this.container.querySelector("#msg-subject").value = `Informacja o rozwiązaniu zgłoszenia ${this.ticket.id} – POK Kartuzy`;
+        } else if (key === "confirm") {
+          this.container.querySelector("#msg-subject").value = `Potwierdzenie przyjęcia zgłoszenia ${this.ticket.id} – POK Kartuzy`;
+        } else if (key === "refusal_pszok") {
+          this.container.querySelector("#msg-subject").value = `Informacja w sprawie zgłoszenia ${this.ticket.id} – POK Kartuzy`;
+        }
+      }
     };
 
     const templatePills = this.container.querySelectorAll(".template-pill");
     templatePills.forEach(pill => {
       pill.onclick = () => {
         const key = pill.getAttribute("data-template");
-        if (templates[key]) {
-          this.container.querySelector("#msg-content").value = templates[key];
-          if (key === "review") {
-            this.container.querySelector("#msg-subject").value = `Podziel się swoją opinią o obsłudze zgłoszenia ${this.ticket.id} – ELWOZ ECO`;
-          } else if (key === "resolved") {
-            this.container.querySelector("#msg-subject").value = `Informacja o rozwiązaniu zgłoszenia ${this.ticket.id} – POK Kartuzy`;
-          } else if (key === "confirm") {
-            this.container.querySelector("#msg-subject").value = `Potwierdzenie przyjęcia zgłoszenia ${this.ticket.id} – POK Kartuzy`;
-          }
-        }
+        applyTemplate(key);
+      };
+    });
+
+    const moreButtons = this.container.querySelectorAll(".more-tmpl-btn");
+    moreButtons.forEach(btn => {
+      btn.onclick = () => {
+        const key = btn.getAttribute("data-template");
+        applyTemplate(key);
+        if (moreMenu) moreMenu.style.display = "none";
       };
     });
 
@@ -498,14 +556,17 @@ export class DetailView {
       polishBtn.innerHTML = `<span>⏳ AI analizuje i poprawia styl...</span>`;
 
       try {
-        const polished = await this.dataProvider.polishMessageWithAi(rawText, { ticket: this.ticket });
+        const polished = await this.dataProvider.polishMessageWithAi(rawText, { 
+          ticket: this.ticket,
+          staffName: currentUserName
+        });
         contentEl.value = polished;
         import("../components/toast.js").then(({ Toast }) => {
           Toast.success("AI poprawiło styl wiadomości zgodnie ze standardami CX/PR.");
         });
       } catch (err) {
         import("../components/toast.js").then(({ Toast }) => {
-          Toast.error(err.message || "Błąd stylizacji AI.");
+          Toast.warning(err.message || "Błąd stylizacji AI.");
         });
       } finally {
         polishBtn.disabled = false;
@@ -517,7 +578,7 @@ export class DetailView {
       }
     };
 
-    // Wysłanie wiadomości
+    // Wysłanie wiadomości (z Pre-Send Guardrail)
     const sendBtn = this.container.querySelector("#btn-send-message");
     sendBtn.onclick = async () => {
       const recipient = this.container.querySelector("#msg-recipient").value.trim();
@@ -534,14 +595,22 @@ export class DetailView {
         return;
       }
 
-      // Strażnik wysyłki (wymóg z testy.md): sprawdzenie czy to nie próba wysłania bez zgody
+      // Pre-Send Quality Control Guardrail (bezwarunkowa kontrola przed wysyłką)
+      const quality = evaluateMessageQuality(content);
+      if (!quality.isValid) {
+        import("../components/toast.js").then(({ Toast }) => {
+          Toast.error(quality.blockedReason || "Wiadomość nie spełnia standardów komunikacji z mieszkańcem. Popraw treść lub skorzystaj z asystenta AI.");
+        });
+        return;
+      }
+
       const commData = {
         ticketId: this.ticket.id,
         recipient,
         channel,
         subject,
         content,
-        author: this.state.currentUser ? this.state.currentUser.name : "Anna Nowak",
+        author: currentUserName,
         actionType: subject.includes("Potwierdzenie") ? "Potwierdzenie przyjęcia" : (subject.includes("opini") ? "Zaproszenie do opinii Google" : (subject.includes("rozwiązani") ? "Informacja o rozwiązaniu" : "Odpowiedź do mieszkańca")),
         status: "Wysłano"
       };

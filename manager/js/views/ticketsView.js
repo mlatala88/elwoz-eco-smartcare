@@ -49,6 +49,8 @@ export class TicketsView {
   async render(params = {}) {
     if (params.search) this.filters.search = params.search;
     if (params.metricKey) this.filters.metricKey = params.metricKey;
+    if (params.period) this.filters.period = params.period;
+    if (params.customRange) this.filters.customRange = params.customRange;
 
     const staffList = await this.dataProvider.getStaff();
 

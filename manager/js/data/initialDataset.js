@@ -20,7 +20,7 @@ export const INITIAL_SETTINGS = {
   address: "ul. Gdańska 30, 83-300 Kartuzy",
   workingHours: "Pn-Pt 07:00 - 15:00",
   googleReviewUrl: "https://search.google.com/local/writereview?placeid=ChIJ13yCwGSa_UYRqkDdyWL8wdA",
-  testEmailWhitelist: "wsb.student.tester@gmail.com",
+  testEmailWhitelist: "tester@example.com",
   slaHours: {
     PILNY: { responseMinutes: 15, resolutionHours: 4 },
     WYSOKI: { responseMinutes: 120, resolutionHours: 24 },

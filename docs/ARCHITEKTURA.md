@@ -169,3 +169,21 @@ Aplikacja operuje na kompletnym zestawie 43 kolumn arkusza Google Sheets wypraco
 - **Czytelność:** Bazowy rozmiar fontu to 14 px, dane tabelaryczne 13 px, główne nagłówki 24–28 px.
 - **Wysokość wiersza tabeli:** 44–48 px, zapewniająca precyzyjne operowanie kursorem.
 - **Odpowiedź na kliknięcie:** Pełna obsługa klawiatury (Enter, Esc w modalach, focus states) oraz natychmiastowe wizualne sprzężenie zwrotne (toasty i wskaźniki postępu).
+
+---
+
+## 6. Architektura Multi-Provider AI oraz Pre-Send Guardrail CX/PR
+
+W wersji v0.3.0 wprowadzono rozszerzalną architekturę modułu sztucznej inteligencji oraz dwuetapowy łańcuch kontroli jakości korespondencji z mieszkańcami:
+
+1. **Wielodostawczość (Multi-Provider AI):**
+   - **Google Gemini (Aktywny dostawca):** Modele Gemini 2.5 Flash / Gemini 1.5 Flash zintegrowane w backendzie Apps Script ze Structured Outputs.
+   - **OpenAI (ChatGPT) & Anthropic (Claude):** Architektura przygotowana pod rozszerzenie w wersji v0.4.0 (oznaczone jako planowane integracje).
+   - **Polityka zarządzania kluczami API:** Klucze API pod żadnym pozorem nie są przechowywane w kodzie frontendowym, plikach cookies ani `localStorage`. Klucz centralny administrator konfiguruje po stronie serwera (`ScriptProperties`). Opcjonalny przełącznik w ustawieniach pozwala administratorowi zezwolić uprawnionym pracownikom na przekazywanie własnego klucza sesyjnego (BYOK).
+   - **Edukacja licencyjna:** System jednoznacznie przypomina, że abonamenty konsumenckie (ChatGPT Plus, Gemini Advanced) nie zapewniają dostępu do API, który wymaga osobnego konta w konsoli programistycznej Google AI Studio lub OpenAI Platform.
+
+2. **Dwuetapowa kontrola jakości (CX/PR Quality Chain):**
+   - **Etap 1: Asystent redakcyjny AI (`simulateCxAiRefine` / Backend Prompt):** Przekształca surowe notatki w uprzejme, empatyczne wiadomości, usuwając wulgaryzmy, oskarżenia klienta oraz wzmianki o postępowaniach dyscyplinarnych wobec kierowców. W przypadku braku faktów (Scenariusz B) odmawia odpowiedzi i żąda ustaleń.
+   - **Etap 2: Strażnik wysyłki (Pre-Send Guardrail – `evaluateMessageQuality`):** Niezależny walidator działający w momencie zatwierdzenia wysyłki. Blokuje próby wysłania wiadomości niespełniających standardów z oficjalnym komunikatem:
+     *„Wiadomość nie spełnia standardów komunikacji z mieszkańcem. Popraw treść lub skorzystaj z asystenta AI.”*
+

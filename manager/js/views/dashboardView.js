@@ -232,7 +232,11 @@ export class DashboardView {
     // Wszystkie pilne
     const viewAllUrgentBtn = this.container.querySelector("#btn-view-all-urgent");
     if (viewAllUrgentBtn) {
-      viewAllUrgentBtn.onclick = () => this.router.navigate("tickets", { metricKey: "urgent" });
+      viewAllUrgentBtn.onclick = () => this.router.navigate("tickets", { 
+        metricKey: "urgent",
+        period: this.currentPeriod,
+        customRange: this.customRange
+      });
     }
   }
 
@@ -287,7 +291,11 @@ export class DashboardView {
     kpiGrid.querySelectorAll(".kpi-card").forEach(card => {
       card.onclick = () => {
         const metric = card.getAttribute("data-metric");
-        this.router.navigate("tickets", { metricKey: metric });
+        this.router.navigate("tickets", { 
+          metricKey: metric,
+          period: this.currentPeriod,
+          customRange: this.customRange
+        });
       };
     });
   }
