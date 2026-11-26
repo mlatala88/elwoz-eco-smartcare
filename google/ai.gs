@@ -532,12 +532,13 @@ function triggerAutoAiAnalysisForTicket(sheet, rowNum, headers, ticketIdParam, f
     const now = Date.now();
     if (backoffUntil && now < backoffUntil) {
       const waitSec = Math.ceil((backoffUntil - now) / 1000);
-      Logger.log(`[Rate Limiter] Aktywny cooldown 429 (${waitSec}s) - zgłoszenie ${ticketId} pozostaje w kolejce (stan: Oczekuje).`);
-      if (aiStateCol > 0 && (!currentState || currentState === "Oczekuje")) {
+      const quotaType = scriptProperties.getProperty("GEMINI_LAST_QUOTA_TYPE") || "RPM";
+      Logger.log(`[Rate Limiter] Aktywny cooldown (${waitSec}s, limit ${quotaType}) - zgłoszenie ${ticketId} pozostaje w kolejce (stan: Oczekuje).`);
+      if (aiStateCol > 0) {
         sheet.getRange(rowNum, aiStateCol).setValue("Oczekuje");
       }
       if (aiErrorCol > 0) {
-        sheet.getRange(rowNum, aiErrorCol).setValue(`Oczekuje w kolejce - limit 15 RPM (cooldown 429: ${waitSec}s)`);
+        sheet.getRange(rowNum, aiErrorCol).setValue(`Oczekuje w kolejce - limit API (cooldown 429: ${waitSec}s, limit ${quotaType})`);
       }
       return;
     }
@@ -593,8 +594,7 @@ function triggerAutoAiAnalysisForTicket(sheet, rowNum, headers, ticketIdParam, f
   }
 
   // 3. Wywołanie Gemini API (zgodnie z zasadą prywatności v0.2.8: zanonimizowane dane mieszkańca)
-  try {
-    const addressStatus = validation.isAddressComplete
+  const addressStatus = validation.isAddressComplete
       ? "KOMPLETNY - adres jest w pełni zweryfikowany w bazie CRM (nie pytaj o adres!)"
       : ("NIEKOMPLETNY: " + (validation.addressIssue || "brak numeru posesji"));
 
@@ -698,13 +698,28 @@ function triggerAutoAiAnalysisForTicket(sheet, rowNum, headers, ticketIdParam, f
     const safeErr = maskApiKey(rawMsg).replace(/^Error:\s*/, "");
     Logger.log(`Błąd analizy AI dla ${ticketId}: ${safeErr}`);
 
-    if (aiStateCol > 0) {
-      sheet.getRange(rowNum, aiStateCol).setValue("Błąd");
-    }
-    if (aiErrorCol > 0) {
-      sheet.getRange(rowNum, aiErrorCol).setValue(safeErr);
-    }
-    // v0.2.8: NIE podmieniamy autentycznych wyników AI sztucznym szablonem awaryjnym!
+    const isQuotaOrRateLimit = safeErr.includes("429") ||
+      safeErr.includes("RESOURCE_EXHAUSTED") ||
+      safeErr.includes("limit Gemini API") ||
+      safeErr.includes("cooldown") ||
+      safeErr.includes("Quota Exceeded");
+
+    if (isQuotaOrRateLimit) {
+      if (aiStateCol > 0) {
+        sheet.getRange(rowNum, aiStateCol).setValue("Oczekuje");
+      }
+      if (aiErrorCol > 0) {
+        sheet.getRange(rowNum, aiErrorCol).setValue(`Odroczono (limit API / cooldown): ${safeErr}`);
+      }
+      // Rzucamy wyjątek dalej, aby processAiAnalysisQueue wiedział o 429 i przerwał bieżącą partię
+      throw err;
+    } else {
+      if (aiStateCol > 0) {
+        sheet.getRange(rowNum, aiStateCol).setValue("Błąd");
+      }
+      if (aiErrorCol > 0) {
+        sheet.getRange(rowNum, aiErrorCol).setValue(safeErr);
+      }
     }
   } finally {
     if (localLockAcquired && typeof releaseTicketAiLock === "function") {
@@ -1157,6 +1172,138 @@ function enforceGeminiRateLimit(modelName) {
   }
 }
 
+/**
+ * Szczegółowa analiza błędu limitów Gemini API (v0.2.8)
+ * Rozróżnia limity:
+ * - RPM (Requests Per Minute)
+ * - TPM (Tokens Per Minute)
+ * - RPD (Requests Per Day)
+ * Parsuje także czas oczekiwania (retryDelay / Retry-After) z JSON oraz nagłówków HTTP.
+ *
+ * @param {number} responseCode Kod odpowiedzi HTTP
+ * @param {string} responseText Treść odpowiedzi serwera
+ * @param {Object} [headers] Nagłówki odpowiedzi HTTP
+ * @returns {{ isQuota: boolean, limitType: string, retryDelaySec: number, description: string, message: string }}
+ */
+function parseGeminiQuotaError(responseCode, responseText, headers = {}) {
+  let isQuota = responseCode === 429;
+  const text = String(responseText || "");
+  if (text.includes("RESOURCE_EXHAUSTED") || text.includes("Quota exceeded") || text.includes("RATE_LIMIT_EXCEEDED")) {
+    isQuota = true;
+  }
+  if (!isQuota) {
+    return { isQuota: false, limitType: "", retryDelaySec: 0, description: "", message: "" };
+  }
+
+  let limitType = "RPM";
+  let retryDelaySec = 60;
+  let description = "Przekroczono limit zapytań Gemini API";
+
+  // 1. Sprawdzenie nagłówka Retry-After
+  if (headers) {
+    const retryAfterHeader = headers["Retry-After"] || headers["retry-after"] || headers["RETRY-AFTER"];
+    if (retryAfterHeader) {
+      const parsedHeaderSec = parseFloat(retryAfterHeader);
+      if (!isNaN(parsedHeaderSec) && parsedHeaderSec > 0) {
+        retryDelaySec = Math.ceil(parsedHeaderSec);
+      }
+    }
+  }
+
+  // 2. Parsowanie struktury JSON błędu Google RPC
+  try {
+    const json = JSON.parse(text);
+    if (json.error) {
+      const errMsg = String(json.error.message || "");
+      const details = Array.isArray(json.error.details) ? json.error.details : [];
+
+      for (let d of details) {
+        // Sprawdź RetryInfo (np. retryDelay: "43.5s" lub { seconds: 43 })
+        if (d["@type"] && d["@type"].includes("RetryInfo")) {
+          if (d.retryDelay) {
+            const delayStr = typeof d.retryDelay === "object" ? String(d.retryDelay.seconds || "") : String(d.retryDelay);
+            const matchSec = delayStr.match(/([\d.]+)\s*s?/i);
+            if (matchSec) {
+              const sec = parseFloat(matchSec[1]);
+              if (!isNaN(sec) && sec > 0) {
+                retryDelaySec = Math.ceil(sec);
+              }
+            }
+          }
+        }
+        // Sprawdź QuotaFailure (violations)
+        if (d["@type"] && d["@type"].includes("QuotaFailure") && Array.isArray(d.violations)) {
+          for (let v of d.violations) {
+            const vDesc = String(v.description || "").toLowerCase();
+            const vQuota = String(v.quotaMetric || "").toLowerCase();
+            const combined = vDesc + " " + vQuota;
+            if (combined.includes("per day") || combined.includes("requestsperday") || combined.includes("tokensperday") || combined.includes("rpd")) {
+              limitType = "RPD";
+            } else if (combined.includes("tokens per minute") || combined.includes("tokensperminute") || combined.includes("tpm")) {
+              limitType = "TPM";
+            } else if (combined.includes("requests per minute") || combined.includes("requestsperminute") || combined.includes("rpm")) {
+              limitType = "RPM";
+            }
+            if (v.description) {
+              description = v.description;
+            }
+          }
+        }
+      }
+
+      // Sprawdź w treści głównego komunikatu błędu jeśli limitType nadal ogólny
+      const lowerMsg = errMsg.toLowerCase();
+      if (lowerMsg.includes("per day") || lowerMsg.includes("daily") || lowerMsg.includes("rpd")) {
+        limitType = "RPD";
+      } else if (lowerMsg.includes("tokens per minute") || lowerMsg.includes("tpm")) {
+        limitType = "TPM";
+      } else if (lowerMsg.includes("requests per minute") || lowerMsg.includes("rpm")) {
+        limitType = "RPM";
+      }
+
+      // Retry-after w treści wiadomości (np. "Please retry after 43.5s")
+      const textRetryMatch = errMsg.match(/retry after ([\d.]+)\s*s?/i);
+      if (textRetryMatch) {
+        const sec = parseFloat(textRetryMatch[1]);
+        if (!isNaN(sec) && sec > 0) {
+          retryDelaySec = Math.ceil(sec);
+        }
+      }
+    }
+  } catch (_) {
+    // Odpowiedź nie jest JSON-em: analiza wyrażeniami regularnymi
+    const lowerText = text.toLowerCase();
+    if (lowerText.includes("per day") || lowerText.includes("daily")) limitType = "RPD";
+    else if (lowerText.includes("tokens per minute") || lowerText.includes("tpm")) limitType = "TPM";
+    else limitType = "RPM";
+
+    const textRetryMatch = text.match(/retry after ([\d.]+)\s*s?/i) || text.match(/"retryDelay":\s*"([\d.]+)s?"/i);
+    if (textRetryMatch) {
+      const sec = parseFloat(textRetryMatch[1]);
+      if (!isNaN(sec) && sec > 0) retryDelaySec = Math.ceil(sec);
+    }
+  }
+
+  // Zabezpieczenie minimalnego i maksymalnego cooldownu (od 5s do 3600s)
+  if (retryDelaySec < 5) retryDelaySec = 5;
+  if (retryDelaySec > 3600) retryDelaySec = 3600;
+
+  const typeDesc = limitType === "RPM" ? "liczby zapytań na minutę (RPM)"
+                 : limitType === "TPM" ? "liczby tokenów na minutę (TPM)"
+                 : limitType === "RPD" ? "dziennego limitu zapytań (RPD)"
+                 : "zasobów API";
+
+  const message = `Przekroczono limit Gemini API (${limitType}: ${typeDesc}). Cooldown: ${retryDelaySec}s. ${description}`;
+
+  return {
+    isQuota: true,
+    limitType: limitType,
+    retryDelaySec: retryDelaySec,
+    description: description,
+    message: message
+  };
+}
+
 function callGeminiApiWithRetry(apiKey, ticketData, maxRetries = 1) {
   let lastError = null;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -1169,7 +1316,7 @@ function callGeminiApiWithRetry(apiKey, ticketData, maxRetries = 1) {
     } catch (err) {
       lastError = err;
       const errMsg = err.message || String(err);
-      if (errMsg.includes("401") || errMsg.includes("403") || errMsg.includes("SAFETY") || errMsg.includes("RECITATION") || errMsg.includes("429")) {
+      if (errMsg.includes("401") || errMsg.includes("403") || errMsg.includes("SAFETY") || errMsg.includes("RECITATION") || errMsg.includes("429") || errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("limit Gemini API") || errMsg.includes("cooldown")) {
         throw err;
       }
       Logger.log(`Próba ${attempt + 1} nie powiodła się: ${maskApiKey(errMsg)}`);
@@ -1259,13 +1406,20 @@ function callGeminiApi(apiKey, ticketData) {
 
   const responseCode = response.getResponseCode();
   const responseText = response.getContentText();
+  let headers = {};
+  try {
+    if (typeof response.getAllHeaders === "function") headers = response.getAllHeaders() || {};
+    else if (typeof response.getHeaders === "function") headers = response.getHeaders() || {};
+  } catch (_) {}
 
-  // 1. Rozróżnienie warstwy HTTP API od treści modelu
-  if (responseCode === 429 || responseText.includes("RESOURCE_EXHAUSTED")) {
+  // 1. Rozróżnienie warstwy limitów i HTTP API
+  const quotaInfo = parseGeminiQuotaError(responseCode, responseText, headers);
+  if (quotaInfo.isQuota) {
     try {
-      PropertiesService.getScriptProperties().setProperty("GEMINI_BACKOFF_UNTIL", String(Date.now() + 60000));
+      PropertiesService.getScriptProperties().setProperty("GEMINI_BACKOFF_UNTIL", String(Date.now() + quotaInfo.retryDelaySec * 1000));
+      PropertiesService.getScriptProperties().setProperty("GEMINI_LAST_QUOTA_TYPE", quotaInfo.limitType);
     } catch (_) {}
-    throw new Error("Przekroczono limit zapytań Gemini API (Quota Exceeded / Rate Limit HTTP 429). Uruchomiono 60s cooldown.");
+    throw new Error(quotaInfo.message);
   }
   if (responseCode === 401 || responseCode === 403) {
     throw new Error("Błąd autoryzacji Gemini API (kod 401/403). Sprawdź poprawność klucza API w menu SmartCare -> Ustawienia / Klucz Gemini API.");
@@ -1729,6 +1883,15 @@ function processAiAnalysisQueue(maxBatch = 5) {
   const errors = [];
 
   for (let r = 0; r < data.length && processedCount < maxBatch; r++) {
+    // Kontrola aktywnego cooldownu przed pobraniem każdego zgłoszenia w partii (v0.2.8)
+    const currentBackoff = Number(props.getProperty("GEMINI_BACKOFF_UNTIL") || 0);
+    const currentTime = Date.now();
+    if (currentBackoff && currentTime < currentBackoff) {
+      const waitRemaining = Math.ceil((currentBackoff - currentTime) / 1000);
+      Logger.log(`[Kolejka AI] Przerwanie partii - aktywny cooldown po 429 (${waitRemaining}s). Kolejne zgłoszenia odroczone.`);
+      break;
+    }
+
     const rowNum = r + 2;
     const ticketId = idIdx !== -1 ? String(data[r][idIdx] || "").trim() : `Wiersz ${rowNum}`;
     const state = String(data[r][aiStateIdx] || "").trim();
@@ -1743,7 +1906,12 @@ function processAiAnalysisQueue(maxBatch = 5) {
           sheet.getRange(rowNum, aiStateIdx + 1).setValue("Błąd");
         }
         if (aiErrorIdx !== -1) {
-          sheet.getRange(rowNum, aiErrorIdx + 1).setValue("Przekroczono limit prób (3/3)");
+          const currentErrMsg = String(data[r][aiErrorIdx] || "").trim();
+          if (!currentErrMsg.includes("Przekroczono limit prób (3/3)")) {
+            sheet.getRange(rowNum, aiErrorIdx + 1).setValue(
+              currentErrMsg ? `Przekroczono limit prób (3/3). Ostatni błąd: ${currentErrMsg}` : "Przekroczono limit prób (3/3)"
+            );
+          }
         }
         continue; // Pomiń to zgłoszenie, nie ponawiaj w nieskończoność
       }
@@ -1764,30 +1932,54 @@ function processAiAnalysisQueue(maxBatch = 5) {
         triggerAutoAiAnalysisForTicket(sheet, rowNum, headers, ticketId, true, true);
 
         const updatedState = String(sheet.getRange(rowNum, aiStateIdx + 1).getValue() || "").trim();
-        if (updatedState === "Błąd") {
+        if (updatedState === "Gotowa" || updatedState === "Wymaga weryfikacji") {
+          successCount++;
+          props.deleteProperty(retryKey); // Reset licznika po sukcesie
+        } else if (updatedState === "Oczekuje") {
+          // Analiza została odroczona (np. przez limit API / cooldown)
+          // NIE zużywamy limitu prób, NIE zaliczamy do sukcesów
+          Logger.log(`[Kolejka AI] Zgłoszenie ${ticketId} odroczone w kolejce (stan: Oczekuje). Brak zużycia próby.`);
+          const checkBackoff = Number(props.getProperty("GEMINI_BACKOFF_UNTIL") || 0);
+          if (checkBackoff && Date.now() < checkBackoff) {
+            break; // Przerwij partię!
+          }
+        } else if (updatedState === "Błąd") {
           errorCount++;
           const newRetries = retryCount + 1;
           props.setProperty(retryKey, String(newRetries));
           const errReason = aiErrorIdx !== -1 ? String(sheet.getRange(rowNum, aiErrorIdx + 1).getValue() || "") : "Nieznany błąd AI";
           if (newRetries >= 3 && aiErrorIdx !== -1) {
-            sheet.getRange(rowNum, aiErrorIdx + 1).setValue(`Przekroczono limit prób (3/3): ${errReason}`);
+            sheet.getRange(rowNum, aiErrorIdx + 1).setValue(`Przekroczono limit prób (3/3). Ostatni błąd: ${errReason}`);
           }
           errors.push(`${ticketId}: ${errReason}`);
         } else {
-          successCount++;
-          props.deleteProperty(retryKey); // Reset licznika po sukcesie
+          sheet.getRange(rowNum, aiStateIdx + 1).setValue("Oczekuje");
         }
       } catch (qErr) {
-        errorCount++;
-        const newRetries = retryCount + 1;
-        props.setProperty(retryKey, String(newRetries));
-        const safeErr = maskApiKey(qErr.toString());
-        sheet.getRange(rowNum, aiStateIdx + 1).setValue("Błąd");
-        if (aiErrorIdx !== -1) {
-          const prefix = newRetries >= 3 ? "Przekroczono limit prób (3/3): " : `Próba ${newRetries}/3: `;
-          sheet.getRange(rowNum, aiErrorIdx + 1).setValue(prefix + safeErr);
+        const rawErrStr = qErr.message || String(qErr);
+        const safeErr = maskApiKey(rawErrStr);
+        const isQuotaErr = safeErr.includes("429") || safeErr.includes("RESOURCE_EXHAUSTED") || safeErr.includes("limit Gemini API") || safeErr.includes("cooldown");
+
+        if (isQuotaErr) {
+          // Ograniczenie dostępności API - ustaw "Oczekuje", NIE zużywaj limitu prób, PRZERWIJ partię natychmiast!
+          sheet.getRange(rowNum, aiStateIdx + 1).setValue("Oczekuje");
+          if (aiErrorIdx !== -1) {
+            sheet.getRange(rowNum, aiErrorIdx + 1).setValue(`Odroczono w kolejce (limit API): ${safeErr}`);
+          }
+          errors.push(`${ticketId}: [Odroczono - limit API] ${safeErr}`);
+          Logger.log(`[Kolejka AI] Przerwanie partii z powodu limitu API dla ${ticketId}: ${safeErr}`);
+          break; // PRZERWIJ PARTIĘ NATYCHMIAST!
+        } else {
+          errorCount++;
+          const newRetries = retryCount + 1;
+          props.setProperty(retryKey, String(newRetries));
+          sheet.getRange(rowNum, aiStateIdx + 1).setValue("Błąd");
+          if (aiErrorIdx !== -1) {
+            const prefix = newRetries >= 3 ? "Przekroczono limit prób (3/3). Ostatni błąd: " : `Próba ${newRetries}/3: `;
+            sheet.getRange(rowNum, aiErrorIdx + 1).setValue(prefix + safeErr);
+          }
+          errors.push(`${ticketId}: ${safeErr}`);
         }
-        errors.push(`${ticketId}: ${safeErr}`);
       } finally {
         if (typeof releaseTicketAiLock === "function") {
           releaseTicketAiLock(ticketId);

@@ -2008,11 +2008,26 @@ function polishMessageWithAiDirect(ticketId, templateText) {
 
   const responseCode = response.getResponseCode();
   const responseText = response.getContentText();
+  let headers = {};
+  try {
+    if (typeof response.getAllHeaders === "function") headers = response.getAllHeaders() || {};
+    else if (typeof response.getHeaders === "function") headers = response.getHeaders() || {};
+  } catch (_) {}
 
-  if (responseCode === 429 || (responseText && responseText.includes("RESOURCE_EXHAUSTED"))) {
-    const cooldownTime = Date.now() + 60000;
+  const quotaInfo = (typeof parseGeminiQuotaError === "function")
+    ? parseGeminiQuotaError(responseCode, responseText, headers)
+    : {
+        isQuota: responseCode === 429 || (responseText && responseText.includes("RESOURCE_EXHAUSTED")),
+        limitType: "RPM",
+        retryDelaySec: 60,
+        message: "Przekroczono limit zapytań Gemini API (HTTP 429). Aktywowano 60s cooldown."
+      };
+
+  if (quotaInfo.isQuota) {
+    const cooldownTime = Date.now() + quotaInfo.retryDelaySec * 1000;
     PropertiesService.getScriptProperties().setProperty("GEMINI_BACKOFF_UNTIL", String(cooldownTime));
-    throw new Error("Przekroczono limit zapytań Gemini API (HTTP 429 / RESOURCE_EXHAUSTED). Aktywowano 60s cooldown. Odczekaj chwilę i spróbuj ponownie.");
+    PropertiesService.getScriptProperties().setProperty("GEMINI_LAST_QUOTA_TYPE", quotaInfo.limitType);
+    throw new Error(`${quotaInfo.message} Odczekaj chwilę i spróbuj ponownie.`);
   }
   if (responseCode === 401 || responseCode === 403) {
     throw new Error("Błąd autoryzacji Gemini API (kod 401/403). Sprawdź klucz API.");

@@ -125,7 +125,16 @@ function createMockEnvironment() {
     })
   };
 
-  return { PropertiesService, LockService, CacheService, Utilities, ScriptApp, Session, MailApp, SpreadsheetApp, scriptPropertiesStore, triggersStore };
+  const Charts = {
+    ChartType: {
+      BAR: "BAR",
+      COLUMN: "COLUMN",
+      PIE: "PIE",
+      LINE: "LINE"
+    }
+  };
+
+  return { PropertiesService, LockService, CacheService, Utilities, ScriptApp, Session, MailApp, SpreadsheetApp, Charts, scriptPropertiesStore, triggersStore };
 }
 
 // Załadowanie plików źródłowych Google Apps Script
@@ -329,6 +338,252 @@ test("SUITE 1", "1.10 LockService GAS compliance: tryLock zwraca boolean, waitLo
   const waitResult = lock.waitLock(1000);
   assert.strictEqual(waitResult, undefined, "waitLock w GAS zwraca void (undefined), a nie boolean!");
   lock.releaseLock();
+});
+
+test("SUITE 1", "1.11 parseGeminiQuotaError: rozróżnia limity RPM, TPM, RPD oraz parsuje retryDelay i Retry-After", () => {
+  // Test 1: Quota Failure RPM z RetryInfo w JSON
+  const rpmJson = JSON.stringify({
+    error: {
+      code: 429,
+      message: "Resource has been exhausted (e.g. check quota).",
+      status: "RESOURCE_EXHAUSTED",
+      details: [
+        {
+          "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+          "violations": [{ "quotaMetric": "GenerateContentRequestsPerMinutePerProjectPerRegion", "description": "Requests per minute limit exceeded" }]
+        },
+        {
+          "@type": "type.googleapis.com/google.rpc.RetryInfo",
+          "retryDelay": "43.5s"
+        }
+      ]
+    }
+  });
+  const resRpm = sandbox.parseGeminiQuotaError(429, rpmJson, {});
+  assert.strictEqual(resRpm.isQuota, true);
+  assert.strictEqual(resRpm.limitType, "RPM");
+  assert.strictEqual(resRpm.retryDelaySec, 44); // zaokrąglenie 43.5s do 44s
+  assert.ok(resRpm.message.includes("RPM"));
+
+  // Test 2: Quota Failure TPM
+  const tpmJson = JSON.stringify({
+    error: {
+      code: 429,
+      message: "Quota exceeded for quota metric 'Tokens per minute'.",
+      status: "RESOURCE_EXHAUSTED"
+    }
+  });
+  const resTpm = sandbox.parseGeminiQuotaError(429, tpmJson, {});
+  assert.strictEqual(resTpm.isQuota, true);
+  assert.strictEqual(resTpm.limitType, "TPM");
+
+  // Test 3: Quota Failure RPD z nagłówkiem Retry-After
+  const rpdJson = JSON.stringify({
+    error: {
+      code: 429,
+      message: "Daily requests quota exceeded.",
+      status: "RESOURCE_EXHAUSTED"
+    }
+  });
+  const resRpd = sandbox.parseGeminiQuotaError(429, rpdJson, { "Retry-After": "120" });
+  assert.strictEqual(resRpd.isQuota, true);
+  assert.strictEqual(resRpd.limitType, "RPD");
+  assert.strictEqual(resRpd.retryDelaySec, 120);
+});
+
+test("SUITE 1", "1.12 processAiAnalysisQueue: przerwanie partii przy 429, odroczenie zgłoszenia bez zużycia prób i sukcesów", () => {
+  // Symulacja 3 zgłoszeń w arkuszu ZGŁOSZENIA
+  const rows = [
+    { id: "ELW-BATCH-01", state: "Oczekuje", error: "" },
+    { id: "ELW-BATCH-02", state: "Oczekuje", error: "" },
+    { id: "ELW-BATCH-03", state: "Oczekuje", error: "" }
+  ];
+
+  delete sandbox.scriptPropertiesStore["GEMINI_BACKOFF_UNTIL"];
+  delete sandbox.scriptPropertiesStore["AI_RETRY_COUNT_ELW-BATCH-01"];
+  delete sandbox.scriptPropertiesStore["AI_RETRY_COUNT_ELW-BATCH-02"];
+  delete sandbox.scriptPropertiesStore["AI_RETRY_COUNT_ELW-BATCH-03"];
+
+  const fakeSheet = {
+    getLastRow: () => rows.length + 1,
+    getLastColumn: () => 3,
+    getRange: (r, c, nr, nc) => ({
+      getValues: () => {
+        if (r === 1) return [["ID Zgłoszenia", "Stan analizy AI", "Szczegóły błędu AI"]];
+        return rows.map(item => [item.id, item.state, item.error]);
+      },
+      getValue: () => {
+        const item = rows[r - 2];
+        if (!item) return "";
+        if (c === 1) return item.id;
+        if (c === 2) return item.state;
+        if (c === 3) return item.error;
+        return "";
+      },
+      setValue: (val) => {
+        const item = rows[r - 2];
+        if (!item) return;
+        if (c === 2) item.state = val;
+        if (c === 3) item.error = val;
+      }
+    })
+  };
+
+  sandbox.SpreadsheetApp = {
+    flush: () => {},
+    getActiveSpreadsheet: () => ({ getSheetByName: () => fakeSheet })
+  };
+
+  // Mock analizy: Zgłoszenie 1 rzuca 429 z 45s cooldown
+  let ticket2Called = false;
+  let ticket3Called = false;
+
+  const originalTrigger = sandbox.triggerAutoAiAnalysisForTicket;
+  sandbox.triggerAutoAiAnalysisForTicket = (sh, rowNum, hdrs, ticketId) => {
+    if (ticketId === "ELW-BATCH-01") {
+      sandbox.scriptPropertiesStore["GEMINI_BACKOFF_UNTIL"] = String(Date.now() + 45000);
+      sh.getRange(rowNum, 2).setValue("Oczekuje");
+      sh.getRange(rowNum, 3).setValue("Odroczono (limit API / cooldown): HTTP 429");
+      throw new Error("Przekroczono limit Gemini API (RPM). Cooldown: 45s.");
+    }
+    if (ticketId === "ELW-BATCH-02") ticket2Called = true;
+    if (ticketId === "ELW-BATCH-03") ticket3Called = true;
+  };
+
+  const queueResult = sandbox.processAiAnalysisQueue(5);
+  sandbox.triggerAutoAiAnalysisForTicket = originalTrigger;
+
+  // Weryfikacja kryteriów audytu:
+  assert.strictEqual(ticket2Called, false, "Partia musi natychmiast przerwać pobieranie kolejnych zgłoszeń po 429!");
+  assert.strictEqual(ticket3Called, false, "Zgłoszenie 3 nie może zostać pobrane podczas aktywnego cooldownu!");
+  assert.strictEqual(queueResult.successCount, 0, "Odroczone zgłoszenie NIE MOŻE być zaliczone jako sukces!");
+  assert.strictEqual(rows[0].state, "Oczekuje", "Zgłoszenie po 429 musi mieć stan 'Oczekuje', a NIE 'W trakcie' ani 'Błąd'!");
+  assert.strictEqual(rows[1].state, "Oczekuje", "Kolejne zgłoszenia w arkuszu muszą pozostać w stanie 'Oczekuje'!");
+  assert.strictEqual(rows[2].state, "Oczekuje", "Zgłoszenie 3 musi pozostać w stanie 'Oczekuje'!");
+  assert.strictEqual(sandbox.scriptPropertiesStore["AI_RETRY_COUNT_ELW-BATCH-01"], undefined, "Błąd 429 NIE MOŻE zużywać limitu prób (retry count)!");
+
+  delete sandbox.scriptPropertiesStore["GEMINI_BACKOFF_UNTIL"];
+});
+
+test("SUITE 1", "1.13 recoverAndResetAiQueue: bezpieczny reset zawieszonych analiz i odblokowanie ELW-2026-0006 z zachowaniem historii błędu", () => {
+  const sheetRows = [
+    { id: "ELW-2026-0005", state: "W trakcie", error: "" },
+    { id: "ELW-2026-0006", state: "Błąd", error: "Przekroczono limit prób (3/3): Nieoczekiwany błąd API" },
+    { id: "ELW-2026-0007", state: "Gotowa", error: "" }
+  ];
+
+  sandbox.scriptPropertiesStore["AI_RETRY_COUNT_ELW-2026-0006"] = "3";
+  sandbox.scriptPropertiesStore["AI_IN_PROGRESS_ELW-2026-0005"] = String(Date.now() - 5000);
+
+  const fakeSheet = {
+    getLastRow: () => sheetRows.length + 1,
+    getLastColumn: () => 3,
+    getParent: () => ({}),
+    getRange: (r, c, nr, nc) => ({
+      getValues: () => {
+        if (r === 1) return [["ID Zgłoszenia", "Stan analizy AI", "Szczegóły błędu AI"]];
+        return sheetRows.map(it => [it.id, it.state, it.error]);
+      },
+      setValue: (val) => {
+        const item = sheetRows[r - 2];
+        if (!item) return;
+        if (c === 2) item.state = val;
+        if (c === 3) item.error = val;
+      }
+    })
+  };
+
+  const recoverRes = sandbox.recoverAndResetAiQueue(fakeSheet);
+
+  assert.strictEqual(recoverRes.recoveredInProgress, 1, "Powinien odzyskać 1 zawieszone zgłoszenie w trakcie");
+  assert.strictEqual(recoverRes.resetFailed, 1, "Powinien zresetować 1 zgłoszenie z błędem");
+  assert.strictEqual(sheetRows[0].state, "Oczekuje", "ELW-2026-0005 powinno powrócić do stanu 'Oczekuje'");
+  assert.strictEqual(sheetRows[1].state, "Oczekuje", "ELW-2026-0006 powinno powrócić do stanu 'Oczekuje'");
+  assert.strictEqual(sheetRows[2].state, "Gotowa", "Zgłoszenie 'Gotowa' nie może być modyfikowane");
+  assert.strictEqual(sandbox.scriptPropertiesStore["AI_RETRY_COUNT_ELW-2026-0006"], undefined, "Licznik prób dla ELW-2026-0006 musi zostać zresetowany!");
+  assert.ok(sheetRows[1].error.includes("Poprzedni błąd"), "Historia błędu w arkuszu musi zostać zachowana, a nie skasowana!");
+});
+
+test("SUITE 1", "1.14 Dashboard formatting: C11 i D11 sformatowane jako liczby całkowite ('0'), nagłówek v0.2.8", () => {
+  let headerValue = "";
+  let c11Format = "";
+  let d11Format = "";
+  const cellsMap = {};
+
+  const fakeDash = {
+    clear: () => {},
+    setHiddenGridlines: () => {},
+    setRowHeight: () => {},
+    setColumnWidth: () => {},
+    getCharts: () => [],
+    newChart: () => {
+      const builder = {
+        setChartType: () => builder,
+        addRange: () => builder,
+        setPosition: () => builder,
+        setOption: () => builder,
+        build: () => ({})
+      };
+      return builder;
+    },
+    insertChart: () => {},
+    getRange: (a1) => {
+      const self = {
+        merge: () => self,
+        setValue: (v) => {
+          if (a1 === "A1:G1" || a1 === "A1") headerValue = v;
+          cellsMap[a1] = v;
+          return self;
+        },
+        getValue: () => cellsMap[a1] || 0,
+        setValues: (arr) => {
+          cellsMap[a1] = arr;
+          return self;
+        },
+        setFontSize: () => self,
+        setFontWeight: () => self,
+        setFontColor: () => self,
+        setBackground: () => self,
+        setFontStyle: () => self,
+        setHorizontalAlignment: () => self,
+        setVerticalAlignment: () => self,
+        setWrap: () => self,
+        setFormula: () => self,
+        setNumberFormat: (fmt) => {
+          if (a1.includes("C11")) c11Format = fmt;
+          if (a1.includes("D11")) d11Format = fmt;
+          if (a1 === "B11:F11") {
+            c11Format = fmt;
+            d11Format = fmt;
+          }
+          return self;
+        }
+      };
+      return self;
+    }
+  };
+
+  const fakeTicketSheet = {
+    getLastRow: () => 1,
+    getLastColumn: () => 10,
+    getRange: () => ({
+      getValues: () => [["ID Zgłoszenia", "Kategoria", "Frakcja", "Miejscowość", "Sygnatura czasowa", "Prośba o kontakt", "Status", "Priorytet"]]
+    })
+  };
+
+  const fakeSs = {
+    getSheetByName: (name) => {
+      if (name === "ZGŁOSZENIA") return fakeTicketSheet;
+      return fakeDash;
+    },
+    getSpreadsheetLocale: () => "pl_PL"
+  };
+
+  sandbox.setupDashboardSheet(fakeSs);
+
+  assert.ok(headerValue.includes("v0.2.8"), "Nagłówek Dashboardu musi wskazywać v0.2.8!");
+  assert.strictEqual(c11Format, "0", "Komórka C11 musi mieć format liczby całkowitej ('0')!");
+  assert.strictEqual(d11Format, "0", "Komórka D11 musi mieć format liczby całkowitej ('0')!");
 });
 
 // -----------------------------------------------------------------------------

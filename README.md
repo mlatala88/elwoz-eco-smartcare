@@ -12,7 +12,7 @@
 ---
 
 
-- **Zautomatyzowany audyt testowy (`tests/test-v028-audit.js`):** Kompletny zestaw 44 testów automatycznych (100% PASS, 44/44) pokrywający kolejkę AI, barierę 15 RPM (4200 ms), cooldown 429, atomowe blokady `tryLock`, kontrolę CX/PR (w tym „pacanie”, „spieprzaj dziadu”), blokowanie ręcznej analizy, robocze godziny SLA (7:00-16:00), ochronę PII oraz Service API.
+- **Zautomatyzowany audyt testowy (`tests/test-v028-audit.js`):** Kompletny zestaw 48 testów automatycznych (100% PASS, 48/48) pokrywający kolejkę AI, barierę 15 RPM (4200 ms), cooldown 429, parser limitów RPM/TPM/RPD, natychmiastowe przerywanie partii po 429, odzyskiwanie zgłoszeń (w tym ELW-2026-0006), formatowanie Dashboardu (C11/D11), atomowe blokady `tryLock`, kontrolę CX/PR (w tym „pacanie”, „spieprzaj dziadu”), blokowanie ręcznej analizy, robocze godziny SLA (7:00-16:00), ochronę PII oraz Service API.
 
 ## Spis treści
 1. [Kontekst i cel projektu](#1-kontekst-i-cel-projektu)

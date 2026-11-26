@@ -1016,7 +1016,7 @@ function setupDashboardSheet(spreadsheet) {
 
   // Nagłówek Dashboardu
   dash.getRange("A1:G1").merge()
-    .setValue("ELWOZ ECO SmartCare – Panel Operacyjny Customer Service Intelligence (v0.2.7)")
+    .setValue("ELWOZ ECO SmartCare – Panel Operacyjny Customer Service Intelligence (v0.2.8)")
     .setFontSize(13).setFontWeight("bold").setBackground("#143d59").setFontColor("#ffffff")
     .setHorizontalAlignment("center").setVerticalAlignment("middle");
   dash.setRowHeight(1, 44);
@@ -1075,7 +1075,8 @@ function setupDashboardSheet(spreadsheet) {
 
   dash.getRange("B11:F11")
     .setFontSize(14).setFontWeight("bold").setFontColor("#b91c1c").setHorizontalAlignment("center")
-    .setVerticalAlignment("middle").setBackground("#ffffff");
+    .setVerticalAlignment("middle").setBackground("#ffffff").setNumberFormat("0");
+  dash.getRange("C11:D11").setNumberFormat("0");
   dash.setRowHeight(11, 36);
 
   // Tabele pomocnicze do kategorii i statusów (wiersze 13-23)
@@ -1107,7 +1108,7 @@ function setupDashboardSheet(spreadsheet) {
 
   dash.getRange("B26:F26")
     .setFontSize(14).setFontWeight("bold").setFontColor("#0f172a").setHorizontalAlignment("center")
-    .setVerticalAlignment("middle").setBackground("#ffffff");
+    .setVerticalAlignment("middle").setBackground("#ffffff").setNumberFormat("0");
   dash.setRowHeight(26, 34);
 
   // Szerokości kolumn Dashboardu
@@ -1125,7 +1126,7 @@ function setupDashboardSheet(spreadsheet) {
 
   setupDashboardCharts(dash);
 
-  Logger.log("Rozszerzona zakładka DASHBOARD (v0.2.7) przygotowana.");
+  Logger.log("Rozszerzona zakładka DASHBOARD (v0.2.8) przygotowana.");
 }
 
 /**
@@ -1141,6 +1142,11 @@ function applyDashboardMetricsAndFormulas(dash, ticketSheet, spreadsheet) {
   const metrics = calculateDashboardMetrics(ticketSheet);
   const preferredSep = getFormulaSeparator(spreadsheet);
   const alternateSep = preferredSep === ";" ? "," : ";";
+
+  dash.getRange("A1").setValue("ELWOZ ECO SmartCare – Panel Operacyjny Customer Service Intelligence (v0.2.8)");
+  dash.getRange("B5:E5").setNumberFormat("0");
+  dash.getRange("B11:F11").setNumberFormat("0");
+  dash.getRange("C11:D11").setNumberFormat("0");
 
   function setFormulasWithSeparator(sep) {
     // Sekcja 1: Wolumeny
@@ -1168,12 +1174,12 @@ function applyDashboardMetricsAndFormulas(dash, ticketSheet, spreadsheet) {
       `=IFERROR(COUNT(FILTER(ZGŁOSZENIA!${cols.satisfaction}2:${cols.satisfaction}${sep} ISNUMBER(ZGŁOSZENIA!${cols.satisfaction}2:${cols.satisfaction})${sep} ZGŁOSZENIA!${cols.satisfaction}2:${cols.satisfaction}>=1${sep} ZGŁOSZENIA!${cols.satisfaction}2:${cols.satisfaction}<=5))${sep} 0)`
     );
 
-    // Sekcja 3: CSI & Kontrola jakości (v0.2.7)
-    dash.getRange("B11").setValue(metrics.urgentHighCount);
-    dash.getRange("C11").setValue(metrics.overdueSlaCount);
-    dash.getRange("D11").setValue(metrics.missingFirstResponseCount);
-    dash.getRange("E11").setValue(metrics.missingNextStepCount);
-    dash.getRange("F11").setValue(metrics.reviewsSentCount);
+    // Sekcja 3: CSI & Kontrola jakości (v0.2.8)
+    dash.getRange("B11").setValue(metrics.urgentHighCount).setNumberFormat("0");
+    dash.getRange("C11").setValue(metrics.overdueSlaCount).setNumberFormat("0");
+    dash.getRange("D11").setValue(metrics.missingFirstResponseCount).setNumberFormat("0");
+    dash.getRange("E11").setValue(metrics.missingNextStepCount).setNumberFormat("0");
+    dash.getRange("F11").setValue(metrics.reviewsSentCount).setNumberFormat("0");
 
     // Tabele kategorii
     for (let i = 0; i < SMARTCARE_SETUP_CONFIG.categories.length; i++) {
@@ -1222,11 +1228,12 @@ function applyDashboardMetricsAndFormulas(dash, ticketSheet, spreadsheet) {
   }
 
   // Zasilenie Sekcji 4: Diagnostyka Silnika & AI (v0.2.8)
-  dash.getRange("B26").setValue(metrics.totalFormResponses);
-  dash.getRange("C26").setValue(metrics.unregisteredResponsesCount);
-  dash.getRange("D26").setValue(metrics.successfulAiCount);
-  dash.getRange("E26").setValue(metrics.failedAiCount);
-  dash.getRange("F26").setValue(metrics.pendingAiCount);
+  dash.getRange("B26:F26").setNumberFormat("0");
+  dash.getRange("B26").setValue(metrics.totalFormResponses).setNumberFormat("0");
+  dash.getRange("C26").setValue(metrics.unregisteredResponsesCount).setNumberFormat("0");
+  dash.getRange("D26").setValue(metrics.successfulAiCount).setNumberFormat("0");
+  dash.getRange("E26").setValue(metrics.failedAiCount).setNumberFormat("0");
+  dash.getRange("F26").setValue(metrics.pendingAiCount).setNumberFormat("0");
 
   if (metrics.unregisteredResponsesCount > 0) {
     dash.getRange("C26").setBackground("#fee2e2").setFontColor("#991b1b");
@@ -1258,11 +1265,11 @@ function applyDashboardMetricsAndFormulas(dash, ticketSheet, spreadsheet) {
     dash.getRange("E8").setValue(metrics.avgSatisfaction);
     dash.getRange("F8").setValue(metrics.satisfactionCount);
 
-    dash.getRange("B11").setValue(metrics.urgentHighCount);
-    dash.getRange("C11").setValue(metrics.overdueSlaCount);
-    dash.getRange("D11").setValue(metrics.missingFirstResponseCount);
-    dash.getRange("E11").setValue(metrics.missingNextStepCount);
-    dash.getRange("F11").setValue(metrics.reviewsSentCount);
+    dash.getRange("B11").setValue(metrics.urgentHighCount).setNumberFormat("0");
+    dash.getRange("C11").setValue(metrics.overdueSlaCount).setNumberFormat("0");
+    dash.getRange("D11").setValue(metrics.missingFirstResponseCount).setNumberFormat("0");
+    dash.getRange("E11").setValue(metrics.missingNextStepCount).setNumberFormat("0");
+    dash.getRange("F11").setValue(metrics.reviewsSentCount).setNumberFormat("0");
 
     for (let i = 0; i < SMARTCARE_SETUP_CONFIG.categories.length; i++) {
       const row = 14 + i;
@@ -1491,7 +1498,7 @@ function setupTestsSheet(spreadsheet) {
 
   if (testSheet.getLastRow() === 0) {
     testSheet.getRange("A1:J1").merge()
-      .setValue("ELWOZ ECO SmartCare – Rejestr Testów Systemowych v0.2.7 (Customer Service Intelligence)")
+      .setValue("ELWOZ ECO SmartCare – Rejestr Testów Systemowych v0.2.8 (Customer Service Intelligence)")
       .setFontSize(12).setFontWeight("bold").setBackground("#143d59").setFontColor("#ffffff")
       .setHorizontalAlignment("center").setVerticalAlignment("middle");
     testSheet.setRowHeight(1, 38);
@@ -1681,6 +1688,94 @@ function recoverStuckAiAnalyses(ticketSheet) {
       }
     }
   }
+}
+
+/**
+ * Bezpieczne odzyskiwanie zawieszonych analiz ("W trakcie" -> "Oczekuje") oraz reset limitu prób
+ * dla zgłoszeń z błędem (w tym ELW-2026-0006) bez usuwania historii błędów z arkusza (v0.2.8).
+ * Zwalnia również blokady LockService/PropertiesService i czyści przedawniony cooldown.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} [ticketSheet] Arkusz ZGŁOSZENIA
+ * @returns {{ recoveredInProgress: number, resetFailed: number, affectedTicketIds: string[] }}
+ */
+function recoverAndResetAiQueue(ticketSheet) {
+  const ss = ticketSheet ? ticketSheet.getParent() : (typeof getSmartCareSpreadsheet === "function" ? getSmartCareSpreadsheet() : SpreadsheetApp.getActiveSpreadsheet());
+  if (!ticketSheet && ss) {
+    ticketSheet = ss.getSheetByName(SMARTCARE_SETUP_CONFIG.sheetTabs.tickets);
+  }
+  if (!ticketSheet || ticketSheet.getLastRow() <= 1) {
+    return { recoveredInProgress: 0, resetFailed: 0, affectedTicketIds: [] };
+  }
+
+  const props = PropertiesService.getScriptProperties();
+  const lastRow = ticketSheet.getLastRow();
+  const lastCol = ticketSheet.getLastColumn();
+  const headers = ticketSheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim());
+
+  const idCol = headers.indexOf("ID Zgłoszenia") + 1;
+  const aiStateCol = headers.indexOf("Stan analizy AI") + 1;
+  const aiErrorCol = headers.indexOf("Szczegóły błędu AI") + 1;
+
+  if (aiStateCol <= 0) {
+    return { recoveredInProgress: 0, resetFailed: 0, affectedTicketIds: [] };
+  }
+
+  let recoveredInProgress = 0;
+  let resetFailed = 0;
+  const affectedTicketIds = [];
+
+  const data = ticketSheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+
+  for (let i = 0; i < data.length; i++) {
+    const rowNum = i + 2;
+    const ticketId = idCol > 0 ? String(data[i][idCol - 1] || "").trim() : `Wiersz ${rowNum}`;
+    const stateVal = String(data[i][aiStateCol - 1] || "").trim();
+    const existingErr = aiErrorCol > 0 ? String(data[i][aiErrorCol - 1] || "").trim() : "";
+
+    // 1. Odzyskanie zawieszonych w stanie "W trakcie"
+    if (stateVal === "W trakcie") {
+      ticketSheet.getRange(rowNum, aiStateCol).setValue("Oczekuje");
+      if (aiErrorCol > 0 && !existingErr) {
+        ticketSheet.getRange(rowNum, aiErrorCol).setValue("Przywrócono do kolejki po aktualizacji silnika v0.2.8");
+      }
+      if (typeof releaseTicketAiLock === "function") releaseTicketAiLock(ticketId);
+      recoveredInProgress++;
+      affectedTicketIds.push(ticketId);
+    }
+    // 2. Bezpieczny reset zgłoszeń ze statusem "Błąd" (w tym ELW-2026-0006)
+    else if (stateVal === "Błąd") {
+      const retryKey = "AI_RETRY_COUNT_" + ticketId;
+      props.deleteProperty(retryKey); // Reset licznika prób do 0
+      ticketSheet.getRange(rowNum, aiStateCol).setValue("Oczekuje");
+
+      // Zachowaj dotychczasową historię błędu w arkuszu!
+      if (aiErrorCol > 0) {
+        const cleanErr = existingErr.replace(/^\[Poprzedni błąd:\s*/, "").replace(/\]\s*Oczekuje na ponowienie.*$/, "");
+        const preservedErr = cleanErr
+          ? `[Poprzedni błąd: ${cleanErr}] Oczekuje na ponowienie`
+          : "Oczekuje na ponowienie po aktualizacji v0.2.8";
+        ticketSheet.getRange(rowNum, aiErrorCol).setValue(preservedErr);
+      }
+      if (typeof releaseTicketAiLock === "function") releaseTicketAiLock(ticketId);
+      resetFailed++;
+      affectedTicketIds.push(ticketId);
+    }
+  }
+
+  // Wyczyść ewentualny wygasły cooldown
+  const backoffUntil = Number(props.getProperty("GEMINI_BACKOFF_UNTIL") || 0);
+  if (backoffUntil && Date.now() >= backoffUntil) {
+    props.deleteProperty("GEMINI_BACKOFF_UNTIL");
+  }
+
+  SpreadsheetApp.flush();
+  Logger.log(`[recoverAndResetAiQueue] Przywrócono: ${recoveredInProgress} zawieszonych, zresetowano do ponowienia: ${resetFailed} błędów (${affectedTicketIds.join(", ")}).`);
+
+  return {
+    recoveredInProgress: recoveredInProgress,
+    resetFailed: resetFailed,
+    affectedTicketIds: affectedTicketIds
+  };
 }
 
 /**
@@ -2765,6 +2860,12 @@ function updateSystemToV028() {
       const reconRes = reconcileUnprocessedFormResponses(ticketSheet);
       if (reconRes.reconciledCount > 0) {
         Logger.log(`[v0.2.8] Przywrócono i nadano ID dla ${reconRes.reconciledCount} zgłoszeń: ${reconRes.reconciledIds.join(', ')}`);
+      }
+
+      // Bezpieczne odzyskanie zawieszonych analiz oraz reset limitu prób (np. ELW-2026-0006) bez utraty danych (v0.2.8)
+      const recoverRes = recoverAndResetAiQueue(ticketSheet);
+      if (recoverRes.recoveredInProgress > 0 || recoverRes.resetFailed > 0) {
+        Logger.log(`[v0.2.8] recoverAndResetAiQueue: przywrócono ${recoverRes.recoveredInProgress} zawieszonych, zresetowano do ponowienia ${recoverRes.resetFailed} błędów (${recoverRes.affectedTicketIds.join(', ')}).`);
       }
     }
 

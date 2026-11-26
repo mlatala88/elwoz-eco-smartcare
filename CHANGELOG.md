@@ -9,6 +9,18 @@ Wszystkie istotne zmiany i wydania w projekcie **ELWOZ ECO SmartCare** są rejes
 
 Wydanie **v0.2.8** stanowi kluczową aktualizację stabilizacyjną silnika przed planowaną budową aplikacji webowej *SmartCare Manager v0.3.0*. Wszystkie modyfikacje powstały na bazie rzeczywistych testów użytkowników oraz niezależnego audytu kodu, zapewniając bezwzględną niezawodność, eliminację zacięć kolejki AI, obsługę limitów bezpłatnego planu Gemini oraz pełną ochronę danych.
 
+#### Kluczowe poprawki silnika po rzeczywistych testach Google Apps Script (v0.2.8):
+1. **Natychmiastowe przerwanie partii przy HTTP 429 (`break`):** W `processAiAnalysisQueue` w przypadku wystąpienia błędu HTTP 429 lub aktywnego cooldownu przetwarzanie partii jest natychmiast przerywane. System nie pobiera kolejnych zgłoszeń w trakcie trwania ograniczenia API.
+2. **Bezpieczny stan odroczonych analiz (`"Oczekuje"`):** Wszystkie zgłoszenia odroczone z powodu limitu API lub cooldownu otrzymują stan `"Oczekuje"`. Zgłoszenia nigdy nie pozostają w stanie `"W trakcie"` ani nie są błędnie oznaczane jako `"Błąd"`.
+3. **Prawidłowe zliczanie sukcesów (`successCount`):** Do sukcesów partii zaliczane są wyłącznie zgłoszenia faktycznie przeanalizowane i zapisane w arkuszu (`"Gotowa"` lub `"Wymaga weryfikacji"`). Odroczone zgłoszenia nie zawyżają licznika sukcesów.
+4. **Ochrona limitu prób przed ograniczeniami API:** Błędy limitów API (HTTP 429, `RESOURCE_EXHAUSTED`, `Quota Exceeded`, aktywny cooldown) nie zużywają limitu 3 prób zgłoszenia (`AI_RETRY_COUNT_${ticketId}`). Licznik prób jest inkrementowany wyłącznie przy błędach merytorycznych i technicznych.
+5. **Bezpieczne odzyskiwanie wyczerpanych zgłoszeń (`recoverAndResetAiQueue`):** Wprowadzono procedurę odzyskującą zgłoszenia z wyczerpanym limitem prób (w tym sprawę `ELW-2026-0006`) z resetem do stanu `"Oczekuje"`. Procedura zachowuje pełną historię poprzednich błędów w kolumnie `Szczegóły błędu AI` (`[Poprzedni błąd: ...] Oczekuje na ponowienie`).
+6. **Zachowanie rzeczywistej przyczyny błędu w CRM:** Ostatnia przyczyna błędu nie jest nadpisywana pustym komunikatem – pole błędu przechowuje szczegółowe wyjaśnienie (`Przekroczono limit prób (3/3). Ostatni błąd: ...`).
+7. **Szczegółowy parser limitów Gemini API (`parseGeminiQuotaError`):** Zamiast sztywnego założenia 15 RPM wprowadzono dynamiczny parser rozróżniający limity `RPM`, `TPM` i `RPD` oraz wyodrębniający czas oczekiwania z `retryDelay` (JSON Google RPC) i nagłówków `Retry-After`.
+8. **Korekta formatowania Dashboardu dla C11 i D11:** Naprawiono formatowanie komórek C11 i D11 (oraz całego wiersza 11), które dziedziczyły format procentowy z wersji v0.2.6 (`700%`, `800%`). Zastosowano wymuszenie formatu liczb całkowitych `.setNumberFormat("0")`.
+9. **Aktualizacja nagłówka Dashboardu:** Zaktualizowano tytuł panelu operacyjnego z wersji `v0.2.7` na `v0.2.8`.
+10. **Jednoklikowa aktualizacja bez utraty danych (`updateSystemToV028`):** Funkcja aktualizująca odzyskuje zawieszone analizy, resetuje zgłoszenia z błędami (w tym `ELW-2026-0006`), kalibruje formaty liczb Dashboardu i zachowuje wszystkie 11 istniejących zgłoszeń CRM (`ELW-2026-0001` – `ELW-2026-0011`).
+
 #### Kluczowe poprawki i usprawnienia silnika (po audycie kodu v0.2.8):
 1. **Automatyczna cykliczna kolejka AI & Ochrona Limitów 15 RPM (`scheduledQueueAndReconcile`):**
    - **Instalacja wyzwalacza czasowego (5 minut):** Wprowadzono funkcję `installScheduledQueueTrigger` uruchamiającą cykliczne przetwarzanie kolejki i uzupełnianie pominiętych zgłoszeń co 5 minut (`.everyMinutes(5)`), co optymalizuje zużycie dziennego limitu czasu wykonania Apps Script (90 min/dzień dla kont konsumenckich `@gmail.com`).
