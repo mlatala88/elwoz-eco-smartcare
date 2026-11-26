@@ -4,6 +4,50 @@ Wszystkie istotne zmiany i wydania w projekcie **ELWOZ ECO SmartCare** są rejes
 
 ---
 
+## [0.3.0] – 2026-11-26
+### ELWOZ ECO SmartCare Manager v0.3.0 – Integracja aplikacji webowej biura obsługi mieszkańców z działającym silnikiem CRM (Google Sheets & Gemini AI)
+
+#### Końcowe korekty DEMO (100% zgodności z audytem):
+1. **Ochrona prawdy i zero halucynacji w asystencie CX/PR:**
+   - Wyeliminowano automatyczne dopisywanie niepotwierdzonych informacji o regulaminach, godzinie 06:00, PSZOK, harmonogramach tras czy działaniach kierownictwa.
+   - Ścisłe zachowanie faktów merytorycznych z notatki pracownika; w przypadku braku uzasadnienia odmowy lub braku kolejnego kroku, AI wyświetla pracownikowi sugestię uzupełnienia danych zamiast wymyślać informacje dla mieszkańca.
+2. **Rozszerzona kontrola treści i Pre-Send Guardrail:**
+   - Rozbudowano filtr inwektyw i wulgaryzmów o polskie formy fleksyjne, odmiany i derywaty oraz mechanizm normalizacji zabezpieczający przed obchodzeniem filtrów (leetspeak, rozstrzelony tekst, separatory kropkowe/myślnikowe).
+3. **Eliminacja fikcyjnych domyślnych opisów rozwiązania:**
+   - Całkowicie usunięto automatyczne uzupełnianie fikcyjnego opisu rozwiązania zarówno w `detailView.js`, jak i `demoProvider.js` (`addCommunication`).
+4. **Pełna spójność statusów cyklu życia:**
+   - Ujednolicono obsługę statusów „Rozwiązane” oraz „Zamknięte” w warstwie dostępu do danych, filtrach tabeli, wskaźnikach KPI oraz raportach efektywności personelu.
+5. **Ujednolicone dynamiczne SLA:**
+   - Zastąpiono statyczną flagę `slaOverdue` w 100% dynamicznym przeliczaniem przekroczenia terminu SLA w widoku zadań, na dashboardzie i w tabeli zgłoszeń.
+6. **Własny zakres dat i nawigacja:**
+   - Zapewniono pełną obsługę przekazywania niestandardowego zakresu dat (`customRange`) z kafelków pulpitu do widoku zgłoszeń z widocznym wskaźnikiem filtru i możliwością jego szybkiego zresetowania.
+7. **Rzeczywista diagnostyka komponentów:**
+   - Usunięto sztywne wpisy „PASSED” – pakiet diagnostyczny wykonuje rzeczywisty test zapisu/odczytu magazynu, weryfikację 43 kolumn CSI, sprawdzenie reguł CX/PR oraz integralności cyklu życia z pomiarem realnych opóźnień w milisekundach.
+8. **Rzetelne szablony komunikacji:**
+   - Oczyszczono gotowe szablony z niezweryfikowanych godzin otwarcia PSZOK i deklaracji proceduralnych, odsyłając bezpośrednio do kontaktu z POK Kartuzy (tel. 58 681 22 99).
+9. **Rozbudowany pakiet testów:**
+   - 65 testów jednostkowych i integracyjnych Node.js zaliczonych w 100% (65 PASSED, 0 FAILED).
+
+#### Główne innowacje i moduły v0.3.0:
+1. **Dwa niezależne tryby pracy:**
+   - **Tryb DEMO:** Działa lokalnie i na GitHub Pages z 30 syntetycznymi zgłoszeniami (`DemoDataProvider`), nie łączy się z prywatnym CRM, nie wysyła wiadomości i nie wykonuje zapytań do Gemini.
+   - **Tryb CONNECTED:** Prywatny menedżer webowy połączony z rzeczywistym arkuszem Google Sheets i silnikiem v0.2.8 (`AppsScriptDataProvider`), wykorzystujący prawdziwy Gemini API, historię komunikacji, mechanizm testowej wysyłki e-mail oraz automatyczną kolejkę AI.
+2. **Dedykowany interfejs webowy SPA (Manager):**
+   - Kompletna aplikacja webowa w czystym HTML5, CSS3 i JavaScript (ES Modules), zastępująca bezpośrednią pracę pracownika w arkuszu Google Sheets.
+   - Nowoczesny, kompaktowy i profesjonalny design system inspirowany identyfikacją ELWOZ ECO (`#252D72`, `#6BAA43`), zgodny z wytycznymi dostępności WCAG 2.2 AA.
+   - Zwijane menu boczne (230 px / 68 px), górny pasek nawigacji (64 px) z globalną wyszukiwarką, centrum powiadomień operacyjnych oraz weryfikacją tożsamości pracownika.
+3. **8 funkcjonalnych modułów operacyjnych:**
+   - **1. Pulpit (Customer Service Intelligence):** 16 klikalnych kafelków KPI, filtry okresu z zachowaniem filtra przy przejściu do zgłoszeń, 6 interaktywnych wykresów Chart.js oraz tabela Top 5 najważniejszych spraw.
+   - **2. Moje zadania:** Zaawansowana kolejka CRM podzielona na 7 sekcji z filtrem spraw przypisanych do aktywnego pracownika.
+   - **3. Wszystkie zgłoszenia:** Kompaktowa tabela z wyszukiwarką wielopolową, sortowaniem, filtrami wielokryterialnymi, modalem konfiguracji kolumn oraz eksportem CSV.
+   - **4. Centrum obsługi pojedynczego zgłoszenia (3-kolumnowe):** Dane mieszkańca, analiza CSI Asystenta AI, kreator wiadomości z korektą stylu CX/PR oraz panel zarządzania statusem, SLA, kolejnym krokiem i notatkami poufnymi.
+   - **5. Komunikacja:** Centralny dziennik audytu korespondencji i notatek telefonicznych.
+   - **6. Satysfakcja & Reputacja:** Analiza ocen CSAT (skala 1–5), rozkład gwiazdek, komentarze oraz etyczny moduł zaproszeń do Google Reviews ze zweryfikowanym linkiem.
+   - **7. Raporty i analityka:** Zestawienie efektywności, obciążenia i skuteczności personelu POK.
+   - **8. Diagnostyka & Ustawienia:** Telemetria backendu, model Gemini, stan kolejki, ograniczenia API, role użytkowników.
+
+---
+
 ## [0.2.8] – 2026-11-26
 ### Stabilizacja silnika CRM, obsługa limitów 15 RPM, eliminacja blokad rejestracji, audyt kolejki AI i warstwa Service API pod v0.3.0
 
@@ -73,7 +117,7 @@ Wydanie **v0.2.8** stanowi kluczową aktualizację stabilizacyjną silnika przed
    - Pełna zgodność typów `Utilities.formatDate` (wymuszenie poprawnych instancji obiektów `Date`).
 
 8. **Zautomatyzowany Zestaw Testów Audytowych (`tests/test-v028-audit.js`):**
-   - 33 testy jednostkowe i integracyjne w 7 modułach audytowych, 100% PASS (33/33).
+   - 48 testów jednostkowych i integracyjnych w 7 modułach audytowych, 100% PASS (48/48).
    - Repozytorium zachowuje kompletny kod testowy do weryfikacji przez zespół oceniający.
 
 ---

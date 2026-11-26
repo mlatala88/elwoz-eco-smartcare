@@ -1,0 +1,404 @@
+/**
+ * ELWOZ ECO SmartCare Manager v0.3.0
+ * Centrum obsługi pojedynczego zgłoszenia (Ticket Detail 3-Panel Center)
+ */
+
+.detail-view-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: calc(100vh - var(--header-height) - 48px);
+}
+
+.detail-top-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: var(--bg-panel);
+  padding: 10px 18px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  flex-shrink: 0;
+}
+
+.detail-nav-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.detail-ticket-heading {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--brand-navy);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.detail-nav-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* 3-kolumnowy obszar roboczy */
+.detail-panels-grid {
+  display: grid;
+  grid-template-columns: 310px 1fr 340px;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Panele */
+.detail-panel {
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: 100%;
+}
+
+.detail-panel-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+  background-color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--brand-navy);
+  flex-shrink: 0;
+}
+
+.detail-panel-body {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Sekcje w lewym panelu (Mieszkaniec) */
+.info-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-bottom: 1px solid var(--border-light);
+  padding-bottom: 14px;
+}
+
+.info-section:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.info-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  letter-spacing: 0.5px;
+}
+
+.info-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.info-icon {
+  width: 15px;
+  height: 15px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.info-value-block {
+  display: flex;
+  flex-direction: column;
+}
+
+.info-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.info-value {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ticket-original-description {
+  background-color: var(--bg-muted);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+}
+
+/* Środkowy panel - Asystent AI i Komunikator */
+.ai-card {
+  background-color: #F8FBF6;
+  border: 1px solid var(--prio-low-border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ai-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ai-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--brand-green-dark);
+}
+
+.ai-insight-box {
+  background-color: #FFFFFF;
+  border: 1px solid #D9EAD3;
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-primary);
+}
+
+.ai-insight-label {
+  font-weight: 700;
+  color: var(--brand-green-dark);
+  margin-bottom: 2px;
+}
+
+.ai-alert-missing {
+  background-color: #FEF3F2;
+  border: 1px solid #FECDCA;
+  color: #B42318;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.message-composer-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+}
+
+/* Ergonomia szablonów: 2 rzędy przycisków, brak poziomego przewijania */
+.quick-templates-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.quick-templates-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.template-pill {
+  background-color: var(--bg-muted);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.25;
+  min-height: 32px;
+  transition: all var(--transition-fast);
+}
+
+.template-pill:hover {
+  background-color: var(--prio-standard-bg);
+  border-color: var(--brand-navy);
+  color: var(--brand-navy);
+}
+
+.templates-more-container {
+  display: flex;
+  justify-content: flex-end;
+  position: relative;
+}
+
+.dropdown-templates-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background-color: #FFFFFF;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  z-index: 50;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.dropdown-templates-menu button {
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border-light);
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.dropdown-templates-menu button:last-child {
+  border-bottom: none;
+}
+
+.dropdown-templates-menu button:hover {
+  background-color: var(--bg-muted);
+  color: var(--brand-navy);
+}
+
+/* Edytor wiadomości z powiększonym oknem */
+#msg-content {
+  min-height: 140px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+/* Pole kolejnego kroku - automatyczne rozszerzanie i czytelność */
+#detail-next-action {
+  min-height: 48px;
+  resize: vertical;
+  line-height: 1.4;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+/* Zapewnienie czytelności i braku obcinania nazwisk oraz stron */
+#detail-assignee {
+  width: 100%;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+#detail-responsible-side {
+  width: 100%;
+}
+
+/* Ujednolicenie pasków przewijania w panelach */
+.detail-panel-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.detail-panel-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.detail-panel-body::-webkit-scrollbar-thumb {
+  background-color: #DCE0E5;
+  border-radius: 3px;
+}
+
+.detail-panel-body::-webkit-scrollbar-thumb:hover {
+  background-color: #B0B7C3;
+}
+
+.ai-refine-banner {
+  background-color: var(--brand-green-light);
+  border: 1px solid var(--prio-low-border);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--brand-green-dark);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Prawy panel - Zarządzanie i SLA */
+.sla-timer-card {
+  background-color: var(--bg-muted);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sla-timer-card.overdue {
+  background-color: var(--prio-urgent-bg);
+  border-color: var(--prio-urgent-border);
+}
+
+.sla-timer-card.ok {
+  background-color: var(--brand-green-light);
+  border-color: var(--prio-low-border);
+}
+
+.sla-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.sla-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.sla-timer-card.overdue .sla-value {
+  color: var(--prio-urgent);
+}
+
+.sla-timer-card.ok .sla-value {
+  color: var(--brand-green-dark);
+}
+
+.warning-no-step {
+  background-color: var(--prio-urgent-bg);
+  border: 1px solid var(--prio-urgent-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  color: var(--prio-urgent);
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
