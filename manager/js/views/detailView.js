@@ -55,9 +55,10 @@ export class DetailView {
 
     const currentUserName = this.state.currentUser ? this.state.currentUser.name : "Anna Nowak";
 
-    // Wyliczenie SLA
+    // Wyliczenie SLA (dynamiczne, spójne z isClosedStatus i terminami)
     const now = new Date();
-    const isOverdue = this.ticket.slaOverdue === "TAK" || (this.ticket.nextActionDeadline && new Date(this.ticket.nextActionDeadline) < now && this.ticket.status !== "Rozwiązane");
+    const isClosed = this.ticket.status === "Rozwiązane" || this.ticket.status === "Zamknięte";
+    const isOverdue = !isClosed && ((this.ticket.slaDeadline && new Date(this.ticket.slaDeadline) < now) || (this.ticket.nextActionDeadline && new Date(this.ticket.nextActionDeadline) < now));
     let slaDisplay = "Zgodne z normą";
     if (isOverdue) slaDisplay = "⚠️ PRZEKROCZONO SLA";
     else if (this.ticket.slaDeadline) slaDisplay = `Termin: ${this.ticket.slaDeadline}`;
@@ -351,6 +352,7 @@ export class DetailView {
                   <option value="W realizacji" ${this.ticket.status === 'W realizacji' ? 'selected' : ''}>W realizacji</option>
                   <option value="Oczekuje na informacje" ${this.ticket.status === 'Oczekuje na informacje' ? 'selected' : ''}>Oczekuje na informacje</option>
                   <option value="Rozwiązane" ${this.ticket.status === 'Rozwiązane' ? 'selected' : ''}>Rozwiązane</option>
+                  <option value="Zamknięte" ${this.ticket.status === 'Zamknięte' ? 'selected' : ''}>Zamknięte</option>
                 </select>
               </div>
 
@@ -377,7 +379,7 @@ export class DetailView {
                 <label class="form-label form-label-required">Następne działanie (Kolejny krok)</label>
                 <textarea class="form-control" id="detail-next-action" rows="2" 
                           placeholder="np. Weryfikacja zapisu kamer trasy...">${this.ticket.nextAction || ''}</textarea>
-                ${!this.ticket.nextAction && this.ticket.status !== 'Rozwiązane' ? `
+                ${!this.ticket.nextAction && !isClosed ? `
                   <div class="warning-no-step" style="margin-top: 6px;">
                     <i data-lucide="alert-octagon" style="width: 14px; height: 14px; flex-shrink: 0;"></i>
                     <span>Uwaga: Sprawa otwarta bez określonego kolejnego kroku!</span>
@@ -402,7 +404,7 @@ export class DetailView {
               </div>
 
               <!-- Potwierdzenie sposobu rozwiązania sprawy (wymagane przy zamykaniu) -->
-              <div class="form-group" id="resolution-method-group" style="display: ${this.ticket.status === 'Rozwiązane' ? 'block' : 'none'};">
+              <div class="form-group" id="resolution-method-group" style="display: ${isClosed ? 'block' : 'none'};">
                 <label class="form-label form-label-required">Rzeczywisty sposób rozwiązania sprawy</label>
                 <textarea class="form-control" id="detail-resolution-method" rows="2" 
                           placeholder="Opisz konkretne działania wykonane przez firmę...">${this.ticket.resolutionMethod || ''}</textarea>
@@ -465,7 +467,7 @@ export class DetailView {
     const statusSelect = this.container.querySelector("#detail-status");
     const resMethodGroup = this.container.querySelector("#resolution-method-group");
     statusSelect.onchange = () => {
-      if (statusSelect.value === "Rozwiązane") {
+      if (statusSelect.value === "Rozwiązane" || statusSelect.value === "Zamknięte") {
         resMethodGroup.style.display = "block";
       } else {
         resMethodGroup.style.display = "none";
@@ -499,15 +501,15 @@ export class DetailView {
     // Szablony wiadomości
     const currentUserName = this.state.currentUser ? this.state.currentUser.name : "Anna Nowak";
     const templates = {
-      confirm: `Dzień dobry,\n\nDziękujemy za kontakt z Punktem Obsługi Klienta ELWOZ ECO w Kartuzach.\nPotwierdzamy zarejestrowanie zgłoszenia nr ${this.ticket.id} dotyczącego: ${this.ticket.type} (${this.ticket.fraction}) pod adresem: ${this.ticket.city}, ul. ${this.ticket.street} ${this.ticket.houseNumber || ''}.\n\nSprawa została przekazana do dyspozytorni w celu weryfikacji. O dalszych krokach poinformujemy w kolejnej wiadomości.\n\nZ poważaniem,\n${currentUserName}\nPunkt Obsługi Klienta Kartuzy\nELWOZ ECO Sp. z o.o.\ntel. 58 681 22 99 | kontakt@example.com`,
+      confirm: `Dzień dobry,\n\nDziękujemy za kontakt z Punktem Obsługi Klienta ELWOZ ECO w Kartuzach.\nPotwierdzamy zarejestrowanie zgłoszenia nr ${this.ticket.id} dotyczącego: ${this.ticket.type} (${this.ticket.fraction}) pod adresem: ${this.ticket.city}, ul. ${this.ticket.street} ${this.ticket.houseNumber || ''}.\n\nZgłoszenie zostało zarejestrowane i przekazane do weryfikacji. O kolejnych krokach poinformujemy w odrębnej wiadomości.\n\nZ poważaniem,\n${currentUserName}\nPunkt Obsługi Klienta Kartuzy\nELWOZ ECO Sp. z o.o.\ntel. 58 681 22 99 | kontakt@example.com`,
       missing: `Dzień dobry,\n\nDziękujemy za kontakt z POK Kartuzy w sprawie zgłoszenia nr ${this.ticket.id}.\n\nAbyśmy mogli skierować załogę bezpośrednio pod Państwa nieruchomość i szybko zrealizować usługę, uprzejmie prosimy o doprecyzowanie brakujących danych (dokładny numer posesji lub frakcja odpadów).\n\nOdpowiedź można przesłać zwrotnie na tę wiadomość lub przekazać telefonicznie pod numerem 58 681 22 99.\n\nZ poważaniem,\n${currentUserName}\nPOK Kartuzy\nELWOZ ECO Sp. z o.o.`,
-      progress: `Dzień dobry,\n\nInformujemy o postępach w obsłudze zgłoszenia nr ${this.ticket.id}.\nPodjęto następujące działania: zweryfikowano trasę brygady oraz zaplanowano realizację zadania (${this.ticket.nextAction || 'podjazd kontrolny'}).\n\nPrzewidywany termin realizacji: ${this.ticket.nextActionDeadline || 'w najbliższy dzień roboczy'}.\n\nZ poważaniem,\n${currentUserName}\nPOK Kartuzy\nELWOZ ECO Sp. z o.o.`,
-      resolved: `Dzień dobry,\n\nInformujemy, że zgłoszenie nr ${this.ticket.id} dotyczące adresu ${this.ticket.city}, ul. ${this.ticket.street} ${this.ticket.houseNumber || ''} zostało pomyślnie zrealizowane.\n\nWykonane działania: ${this.ticket.resolutionMethod || 'Zrealizowano odbiór odpadów przez brygadę interwencyjną.'}\n\nDziękujemy za wyrozumiałość i współpracę.\n\nZ poważaniem,\n${currentUserName}\nELWOZ ECO Sp. z o.o.`,
-      thanks: `Dzień dobry,\n\nSerdecznie dziękujemy za kontakt z Punktem Obsługi Klienta ELWOZ ECO w Kartuzach oraz za przekazane słowa podziękowania.\n\nPaństwa opinia została przekazana pracownikom oraz kierownictwu bazy w Kartuzach. Takie sygnały są dla całego zespołu ogromną motywacją do codziennej rzetelnej pracy na rzecz czystości naszego regionu.\n\nZ poważaniem,\n${currentUserName}\nPOK Kartuzy\nELWOZ ECO Sp. z o.o.`,
+      progress: `Dzień dobry,\n\nInformujemy o postępach w obsłudze zgłoszenia nr ${this.ticket.id}.\nPodjęto następujące działania: zweryfikowano zgłoszenie oraz zaplanowano realizację zadania (${this.ticket.nextAction || 'weryfikacja w terenie'}).\n\nPrzewidywany termin realizacji: ${this.ticket.nextActionDeadline || 'w najbliższy dzień roboczy'}.\n\nZ poważaniem,\n${currentUserName}\nPOK Kartuzy\nELWOZ ECO Sp. z o.o.`,
+      resolved: `Dzień dobry,\n\nInformujemy, że zgłoszenie nr ${this.ticket.id} dotyczące adresu ${this.ticket.city}, ul. ${this.ticket.street} ${this.ticket.houseNumber || ''} zostało pomyślnie zrealizowane.\n\nWykonane działania: ${this.ticket.resolutionMethod || '[Opis wykonanych działań]'}\n\nDziękujemy za wyrozumiałość i współpracę.\n\nZ poważaniem,\n${currentUserName}\nELWOZ ECO Sp. z o.o.`,
+      thanks: `Dzień dobry,\n\nSerdecznie dziękujemy za kontakt z Punktem Obsługi Klienta ELWOZ ECO w Kartuzach oraz za przekazane słowa podziękowania.\n\nPaństwa opinia została przekazana pracownikom bazy w Kartuzach. Takie sygnały są dla całego zespołu motywacją do codziennej rzetelnej pracy na rzecz czystości naszego regionu.\n\nZ poważaniem,\n${currentUserName}\nPOK Kartuzy\nELWOZ ECO Sp. z o.o.`,
       review: `Dzień dobry,\n\nDziękujemy za współpracę z ELWOZ ECO w ramach obsługi zgłoszenia nr ${this.ticket.id}.\n\nZależy nam na ciągłym podnoszeniu jakości naszych usług komunalnych. Będziemy niezwykle wdzięczni za poświęcenie minuty na podzielenie się swoją opinią o obsłudze:\nhttps://search.google.com/local/writereview?placeid=ChIJ13yCwGSa_UYRqkDdyWL8wdA\n\nKażda szczera opinia pomaga nam lepiej dopasować usługi do potrzeb mieszkańców.\n\nZ poważaniem,\nZespół Obsługi Klienta ELWOZ ECO`,
       google_review: `Dzień dobry,\n\nDziękujemy za kontakt z Punktem Obsługi Klienta ELWOZ ECO w Kartuzach w sprawie zgłoszenia nr ${this.ticket.id}.\n\nBędziemy bardzo wdzięczni za wystawienie oceny w profilu Google naszej firmy:\nhttps://search.google.com/local/writereview?placeid=ChIJ13yCwGSa_UYRqkDdyWL8wdA\n\nZ poważaniem,\nZespół Obsługi Klienta ELWOZ ECO`,
-      refusal_pszok: `Dzień dobry,\n\nDziękujemy za kontakt z Punktem Obsługi Klienta ELWOZ ECO w Kartuzach w sprawie zgłoszenia nr ${this.ticket.id}.\n\nUprzejmie informujemy, że z przyczyn formalno-regulaminowych oraz obowiązującego regulaminu utrzymania czystości nie mamy możliwości zrealizowania wnioskowanej usługi w ramach standardowego odbioru.\n\nW celu bezpłatnego i bezpiecznego zagospodarowania tych odpadów serdecznie zachęcamy do skorzystania z Punktu Selektywnej Zbiórki Odpadów Komunalnych (PSZOK) w Kartuzach.\n\nZ poważaniem,\n${currentUserName}\nPOK Kartuzy\nELWOZ ECO Sp. z o.o.`,
-      pszok_info: `Dzień dobry,\n\nInformujemy, że Punkt Selektywnej Zbiórki Odpadów Komunalnych (PSZOK) w Kartuzach przyjmuje odpady selektywne od mieszkańców gminy bezpłatnie.\n\nGodziny otwarcia PSZOK:\n- Wtorek – Piątek: 09:00 – 17:00\n- Sobota: 08:00 – 14:00\n\nW razie pytań zapraszamy do kontaktu z POK Kartuzy pod numerem tel. 58 681 22 99.\n\nZ poważaniem,\nZespół POK Kartuzy\nELWOZ ECO Sp. z o.o.`
+      refusal_pszok: `Dzień dobry,\n\nDziękujemy za kontakt z Punktem Obsługi Klienta ELWOZ ECO w Kartuzach w sprawie zgłoszenia nr ${this.ticket.id}.\n\nUprzejmie informujemy, że wskazany odbiór nie może zostać zrealizowany w ramach standardowego odbioru odpadów. Szczegółowych informacji o możliwości zagospodarowania odpadów udziela Punkt Obsługi Klienta oraz PSZOK w Kartuzach.\n\nZachęcamy do kontaktu telefonicznego pod numerem 58 681 22 99 w celu omówienia dostępnych rozwiązań.\n\nZ poważaniem,\n${currentUserName}\nPOK Kartuzy\nELWOZ ECO Sp. z o.o.`,
+      pszok_info: `Dzień dobry,\n\nInformujemy, że na terenie gminy funkcjonuje Punkt Selektywnej Zbiórki Odpadów Komunalnych (PSZOK) w Kartuzach, przyjmujący określone frakcje odpadów od mieszkańców.\n\nAby uzyskać aktualne informacje dotyczące zasad przyjmowania odpadów oraz bieżących godzin otwarcia punktu, zapraszamy do kontaktu z Punktem Obsługi Klienta pod numerem telefonu 58 681 22 99.\n\nZ poważaniem,\nZespół POK Kartuzy\nELWOZ ECO Sp. z o.o.`
     };
 
     const applyTemplate = (key) => {
@@ -708,16 +710,17 @@ export class DetailView {
       const resolutionMethod = this.container.querySelector("#detail-resolution-method").value.trim();
 
       // Walidacja zamykania zgłoszenia (wymóg z promptu i testy.md TEST-07)
-      if (newStatus === "Rozwiązane" && !resolutionMethod) {
+      const isClosing = newStatus === "Rozwiązane" || newStatus === "Zamknięte";
+      if (isClosing && !resolutionMethod) {
         import("../components/toast.js").then(({ Toast }) => {
-          Toast.error("Błąd: Przed oznaczeniem sprawy jako rozwiązana musisz wpisać rzeczywisty sposób rozwiązania sprawy.");
+          Toast.error("Błąd: Przed oznaczeniem sprawy jako rozwiązana lub zamknięta musisz wpisać rzeczywisty sposób rozwiązania sprawy.");
         });
         this.container.querySelector("#detail-resolution-method").focus();
         return;
       }
 
       // Ostrzeżenie przy braku kolejnego kroku w otwartej sprawie
-      if (newStatus !== "Rozwiązane" && !newNextAction) {
+      if (!isClosing && !newNextAction) {
         import("../components/toast.js").then(({ Toast }) => {
           Toast.warning("Uwaga: Sprawa otwarta bez określonego kolejnego kroku!");
         });
@@ -733,7 +736,7 @@ export class DetailView {
         employeeNote: newNote
       };
 
-      if (newStatus === "Rozwiązane") {
+      if (isClosing) {
         updates.resolutionMethod = resolutionMethod;
       }
 

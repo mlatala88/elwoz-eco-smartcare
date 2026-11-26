@@ -164,11 +164,12 @@ export class ReportsView {
     `;
 
     // Tabela pracowników
+    const isClosed = s => s === "Rozwiązane" || s === "Zamknięte";
     const staffTbody = this.container.querySelector("#rep-staff-tbody");
     const staffRows = staffList.map(s => {
       const assigned = tickets.filter(t => t.assignee === s.name);
-      const res = assigned.filter(t => t.status === "Rozwiązane");
-      const inProg = assigned.filter(t => t.status !== "Rozwiązane");
+      const res = assigned.filter(t => isClosed(t.status));
+      const inProg = assigned.filter(t => !isClosed(t.status));
       const rate = assigned.length > 0 ? ((res.length / assigned.length) * 100).toFixed(0) + "%" : "-";
 
       return `
@@ -193,7 +194,7 @@ export class ReportsView {
 
     catTbody.innerHTML = catEntries.map(([cat, count]) => {
       const pct = ((count / total) * 100).toFixed(1);
-      const resolvedCount = tickets.filter(t => t.type === cat && t.status === "Rozwiązane").length;
+      const resolvedCount = tickets.filter(t => t.type === cat && isClosed(t.status)).length;
       const resRate = count > 0 ? ((resolvedCount / count) * 100).toFixed(0) + "%" : "-";
 
       return `

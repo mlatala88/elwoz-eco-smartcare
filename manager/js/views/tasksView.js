@@ -133,16 +133,20 @@ export class TasksView {
     let tickets = await this.dataProvider.getTickets();
     const currentUserName = this.state.currentUser ? this.state.currentUser.name : "Anna Nowak";
 
-    // Wyklucz sprawy rozwiązane
-    const openTickets = tickets.filter(t => t.status !== "Rozwiązane");
+    // Wyklucz sprawy zakończone (Rozwiązane i Zamknięte)
+    const isClosed = s => s === "Rozwiązane" || s === "Zamknięte";
+    const openTickets = tickets.filter(t => !isClosed(t.status));
 
     const now = new Date();
     const todayStr = now.toISOString().split("T")[0];
 
+    // Dynamiczny sprawdzian SLA bez opierania się na historycznej fladze
+    const isOverdueCheck = t => (t.slaDeadline && new Date(t.slaDeadline) < now) || (t.nextActionDeadline && new Date(t.nextActionDeadline) < now);
+
     // Oblicz liczebności zakładek
     const counts = {
       immediate: openTickets.filter(t => t.priority === "PILNY" || t.status === "Nowe").length,
-      overdue: openTickets.filter(t => t.slaOverdue === "TAK" || (t.nextActionDeadline && new Date(t.nextActionDeadline) < now)).length,
+      overdue: openTickets.filter(isOverdueCheck).length,
       today: openTickets.filter(t => t.nextActionDeadline && t.nextActionDeadline.startsWith(todayStr)).length,
       scheduled: openTickets.filter(t => t.nextActionDeadline && new Date(t.nextActionDeadline) > now && !t.nextActionDeadline.startsWith(todayStr)).length,
       awaiting_citizen: openTickets.filter(t => t.responsibleSide === "Mieszkaniec").length,
@@ -169,7 +173,7 @@ export class TasksView {
         filtered = openTickets.filter(t => t.priority === "PILNY" || t.status === "Nowe");
         break;
       case "overdue":
-        filtered = openTickets.filter(t => t.slaOverdue === "TAK" || (t.nextActionDeadline && new Date(t.nextActionDeadline) < now));
+        filtered = openTickets.filter(isOverdueCheck);
         break;
       case "today":
         filtered = openTickets.filter(t => t.nextActionDeadline && t.nextActionDeadline.startsWith(todayStr));
@@ -218,7 +222,7 @@ export class TasksView {
     }
 
     tbody.innerHTML = filtered.map(t => {
-      const isOverdue = t.slaOverdue === "TAK" || (t.nextActionDeadline && new Date(t.nextActionDeadline) < now);
+      const isOverdue = (t.slaDeadline && new Date(t.slaDeadline) < now) || (t.nextActionDeadline && new Date(t.nextActionDeadline) < now);
       const isMine = t.assignee === currentUserName;
 
       return `

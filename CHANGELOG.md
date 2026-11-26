@@ -7,6 +7,27 @@ Wszystkie istotne zmiany i wydania w projekcie **ELWOZ ECO SmartCare** są rejes
 ## [0.3.0] – 2026-11-26
 ### ELWOZ ECO SmartCare Manager v0.3.0 – Niezależna aplikacja webowa biura obsługi mieszkańców (Prototyp edukacyjny WSB Merito)
 
+#### Końcowe korekty DEMO (100% zgodności z audytem):
+1. **Ochrona prawdy i zero halucynacji w asystencie CX/PR:**
+   - Wyeliminowano automatyczne dopisywanie niepotwierdzonych informacji o regulaminach, godzinie 06:00, PSZOK, harmonogramach tras czy działaniach kierownictwa.
+   - Ścisłe zachowanie faktów merytorycznych z notatki pracownika; w przypadku braku uzasadnienia odmowy lub braku kolejnego kroku, AI wyświetla pracownikowi sugestię uzupełnienia danych zamiast wymyślać informacje dla mieszkańca.
+2. **Rozszerzona kontrola treści i Pre-Send Guardrail:**
+   - Rozbudowano filtr inwektyw i wulgaryzmów o polskie formy fleksyjne, odmiany i derywaty oraz mechanizm normalizacji zabezpieczający przed obchodzeniem filtrów (leetspeak, rozstrzelony tekst, separatory kropkowe/myślnikowe).
+3. **Eliminacja fikcyjnych domyślnych opisów rozwiązania:**
+   - Całkowicie usunięto automatyczne uzupełnianie fikcyjnego opisu rozwiązania zarówno w `detailView.js`, jak i `demoProvider.js` (`addCommunication`).
+4. **Pełna spójność statusów cyklu życia:**
+   - Ujednolicono obsługę statusów „Rozwiązane” oraz „Zamknięte” w warstwie dostępu do danych, filtrach tabeli, wskaźnikach KPI oraz raportach efektywności personelu.
+5. **Ujednolicone dynamiczne SLA:**
+   - Zastąpiono statyczną flagę `slaOverdue` w 100% dynamicznym przeliczaniem przekroczenia terminu SLA w widoku zadań, na dashboardzie i w tabeli zgłoszeń.
+6. **Własny zakres dat i nawigacja:**
+   - Zapewniono pełną obsługę przekazywania niestandardowego zakresu dat (`customRange`) z kafelków pulpitu do widoku zgłoszeń z widocznym wskaźnikiem filtru i możliwością jego szybkiego zresetowania.
+7. **Rzeczywista diagnostyka komponentów:**
+   - Usunięto sztywne wpisy „PASSED” – pakiet diagnostyczny wykonuje rzeczywisty test zapisu/odczytu magazynu, weryfikację 43 kolumn CSI, sprawdzenie reguł CX/PR oraz integralności cyklu życia z pomiarem realnych opóźnień w milisekundach.
+8. **Rzetelne szablony komunikacji:**
+   - Oczyszczono gotowe szablony z niezweryfikowanych godzin otwarcia PSZOK i deklaracji proceduralnych, odsyłając bezpośrednio do kontaktu z POK Kartuzy (tel. 58 681 22 99).
+9. **Rozbudowany pakiet testów:**
+   - 65 testów jednostkowych i integracyjnych Node.js zaliczonych w 100% (65 PASSED, 0 FAILED).
+
 #### Główne innowacje i moduły v0.3.0:
 1. **Dedykowany interfejs webowy SPA (Manager):**
    - Kompletna aplikacja webowa w czystym HTML5, CSS3 i JavaScript (ES Modules), zastępująca bezpośrednią pracę pracownika w arkuszu Google Sheets.

@@ -37,7 +37,10 @@ export class Topbar {
   async loadNotifications() {
     try {
       const tickets = await this.dataProvider.getTickets();
-      const urgentOrOverdue = tickets.filter(t => (t.priority === "PILNY" || t.slaOverdue === "TAK") && t.status !== "Rozwiązane").slice(0, 5);
+      const now = new Date();
+      const isClosed = s => s === "Rozwiązane" || s === "Zamknięte";
+      const isOverdue = t => (t.slaDeadline && new Date(t.slaDeadline) < now) || (t.nextActionDeadline && new Date(t.nextActionDeadline) < now);
+      const urgentOrOverdue = tickets.filter(t => !isClosed(t.status) && (t.priority === "PILNY" || isOverdue(t))).slice(0, 5);
 
       const notifBadge = this.container.querySelector("#notif-badge");
       const notifList = this.container.querySelector("#notif-list");
@@ -54,7 +57,7 @@ export class Topbar {
           notifList.innerHTML = urgentOrOverdue.map(t => `
             <div class="notification-item unread" data-ticket-id="${t.id}">
               <div class="notification-item-title">
-                ${t.slaOverdue === "TAK" ? "⚠️ Przekroczenie SLA:" : "🔥 Sprawa PILNA:"} ${t.id}
+                ${isOverdue(t) ? "⚠️ Przekroczenie SLA:" : "🔥 Sprawa PILNA:"} ${t.id}
               </div>
               <div style="font-size: 11px; color: var(--text-secondary);">
                 ${t.city}, ${t.street} ${t.houseNumber} (${t.type})

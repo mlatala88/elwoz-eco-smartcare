@@ -322,7 +322,7 @@ export class DashboardView {
           <span class="badge badge-prio-${t.priority.toLowerCase()}">${t.priority}</span>
         </td>
         <td>
-          ${t.slaOverdue === 'TAK' 
+          ${((t.slaDeadline && new Date(t.slaDeadline) < new Date()) || (t.nextActionDeadline && new Date(t.nextActionDeadline) < new Date()))
             ? '<span class="badge badge-prio-pilny">⚠️ Przekroczone SLA</span>' 
             : `<span style="font-size: 11px; color: var(--text-secondary);">${t.slaDeadline ? 'Do: ' + t.slaDeadline.substring(11, 16) : 'Brak terminu'}</span>`}
         </td>

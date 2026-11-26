@@ -97,6 +97,7 @@ export class TicketsView {
               <option value="W realizacji" ${this.filters.status === 'W realizacji' ? 'selected' : ''}>W realizacji</option>
               <option value="Oczekuje na informacje" ${this.filters.status === 'Oczekuje na informacje' ? 'selected' : ''}>Oczekuje na informacje</option>
               <option value="Rozwiązane" ${this.filters.status === 'Rozwiązane' ? 'selected' : ''}>Rozwiązane</option>
+              <option value="Zamknięte" ${this.filters.status === 'Zamknięte' ? 'selected' : ''}>Zamknięte</option>
             </select>
           </div>
 
@@ -263,19 +264,42 @@ export class TicketsView {
 
     const metricBadge = this.container.querySelector("#active-metric-badge");
     if (metricBadge) {
+      let badgesHtml = "";
       if (this.filters.metricKey) {
-        metricBadge.style.display = "inline-flex";
-        metricBadge.innerHTML = `
-          <span class="badge badge-status-w-realizacji">
+        badgesHtml += `
+          <span class="badge badge-status-w-realizacji" style="margin-right: 6px;">
             Filtr wskaźnika: ${this.filters.metricKey}
-            <button id="btn-clear-metric" style="background: none; border: none; cursor: pointer; margin-left: 4px;">&times;</button>
+            <button id="btn-clear-metric" style="background: none; border: none; cursor: pointer; margin-left: 4px; color: inherit;">&times;</button>
           </span>
         `;
-        metricBadge.querySelector("#btn-clear-metric").onclick = () => {
-          delete this.filters.metricKey;
-          metricBadge.style.display = "none";
-          this.loadTickets();
-        };
+      }
+      if (this.filters.period === "custom" && this.filters.customRange && this.filters.customRange.from && this.filters.customRange.to) {
+        badgesHtml += `
+          <span class="badge badge-status-do-weryfikacji">
+            Zakres dat: ${this.filters.customRange.from} do ${this.filters.customRange.to}
+            <button id="btn-clear-range" style="background: none; border: none; cursor: pointer; margin-left: 4px; color: inherit;">&times;</button>
+          </span>
+        `;
+      }
+
+      if (badgesHtml) {
+        metricBadge.style.display = "inline-flex";
+        metricBadge.innerHTML = badgesHtml;
+        const clearMetricBtn = metricBadge.querySelector("#btn-clear-metric");
+        if (clearMetricBtn) {
+          clearMetricBtn.onclick = () => {
+            delete this.filters.metricKey;
+            this.loadTickets();
+          };
+        }
+        const clearRangeBtn = metricBadge.querySelector("#btn-clear-range");
+        if (clearRangeBtn) {
+          clearRangeBtn.onclick = () => {
+            delete this.filters.period;
+            delete this.filters.customRange;
+            this.loadTickets();
+          };
+        }
       } else {
         metricBadge.style.display = "none";
       }

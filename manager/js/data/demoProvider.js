@@ -7,7 +7,32 @@
 
 import { DataProviderInterface } from "./dataProvider.js";
 import { INITIAL_TICKETS, INITIAL_COMMUNICATIONS, INITIAL_STAFF, INITIAL_SETTINGS } from "./initialDataset.js";
-import { simulateCxAiRefine } from "./cxGuardrail.js";
+import { simulateCxAiRefine, evaluateMessageQuality } from "./cxGuardrail.js";
+
+/**
+ * Sprawdza czy dany status oznacza sprawę zakończoną (Rozwiązane lub Zamknięte)
+ */
+export function isClosedStatus(status) {
+  if (!status) return false;
+  const s = String(status).trim().toLowerCase();
+  return s === "rozwiązane" || s === "zamknięte" || s === "rozwiazane" || s === "zamkniete";
+}
+
+/**
+ * Ujednolicone, w 100% dynamiczne wyliczanie zaległości SLA.
+ * Nie polega na historycznej fladze slaOverdue.
+ */
+export function isTicketOverdue(ticket, dateNow = new Date()) {
+  if (!ticket || isClosedStatus(ticket.status)) return false;
+
+  if (ticket.slaDeadline && !isNaN(new Date(ticket.slaDeadline).getTime())) {
+    if (new Date(ticket.slaDeadline) < dateNow) return true;
+  }
+  if (ticket.nextActionDeadline && !isNaN(new Date(ticket.nextActionDeadline).getTime())) {
+    if (new Date(ticket.nextActionDeadline) < dateNow) return true;
+  }
+  return false;
+}
 
 const STORAGE_KEYS = {
   TICKETS: "elwoz_smartcare_v3_tickets",
@@ -156,7 +181,11 @@ export class DemoDataProvider extends DataProviderInterface {
 
     // Filtry precyzyjne
     if (filters.status && filters.status !== "all") {
-      tickets = tickets.filter(t => t.status === filters.status);
+      if (isClosedStatus(filters.status)) {
+        tickets = tickets.filter(t => isClosedStatus(t.status));
+      } else {
+        tickets = tickets.filter(t => t.status === filters.status);
+      }
     }
 
     if (filters.priority && filters.priority !== "all") {
@@ -176,14 +205,6 @@ export class DemoDataProvider extends DataProviderInterface {
     }
 
     // Filtry terminu
-    const isTicketOverdue = (t, dateNow) => {
-      if (t.status === "Rozwiązane") return false;
-      if (t.slaOverdue === "TAK") return true;
-      if (t.slaDeadline && new Date(t.slaDeadline) < dateNow) return true;
-      if (t.nextActionDeadline && new Date(t.nextActionDeadline) < dateNow) return true;
-      return false;
-    };
-
     if (filters.deadlineFilter && filters.deadlineFilter !== "all") {
       const now = new Date();
       const todayStr = now.toISOString().split("T")[0];
@@ -193,7 +214,7 @@ export class DemoDataProvider extends DataProviderInterface {
       } else if (filters.deadlineFilter === "today") {
         tickets = tickets.filter(t => t.nextActionDeadline && t.nextActionDeadline.startsWith(todayStr));
       } else if (filters.deadlineFilter === "no_step") {
-        tickets = tickets.filter(t => t.status !== "Rozwiązane" && (!t.nextAction || t.nextAction.trim() === ""));
+        tickets = tickets.filter(t => !isClosedStatus(t.status) && (!t.nextAction || t.nextAction.trim() === ""));
       }
     }
 
@@ -206,10 +227,10 @@ export class DemoDataProvider extends DataProviderInterface {
           tickets = tickets.filter(t => t.status === "Nowe");
           break;
         case "no_response":
-          tickets = tickets.filter(t => t.status !== "Rozwiązane" && !t.firstContactDate);
+          tickets = tickets.filter(t => !isClosedStatus(t.status) && !t.firstContactDate);
           break;
         case "urgent":
-          tickets = tickets.filter(t => t.priority === "PILNY" && t.status !== "Rozwiązane");
+          tickets = tickets.filter(t => t.priority === "PILNY" && !isClosedStatus(t.status));
           break;
         case "overdue":
           tickets = tickets.filter(t => isTicketOverdue(t, now));
@@ -218,16 +239,16 @@ export class DemoDataProvider extends DataProviderInterface {
           tickets = tickets.filter(t => t.nextActionDeadline && t.nextActionDeadline.startsWith(todayStr));
           break;
         case "no_step":
-          tickets = tickets.filter(t => t.status !== "Rozwiązane" && (!t.nextAction || t.nextAction.trim() === ""));
+          tickets = tickets.filter(t => !isClosedStatus(t.status) && (!t.nextAction || t.nextAction.trim() === ""));
           break;
         case "awaiting_citizen":
-          tickets = tickets.filter(t => t.responsibleSide === "Mieszkaniec" && t.status !== "Rozwiązane");
+          tickets = tickets.filter(t => t.responsibleSide === "Mieszkaniec" && !isClosedStatus(t.status));
           break;
         case "awaiting_company":
-          tickets = tickets.filter(t => t.responsibleSide === "Przedsiębiorstwo" && t.status !== "Rozwiązane");
+          tickets = tickets.filter(t => t.responsibleSide === "Przedsiębiorstwo" && !isClosedStatus(t.status));
           break;
         case "resolved":
-          tickets = tickets.filter(t => t.status === "Rozwiązane");
+          tickets = tickets.filter(t => isClosedStatus(t.status));
           break;
         case "review_invites":
           tickets = tickets.filter(t => t.reviewInviteSent === "TAK");
@@ -337,7 +358,7 @@ export class DemoDataProvider extends DataProviderInterface {
     const nowStr = new Date().toISOString().replace("T", " ").substring(0, 19);
 
     // Wymóg nienaruszalności standardu: nie można zamknąć zgłoszenia bez rzeczywistego sposobu rozwiązania sprawy
-    if (updates.status === "Rozwiązane") {
+    if (isClosedStatus(updates.status)) {
       const resMethod = (updates.resolutionMethod !== undefined ? updates.resolutionMethod : current.resolutionMethod) || "";
       if (!resMethod.trim()) {
         throw new Error("Nie można zamknąć zgłoszenia bez wpisania rzeczywistego sposobu rozwiązania sprawy.");
@@ -345,11 +366,11 @@ export class DemoDataProvider extends DataProviderInterface {
     }
 
     // Automatyczna aktualizacja dat cyklu życia
-    if (updates.status === "Rozwiązane" && current.status !== "Rozwiązane" && !updates.resolvedDate) {
+    if (isClosedStatus(updates.status) && !isClosedStatus(current.status) && !updates.resolvedDate) {
       updates.resolvedDate = nowStr;
     }
 
-    if (updates.status && updates.status !== "Rozwiązane" && current.status === "Rozwiązane") {
+    if (updates.status && !isClosedStatus(updates.status) && isClosedStatus(current.status)) {
       updates.resolvedDate = "";
     }
 
@@ -416,11 +437,11 @@ export class DemoDataProvider extends DataProviderInterface {
           ticketUpdates.reviewInviteSent = "TAK";
           ticketUpdates.reviewInviteDate = nowStr;
         }
-        if (commData.actionType === "Informacja o rozwiązaniu" && ticket.status !== "Rozwiązane") {
-          ticketUpdates.status = "Rozwiązane";
-          ticketUpdates.resolvedDate = nowStr;
-          if (!ticket.resolutionMethod) {
-            ticketUpdates.resolutionMethod = "Zrealizowano odbiór odpadów i powiadomiono mieszkańca.";
+        if (commData.actionType === "Informacja o rozwiązaniu" && !isClosedStatus(ticket.status)) {
+          // Funkcja addCommunication nie może samodzielnie wymyślać sposobu rozwiązania zgłoszenia.
+          if (ticket.resolutionMethod && ticket.resolutionMethod.trim()) {
+            ticketUpdates.status = "Rozwiązane";
+            ticketUpdates.resolvedDate = nowStr;
           }
         }
         await this.updateTicket(commData.ticketId, ticketUpdates);
@@ -458,14 +479,14 @@ export class DemoDataProvider extends DataProviderInterface {
 
     const total = tickets.length;
     const newCount = tickets.filter(t => t.status === "Nowe").length;
-    const noFirstResponse = tickets.filter(t => t.status !== "Rozwiązane" && !t.firstContactDate).length;
-    const urgent = tickets.filter(t => t.priority === "PILNY" && t.status !== "Rozwiązane").length;
-    const overdue = tickets.filter(t => t.slaOverdue === "TAK" || (t.nextActionDeadline && new Date(t.nextActionDeadline) < now && t.status !== "Rozwiązane")).length;
+    const noFirstResponse = tickets.filter(t => !isClosedStatus(t.status) && !t.firstContactDate).length;
+    const urgent = tickets.filter(t => t.priority === "PILNY" && !isClosedStatus(t.status)).length;
+    const overdue = tickets.filter(t => isTicketOverdue(t, now)).length;
     const dueToday = tickets.filter(t => t.nextActionDeadline && t.nextActionDeadline.startsWith(todayStr)).length;
-    const noNextStep = tickets.filter(t => t.status !== "Rozwiązane" && (!t.nextAction || t.nextAction.trim() === "")).length;
-    const awaitingCitizen = tickets.filter(t => t.responsibleSide === "Mieszkaniec" && t.status !== "Rozwiązane").length;
-    const awaitingCompany = tickets.filter(t => t.responsibleSide === "Przedsiębiorstwo" && t.status !== "Rozwiązane").length;
-    const resolved = tickets.filter(t => t.status === "Rozwiązane").length;
+    const noNextStep = tickets.filter(t => !isClosedStatus(t.status) && (!t.nextAction || t.nextAction.trim() === "")).length;
+    const awaitingCitizen = tickets.filter(t => t.responsibleSide === "Mieszkaniec" && !isClosedStatus(t.status)).length;
+    const awaitingCompany = tickets.filter(t => t.responsibleSide === "Przedsiębiorstwo" && !isClosedStatus(t.status)).length;
+    const resolved = tickets.filter(t => isClosedStatus(t.status)).length;
 
     const resolutionRate = total > 0 ? ((resolved / total) * 100).toFixed(1) : "-";
 
@@ -500,7 +521,7 @@ export class DemoDataProvider extends DataProviderInterface {
     let totalResolutionHours = 0;
     let resolvedCalcCount = 0;
     tickets.forEach(t => {
-      if (t.timestamp && t.resolvedDate && t.status === "Rozwiązane") {
+      if (t.timestamp && t.resolvedDate && isClosedStatus(t.status)) {
         const start = new Date(t.timestamp);
         const end = new Date(t.resolvedDate);
         const diffMs = end.getTime() - start.getTime();
@@ -546,7 +567,8 @@ export class DemoDataProvider extends DataProviderInterface {
       "Do weryfikacji": 0,
       "W realizacji": 0,
       "Oczekuje na informacje": 0,
-      "Rozwiązane": 0
+      "Rozwiązane": 0,
+      "Zamknięte": 0
     };
     tickets.forEach(t => {
       if (statusMap[t.status] !== undefined) {
@@ -589,13 +611,15 @@ export class DemoDataProvider extends DataProviderInterface {
 
     // Top 5 spraw wymagających natychmiastowego działania
     const topUrgent = [...tickets]
-      .filter(t => t.status !== "Rozwiązane")
+      .filter(t => !isClosedStatus(t.status))
       .sort((a, b) => {
         const pOrder = { "PILNY": 4, "WYSOKI": 3, "STANDARDOWY": 2, "NISKI": 1 };
         const pDiff = (pOrder[b.priority] || 0) - (pOrder[a.priority] || 0);
         if (pDiff !== 0) return pDiff;
-        if (a.slaOverdue === "TAK" && b.slaOverdue !== "TAK") return -1;
-        if (b.slaOverdue === "TAK" && a.slaOverdue !== "TAK") return 1;
+        const aOverdue = isTicketOverdue(a, now);
+        const bOverdue = isTicketOverdue(b, now);
+        if (aOverdue && !bOverdue) return -1;
+        if (!aOverdue && bOverdue) return 1;
         return new Date(a.timestamp || 0) - new Date(b.timestamp || 0);
       })
       .slice(0, 5);
@@ -663,16 +687,106 @@ export class DemoDataProvider extends DataProviderInterface {
     diag.lastSyncTime = new Date().toISOString();
     this._set(STORAGE_KEYS.DIAG_SIM, diag);
 
+    const tests = [];
+
+    // 1. Rzeczywisty test zapisu i odczytu magazynu (LocalStorage / RAM fallback)
+    const t0 = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+    let storagePassed = false;
+    try {
+      const testKey = "__smartcare_diag_test__";
+      const testVal = JSON.stringify({ ping: "pong", ts: Date.now() });
+      localStorage.setItem(testKey, testVal);
+      const readVal = localStorage.getItem(testKey);
+      localStorage.removeItem(testKey);
+      storagePassed = (readVal === testVal);
+    } catch (e) {
+      storagePassed = false;
+    }
+    const t1 = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+    const storageLatency = Math.max(1, Math.round(t1 - t0));
+    tests.push({
+      name: "Połączenie z magazynem demonstracyjnym",
+      status: storagePassed ? "PASSED" : "FAILED",
+      latency: `${storageLatency} ms`
+    });
+
+    // 2. Rzeczywista weryfikacja integralności schematu (43 kolumny CSI)
+    const t2 = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+    const tickets = this._get(STORAGE_KEYS.TICKETS) || [];
+    const requiredCols = [
+      "id", "timestamp", "type", "fraction", "city", "street", "houseNumber",
+      "incidentDate", "description", "applicantName", "applicantPhone", "applicantEmail",
+      "contactRequest", "status", "priority", "suggestedPriority", "priorityRationale",
+      "aiState", "localValidation", "contradictions", "assignee", "nextAction",
+      "responsibleSide", "nextActionDeadline", "slaDeadline", "slaOverdue", "employeeNote",
+      "receiptConfirmedDate", "firstContactDate", "lastContactDate", "resolvedDate",
+      "resolutionMethod", "contactResult", "satisfactionScore", "citizenFeedback",
+      "reviewInviteSent", "reviewInviteDate", "aiCategory", "aiSummary", "aiMissingInfo",
+      "aiSuggestedAction", "aiRecommendedStep", "aiDraftReply"
+    ];
+    let schemaValid = tickets.length > 0;
+    if (schemaValid) {
+      const sample = tickets[0];
+      for (const col of requiredCols) {
+        if (!(col in sample)) {
+          schemaValid = false;
+          break;
+        }
+      }
+    }
+    const t3 = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+    const schemaLatency = Math.max(1, Math.round(t3 - t2));
+    tests.push({
+      name: "Format danych (43 kolumny CSI)",
+      status: schemaValid ? "PASSED" : "FAILED",
+      latency: `${schemaLatency} ms`
+    });
+
+    // 3. Symulator Gemini API 3.6 Flash (stan faktyczny z konfiguracji diagnostycznej)
+    const apiAvailable = !!(diag.apiHealthy && !diag.simulatedErrorMode);
+    const apiLatency = diag.simulatedLatencyMs || 120;
+    tests.push({
+      name: "Symulator Gemini API 3.6 Flash",
+      status: apiAvailable ? "PASSED" : "FAILED",
+      latency: `${apiLatency} ms`
+    });
+
+    // 4. Rzeczywista ewaluacja reguł i filtrów CX/PR Guardrail
+    const t4 = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+    let cxPassed = false;
+    try {
+      const evalSample = evaluateMessageQuality("Dzień dobry, potwierdzamy przyjęcie zgłoszenia. Sprawa została przekazana do realizacji.");
+      const profanityCheck = evaluateMessageQuality("Ty pacanie, załatw to sam.");
+      cxPassed = (evalSample.isValid && !profanityCheck.isValid && profanityCheck.forbiddenViolations.length > 0);
+    } catch (e) {
+      cxPassed = false;
+    }
+    const t5 = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+    const cxLatency = Math.max(1, Math.round(t5 - t4));
+    tests.push({
+      name: "Weryfikacja reguł i filtrów CX/PR",
+      status: cxPassed ? "PASSED" : "FAILED",
+      latency: `${cxLatency} ms`
+    });
+
+    // 5. Sprawdzenie spójności statusów cyklu życia zgłoszeń
+    const t6 = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+    const validStatuses = ["Nowe", "Do weryfikacji", "W realizacji", "Oczekuje na informacje", "Rozwiązane", "Zamknięte"];
+    const statusIntegrity = tickets.length > 0 && tickets.every(t => validStatuses.includes(t.status));
+    const t7 = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+    const statusLatency = Math.max(1, Math.round(t7 - t6));
+    tests.push({
+      name: "Spójność statusów cyklu życia zgłoszeń",
+      status: statusIntegrity ? "PASSED" : "FAILED",
+      latency: `${statusLatency} ms`
+    });
+
+    const allPassed = tests.every(t => t.status === "PASSED");
+
     return {
-      success: true,
+      success: allPassed,
       timestamp: new Date().toLocaleTimeString("pl-PL"),
-      tests: [
-        { name: "Połączenie z magazynem demonstracyjnym", status: "PASSED", latency: "1 ms" },
-        { name: "Format danych (43 kolumny CSI)", status: "PASSED", latency: "3 ms" },
-        { name: "Symulator Gemini API 3.6 Flash", status: diag.apiHealthy ? "PASSED" : "FAILED", latency: `${diag.simulatedLatencyMs} ms` },
-        { name: "Weryfikacja szablonów CX/PR", status: "PASSED", latency: "2 ms" },
-        { name: "Strażnik wysyłki testowej (tester@example.com)", status: "PASSED", latency: "1 ms" }
-      ]
+      tests
     };
   }
 
