@@ -459,16 +459,18 @@ function preValidateTicketData(ticketData) {
 
 /**
  * Atomowa rezerwacja zgłoszenia do analizy AI we wszystkich ścieżkach (v0.2.8)
+ * Blokuje równoległe uruchomienie analizy tej samej sprawy przez formularz, kolejkę i pracownika.
  */
 function tryAcquireTicketAiLock(ticketId) {
   if (!ticketId) return false;
   const lock = LockService.getScriptLock();
   try {
-    if (!lock.waitLock(3000)) return false;
+    if (!lock.tryLock(3000)) return false;
     const props = PropertiesService.getScriptProperties();
     const inProgressKey = "AI_IN_PROGRESS_" + ticketId;
     const currentLockTime = Number(props.getProperty(inProgressKey) || 0);
     const now = Date.now();
+    // Jeśli blokada jest aktywna i ma mniej niż 3 minuty, rezerwacja zajęta
     if (currentLockTime && (now - currentLockTime < 180000)) {
       return false;
     }
@@ -818,6 +820,19 @@ function analyzeSelectedTicket() {
   };
 
   const ticketId = getVal(["ID Zgłoszenia", "Numer zgłoszenia", "ID"]) || `Wiersz ${row}`;
+
+  // Blokowanie ręcznej analizy AI – sprawdzenie czy sprawa jest w trakcie przetwarzania
+  const inProgressKey = "AI_IN_PROGRESS_" + ticketId;
+  const currentLockTime = Number(scriptProperties.getProperty(inProgressKey) || 0);
+  if (currentLockTime && (Date.now() - currentLockTime < 180000)) {
+    ui.alert(
+      "Zgłoszenie w trakcie analizy",
+      `Zgłoszenie ${ticketId} jest obecnie analizowane w tle przez AI lub w innym oknie dialogowym.\n\nOdczekaj chwilę na zakończenie przetwarzania.`,
+      ui.ButtonSet.OK
+    );
+    return;
+  }
+
   const ticketType = getVal(["Rodzaj zgłoszenia", "Kategoria"]);
   const wasteFraction = getVal(["Rodzaj odpadów", "Frakcja"]);
   const city = getVal(["Miejscowość", "Miasto"]) || "Rejon Kartuzy";
@@ -950,14 +965,24 @@ function analyzeSelectedTicket() {
 }
 
 function processAiTicketAnalysis(ticketId, verifiedText) {
+  // Blokowanie ręcznej analizy AI – próba atomowej rezerwacji sprawy
+  if (typeof tryAcquireTicketAiLock === "function" && !tryAcquireTicketAiLock(ticketId)) {
+    return {
+      success: false,
+      error: `Zgłoszenie ${ticketId} jest już w trakcie analizy AI (blokada współbieżności). Odczekaj chwilę.`
+    };
+  }
+
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("ZGŁOSZENIA");
   if (!sheet) {
+    if (typeof releaseTicketAiLock === "function") releaseTicketAiLock(ticketId);
     return { success: false, error: "Brak zakładki ZGŁOSZENIA w arkuszu." };
   }
 
   const scriptProperties = PropertiesService.getScriptProperties();
   const apiKey = scriptProperties.getProperty("GEMINI_API_KEY");
   if (!apiKey) {
+    if (typeof releaseTicketAiLock === "function") releaseTicketAiLock(ticketId);
     return { success: false, error: "Brak skonfigurowanego klucza Gemini API w Script Properties." };
   }
 
@@ -994,6 +1019,7 @@ function processAiTicketAnalysis(ticketId, verifiedText) {
   }
 
   if (rowNum === -1 || !ticketData) {
+    if (typeof releaseTicketAiLock === "function") releaseTicketAiLock(ticketId);
     return { success: false, error: `Nie znaleziono zgłoszenia o ID ${ticketId} w arkuszu.` };
   }
 
@@ -1083,6 +1109,10 @@ function processAiTicketAnalysis(ticketId, verifiedText) {
     setValByHeader(sheet, rowNum, headers, "Stan analizy AI", "Błąd");
     setValByHeader(sheet, rowNum, headers, "Szczegóły błędu AI", safeErrMsg);
     return { success: false, error: safeErrMsg };
+  } finally {
+    if (typeof releaseTicketAiLock === "function") {
+      releaseTicketAiLock(ticketId);
+    }
   }
 }
 

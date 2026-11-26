@@ -1684,42 +1684,6 @@ function recoverStuckAiAnalyses(ticketSheet) {
 }
 
 /**
- * Atomowa rezerwacja zgłoszenia do analizy AI we wszystkich ścieżkach (v0.2.8)
- * Blokuje równoległe uruchomienie analizy tej samej sprawy przez formularz, kolejkę i pracownika.
- */
-function tryAcquireTicketAiLock(ticketId) {
-  if (!ticketId) return false;
-  const lock = LockService.getScriptLock();
-  try {
-    if (!lock.waitLock(3000)) return false;
-    const props = PropertiesService.getScriptProperties();
-    const inProgressKey = "AI_IN_PROGRESS_" + ticketId;
-    const currentLockTime = Number(props.getProperty(inProgressKey) || 0);
-    const now = Date.now();
-    // Jeśli blokada jest aktywna i ma mniej niż 3 minuty, rezerwacja zajęta
-    if (currentLockTime && (now - currentLockTime < 180000)) {
-      return false;
-    }
-    props.setProperty(inProgressKey, String(now));
-    return true;
-  } catch (err) {
-    return false;
-  } finally {
-    try { lock.releaseLock(); } catch (_) {}
-  }
-}
-
-/**
- * Zwalnia atomową rezerwację zgłoszenia do analizy AI (v0.2.8)
- */
-function releaseTicketAiLock(ticketId) {
-  if (!ticketId) return;
-  try {
-    PropertiesService.getScriptProperties().deleteProperty("AI_IN_PROGRESS_" + ticketId);
-  } catch (_) {}
-}
-
-/**
  * Obsługa nowego zgłoszenia po wysłaniu formularza Google Forms (v0.2.7)
  * - Nadanie unikalnego ID
  * - Wyliczenie terminu SLA
@@ -2715,9 +2679,20 @@ function apiTriggerAiAnalysis(ticketId) {
 
   if (targetRow === -1) return { success: false, error: `Nie znaleziono zgłoszenia ${ticketId}.` };
 
+  // Sprawdzenie i atomowa rezerwacja blokady współbieżności dla ręcznej analizy przez API
+  if (typeof tryAcquireTicketAiLock === "function" && !tryAcquireTicketAiLock(ticketId)) {
+    return {
+      success: false,
+      ticketId: ticketId,
+      aiState: "W trakcie",
+      error: `Zgłoszenie ${ticketId} jest już w trakcie analizy AI (blokada współbieżności). Odczekaj chwilę.`
+    };
+  }
+
   if (typeof triggerAutoAiAnalysisForTicket === "function") {
     try {
-      triggerAutoAiAnalysisForTicket(sheet, targetRow, headers, ticketId, true);
+      // hasLock = true ponieważ blokada została już zarezerwowana przez tryAcquireTicketAiLock
+      triggerAutoAiAnalysisForTicket(sheet, targetRow, headers, ticketId, true, true);
 
       const aiStateCol = headers.indexOf("Stan analizy AI") + 1;
       const aiErrorCol = headers.indexOf("Szczegóły błędu AI") + 1;
@@ -2741,7 +2716,14 @@ function apiTriggerAiAnalysis(ticketId) {
       };
     } catch (e) {
       return { success: false, ticketId: ticketId, aiState: "Błąd", error: e.toString() };
+    } finally {
+      if (typeof releaseTicketAiLock === "function") {
+        releaseTicketAiLock(ticketId);
+      }
     }
+  }
+  if (typeof releaseTicketAiLock === "function") {
+    releaseTicketAiLock(ticketId);
   }
   return { success: false, error: "Funkcja triggerAutoAiAnalysisForTicket nie jest dostępna." };
 }

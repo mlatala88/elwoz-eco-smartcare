@@ -24,12 +24,24 @@ function createMockEnvironment() {
     })
   };
 
-  let lockAcquired = false;
+  let isScriptLocked = false;
   const LockService = {
     getScriptLock: () => ({
-      waitLock: (timeout) => { lockAcquired = true; return true; },
-      releaseLock: () => { lockAcquired = false; return true; },
-      hasLock: () => lockAcquired
+      tryLock: (timeout) => {
+        if (isScriptLocked) return false;
+        isScriptLocked = true;
+        return true;
+      },
+      waitLock: (timeout) => {
+        if (isScriptLocked) {
+          throw new Error("Lock wait timed out");
+        }
+        isScriptLocked = true;
+      },
+      releaseLock: () => {
+        isScriptLocked = false;
+      },
+      hasLock: () => isScriptLocked
     })
   };
 
@@ -304,6 +316,21 @@ test("SUITE 1", "1.9 getSmartCareSpreadsheet: odzyskiwanie arkusza po SMARTCARE_
   assert.strictEqual(ss.id, "SPREADSHEET_12345");
 });
 
+test("SUITE 1", "1.10 LockService GAS compliance: tryLock zwraca boolean, waitLock rzuca błąd i zwraca void", () => {
+  const lock = sandbox.LockService.getScriptLock();
+  assert.strictEqual(lock.tryLock(1000), true, "tryLock na wolnej blokadzie powinien zwrócić true");
+  assert.strictEqual(lock.tryLock(1000), false, "tryLock na zajętej blokadzie powinien zwrócić false");
+  assert.throws(
+    () => { lock.waitLock(1000); },
+    /Lock wait timed out/,
+    "waitLock na zajętej blokadzie musi rzucać błąd przekroczenia czasu"
+  );
+  lock.releaseLock();
+  const waitResult = lock.waitLock(1000);
+  assert.strictEqual(waitResult, undefined, "waitLock w GAS zwraca void (undefined), a nie boolean!");
+  lock.releaseLock();
+});
+
 // -----------------------------------------------------------------------------
 // SUITE 2: Rejestracja zgłoszeń & Reconciliation Lock Race
 // -----------------------------------------------------------------------------
@@ -353,8 +380,9 @@ test("SUITE 2", "2.2 reconcileUnprocessedFormResponses: brak wysyłki e-mail dla
 test("SUITE 2", "2.3 LockService: blokada zwalniana bezzwłocznie (<200ms)", () => {
   let lockReleased = false;
   sandbox.LockService.getScriptLock = () => ({
-    waitLock: () => true,
-    releaseLock: () => { lockReleased = true; return true; }
+    tryLock: () => true,
+    waitLock: () => { /* w GAS waitLock zwraca void */ },
+    releaseLock: () => { lockReleased = true; }
   });
   const fakeSheet = {
     getLastRow: () => 1,
@@ -482,6 +510,16 @@ test("SUITE 3", "3.6 validateMessageContentQuality: serwerowa blokada obraźliwy
   const aggressive = sandbox.validateMessageContentQuality("Odpowiedź", "Jesteście bezczelni, to wasza wina i spadaj stąd.");
   assert.strictEqual(aggressive.isValid, false);
   assert.ok(aggressive.reason.includes("agresywne") || aggressive.reason.includes("obraźliwe"));
+});
+
+test("SUITE 3", "3.7 validateMessageContentQuality: blokada przypadków 'pacanie' i 'spieprzaj dziadu'", () => {
+  const res1 = sandbox.validateMessageContentQuality("Odpowiedź", "Nie będziemy z tobą dyskutować pacanie, nie zawracaj głowy.");
+  assert.strictEqual(res1.isValid, false, "Powinno zablokować słowo 'pacanie'");
+  assert.ok(res1.reason.includes("agresywne") || res1.reason.includes("obraźliwe"));
+
+  const res2 = sandbox.validateMessageContentQuality("Wiadomość", "Spieprzaj dziadu z tymi śmieciami i nie pisz więcej.");
+  assert.strictEqual(res2.isValid, false, "Powinno zablokować sformułowanie 'spieprzaj dziadu'");
+  assert.ok(res2.reason.includes("wulgaryzmy") || res2.reason.includes("agresywne") || res2.reason.includes("obraźliwe"));
 });
 
 // -----------------------------------------------------------------------------
@@ -894,6 +932,32 @@ test("SUITE 7", "7.6 apiTriggerAiAnalysis: zwraca rzeczywisty stan i szczegóły
   assert.strictEqual(res.success, false);
   assert.strictEqual(res.aiState, "Błąd");
   assert.ok(res.error.includes("limit tokenów"));
+});
+
+test("SUITE 7", "7.7 apiTriggerAiAnalysis: blokowanie ręcznej analizy, gdy sprawa jest już w trakcie przetwarzania", () => {
+  const ticketId = "ELW-2026-0001";
+  sandbox.scriptPropertiesStore["AI_IN_PROGRESS_" + ticketId] = String(Date.now()); // aktywny znacznik rezerwacji
+  const fakeSheet = {
+    getLastRow: () => 2,
+    getLastColumn: () => 3,
+    getRange: (r, c, nr, nc) => ({
+      getValues: () => [["ID Zgłoszenia", "Stan analizy AI", "Szczegóły błędu AI"], ["ELW-2026-0001", "Nowe", ""]]
+    })
+  };
+  sandbox.SpreadsheetApp = { flush: () => {}, getActiveSpreadsheet: () => ({ getSheetByName: () => fakeSheet }) };
+  const res = sandbox.apiTriggerAiAnalysis(ticketId);
+  assert.strictEqual(res.success, false, "Powinno zablokować wywołanie analizy dla zajętej sprawy");
+  assert.ok(res.error.includes("blokada współbieżności") || res.error.includes("w trakcie analizy"));
+  delete sandbox.scriptPropertiesStore["AI_IN_PROGRESS_" + ticketId];
+});
+
+test("SUITE 7", "7.8 processAiTicketAnalysis: blokowanie ręcznej analizy z okna dialogowego przy aktywnej blokadzie", () => {
+  const ticketId = "ELW-2026-0001";
+  sandbox.scriptPropertiesStore["AI_IN_PROGRESS_" + ticketId] = String(Date.now());
+  const res = sandbox.processAiTicketAnalysis(ticketId, "Opis zgłoszenia");
+  assert.strictEqual(res.success, false, "processAiTicketAnalysis musi zwrócić błąd przy zajętym zgłoszeniu");
+  assert.ok(res.error.includes("blokada współbieżności") || res.error.includes("w trakcie analizy"));
+  delete sandbox.scriptPropertiesStore["AI_IN_PROGRESS_" + ticketId];
 });
 
 // -----------------------------------------------------------------------------

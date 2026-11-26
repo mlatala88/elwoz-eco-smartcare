@@ -1567,6 +1567,8 @@ function validateMessageContentQuality(subject, body) {
     /\bjeb/i,
     /\bgówn/i,
     /\bspierdal/i,
+    /\bspieprz/i,
+    /\bpieprz/i,
     /\bsuk/i,
     /\bpedał/i,
     /\bciul/i,
@@ -1587,6 +1589,10 @@ function validateMessageContentQuality(subject, body) {
     /\bidiot/i,
     /\bkretyn/i,
     /\bdebil/i,
+    /\bpacan/i,
+    /\bdziad/i,
+    /\bspieprzaj dziadu\b/i,
+    /\bbaran/i,
     /\bbezczeln/i,
     /\bdurn/i,
     /\boszust/i,
@@ -1937,7 +1943,7 @@ function polishMessageWithAiDirect(ticketId, templateText) {
     "Jesteś profesjonalnym asystentem redakcyjnym oraz ekspertem ds. komunikacji Customer Experience (CX) i PR w firmie komunalnej ELWOZ ECO w Kartuzach.\n" +
     "Twoim celem jest wygładzenie stylu, korekta językowa i profesjonalna redakcja poniższej wiadomości roboczej do mieszkańca.\n\n" +
     "BEZWZGLĘDNE ZASADY PROFESJONALNEJ KOMUNIKACJI CX, PR I STANDARDÓW ETYCZNYCH (v0.2.8):\n" +
-    "1. CAŁKOWITE ELIMINOWANIE AGRESJI, OBELG I LEKCEWAŻENIA: Bezwzględnie wyklucz wszelkie obelgi, przekleństwa, sformułowania agresywne, pretensjonalne, sarkastyczne, protekcjonalne lub lekceważące mieszkańca.\n" +
+    "1. CAŁKOWITE ELIMINOWANIE AGRESJI, OBELG I LEKCEWAŻENIA: Bezwzględnie wyklucz wszelkie obelgi, przekleństwa, sformułowania agresywne, pretensjonalne, sarkastyczne, protekcjonalne lub lekceważące mieszkańca (w tym zwroty typu 'pacanie', 'spieprzaj dziadu', 'spadaj', 'idioto', 'durniu').\n" +
     "2. ŁAGODZENIE KONFLIKTÓW: Stosuj deeskalację emocji, wykazując empatię, spokój i profesjonalne zrozumienie dla sytuacji mieszkańca, unikając postawy konfrontacyjnej.\n" +
     "3. ZACHOWANIE POTWIERDZONYCH FAKTÓW I STANOWISKA SPÓŁKI: Zachowaj wyłącznie potwierdzone fakty i merytoryczne stanowisko przedsiębiorstwa. Nie zmieniaj sensu ustaleń faktycznych.\n" +
     "4. KULTURALNE PRZEDSTAWIANIE ODMOWY: Wszelkie odmowy (np. brak wystawionego pojemnika) przedstawiaj kulturalnie, ze spokojnym, życzliwym i rzeczowym wyjaśnieniem przyczyn regulaminowych, bez złośliwości ani pouczania.\n" +
