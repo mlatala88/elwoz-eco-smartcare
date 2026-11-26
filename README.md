@@ -12,7 +12,7 @@
 ---
 
 
-- **Zautomatyzowany audyt testowy (`tests/test-v028-audit.js`):** Kompletny zestaw 33 testów automatycznych (100% PASS, 33/33) pokrywający kolejkę AI, blokady współbieżności, dynamiczną komunikację CX/PR, robocze godziny SLA (7:00-16:00), ochronę PII oraz Service API.
+- **Zautomatyzowany audyt testowy (`tests/test-v028-audit.js`):** Kompletny zestaw 40 testów automatycznych (100% PASS, 40/40) pokrywający kolejkę AI, barierę 15 RPM (4200 ms), cooldown 429, blokady współbieżności per-ticket, dynamiczną komunikację CX/PR, robocze godziny SLA (7:00-16:00), ochronę PII oraz Service API.
 
 ## Spis treści
 1. [Kontekst i cel projektu](#1-kontekst-i-cel-projektu)

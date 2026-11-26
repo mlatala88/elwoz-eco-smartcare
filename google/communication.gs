@@ -792,7 +792,7 @@ function generateTailoredEmergencyConfirmation(ticket, settings) {
 
 Serdecznie dziękujemy za przesłanie miłych słów dotyczących pracy naszej załogi w rejonie Kartuz (${ticket.location || "Rejon Kartuzy"}).
 
-Pana/Pani opinia została zarejestrowana w naszym systemie (sprawa: ${ticket.ticketId}) i przekazana bezpośrednio załodze realizującej odbiory oraz kierownikowi rejonu. Tego typu sygnały są dla całego zespołu ELWOZ ECO największą motywacją do codziennej rzetelnej pracy.
+Pana/Pani opinia została zarejestrowana w naszym systemie pod numerem sprawy ${ticket.ticketId}. Tego typu sygnały są dla całego zespołu ELWOZ ECO cennym potwierdzeniem jakości świadczonych usług i motywacją do codziennej rzetelnej pracy.
 
 Z poważaniem,
 ${settings.senderName}
@@ -836,7 +836,7 @@ Potwierdzamy zarejestrowanie zgłoszenia w systemie ELWOZ ECO SmartCare:
 
 1. Ustalenia wstępne: Zgłoszenie zostało poprawnie zarejestrowane w naszym systemie CRM.
 2. Działania ze strony Mieszkańca: Ze strony Mieszkańca na ten moment nie są wymagane żadne dodatkowe działania.
-3. Kolejny krok przedsiębiorstwa: Dyspozytor POK Kartuzy dokonuje weryfikacji operacyjnej trasy oraz raportu dziennego załogi.
+3. Kolejny krok przedsiębiorstwa: Zgłoszenie zostało zarejestrowane w rejestrze CRM i oczekuje na weryfikację operacyjną.
 4. Strona odpowiedzialna za realizację: Przedsiębiorstwo ELWOZ ECO.
 
 W przypadku pytań prosimy o kontakt z biurem POK Kartuzy (tel. ${settings.contactPhone}, e-mail: ${settings.contactEmail}), powołując się na numer sprawy ${ticket.ticketId}.
@@ -903,8 +903,8 @@ function actionPrepareProgressUpdate() {
   const subject = `Informacja o statusie sprawy ${ticket.ticketId} – ELWOZ ECO SmartCare`;
 
   const progressDetails = [];
-  if (ticket.employeeNote) {
-    progressDetails.push(`• Ustalenia operacyjne pracownika: ${ticket.employeeNote}`);
+  if (ticket.status) {
+    progressDetails.push(`• Aktualny status sprawy: ${ticket.status}`);
   }
   if (ticket.nextAction) {
     progressDetails.push(`• Kolejne zaplanowane działanie: ${ticket.nextAction}`);
@@ -913,14 +913,14 @@ function actionPrepareProgressUpdate() {
     progressDetails.push(`• Strona odpowiedzialna za realizację kroku: ${ticket.responsibleSide}`);
   }
   if (ticket.residentContactResult) {
-    progressDetails.push(`• Dotychczasowy wynik kontaktu: ${ticket.residentContactResult}`);
+    progressDetails.push(`• Dotychczasowy wynik kontaktu z Mieszkańcem: ${ticket.residentContactResult}`);
   }
 
   let detailsSection = "";
   if (progressDetails.length > 0) {
     detailsSection = "Aktualne ustalenia w toku sprawy:\n" + progressDetails.join("\n") + "\n\n";
   } else {
-    detailsSection = `Sprawa znajduje się w toku realizacji (status: ${ticket.status || "W toku"}). Trwa weryfikacja operacyjna z dyspozytorem rejonu Kartuzy.\n\n`;
+    detailsSection = `Sprawa znajduje się w toku realizacji (status: ${ticket.status || "W toku"}). Trwają czynności związane z obsługą zgłoszenia.\n\n`;
   }
 
   const body = 
@@ -1548,6 +1548,73 @@ function openEmailDialog(params) {
 }
 
 /**
+ * Serwerowa kontrola jakości treści wiadomości przed wysyłką (v0.2.8)
+ * Bezwzględnie blokuje wysyłkę obraźliwych, agresywnych, sarkastycznych lub wulgarnych treści,
+ * również wtedy, gdy pracownik nie skorzystał z asystenta AI.
+ *
+ * @param {string} subject Temat wiadomości
+ * @param {string} body Treść wiadomości
+ * @returns {{ isValid: boolean, reason?: string }}
+ */
+function validateMessageContentQuality(subject, body) {
+  const fullText = `${subject || ""} ${body || ""}`.toLowerCase();
+
+  // 1. Wykrywanie wulgaryzmów i przekleństw w języku polskim
+  const vulgarities = [
+    /\bkurw/i,
+    /\bchuj/i,
+    /\bpierdol/i,
+    /\bjeb/i,
+    /\bgówn/i,
+    /\bspierdal/i,
+    /\bsuk/i,
+    /\bpedał/i,
+    /\bciul/i,
+    /\bdupek/i
+  ];
+
+  for (let pattern of vulgarities) {
+    if (pattern.test(fullText)) {
+      return {
+        isValid: false,
+        reason: "wykryto niedopuszczalne wulgaryzmy lub przekleństwa"
+      };
+    }
+  }
+
+  // 2. Wykrywanie agresji, obelg, sarkazmu i lekceważenia mieszkańca
+  const offensiveTerms = [
+    /\bidiot/i,
+    /\bkretyn/i,
+    /\bdebil/i,
+    /\bbezczeln/i,
+    /\bdurn/i,
+    /\boszust/i,
+    /\bkłamc/i,
+    /\bzłodziej/i,
+    /\bwynoś się\b/i,
+    /\bspadaj\b/i,
+    /\bmorda\b/i,
+    /\bzamknij się\b/i,
+    /\bgłupek/i,
+    /\bnie zawracaj głowy\b/i,
+    /\bwasza wina i tyle\b/i,
+    /\bjak się nie podoba\b/i
+  ];
+
+  for (let pattern of offensiveTerms) {
+    if (pattern.test(fullText)) {
+      return {
+        isValid: false,
+        reason: "wykryto agresywne, obraźliwe lub lekceważące sformułowania wobec mieszkańca"
+      };
+    }
+  }
+
+  return { isValid: true };
+}
+
+/**
  * Backend wysyłki poczty z BEZWARUNKOWĄ blokadą serwerową, LockService oraz zabezpieczeniem przed duplikatami (v0.2.7)
  */
 function processSendEmail(payload) {
@@ -1582,7 +1649,18 @@ function processSendEmail(payload) {
       };
     }
 
-    // 2. WERYFIKACJA LINKU DO OPINII GOOGLE:
+    // 2. SERWEROWA KONTROLA JAKOŚCI TREŚCI I BLOKADA OBRAŹLIWYCH SFORMUŁOWAŃ (v0.2.8):
+    const qualityCheck = validateMessageContentQuality(payload.subject, payload.body);
+    if (!qualityCheck.isValid) {
+      const blockMsg = `SERWEROWA BLOKADA JAKOŚCI TREŚCI: Wiadomość narusza standardy Customer Experience i PR (${qualityCheck.reason}). Wiadomość NIE została wysłana. Skoryguj treść przed ponowną próbą.`;
+      Logger.log(`[Content Quality Guard] ${blockMsg} dla zgłoszenia ${payload.ticketId}.`);
+      return {
+        success: false,
+        error: blockMsg
+      };
+    }
+
+    // 3. WERYFIKACJA LINKU DO OPINII GOOGLE:
     const hasVerifiedReviewLink = isVerifiedReviewUrl(settings.googleReviewUrl);
     if (payload.actionType === "Prośba o opinię" && !hasVerifiedReviewLink) {
       return {
@@ -1858,14 +1936,19 @@ function polishMessageWithAiDirect(ticketId, templateText) {
   const systemPrompt = 
     "Jesteś profesjonalnym asystentem redakcyjnym oraz ekspertem ds. komunikacji Customer Experience (CX) i PR w firmie komunalnej ELWOZ ECO w Kartuzach.\n" +
     "Twoim celem jest wygładzenie stylu, korekta językowa i profesjonalna redakcja poniższej wiadomości roboczej do mieszkańca.\n\n" +
-    "ZASADY PROFESJONALNEJ KOMUNIKACJI CX, PR I BEZPIECZEŃSTWA:\n" +
-    "1. POPRAWIAJ GRAMATYKĘ, ORTOGRAFIĘ, INTERPUNKCJĘ I STYL: Dbaj o wysoki standard polszczyzny, uprzejmy, empatyczny, partnerski i rzeczowy ton.\n" +
-    "2. USUWAJ PRZYPADKOWO SKOPIOWANE ELEMENTY INTERFEJSU: Wytnij wszelkie techniczne pozostałości, znaczniki UI lub etykiety formularza (np. '[Opis]', 'ID Zgłoszenia:', 'Pole edytowalne:', 'Wiersz:', znaczniki pól itp.).\n" +
-    "3. OCHRONA WIZERUNKU PRZEDSIĘBIORSTWA I PRACOWNIKÓW (PR): BEZWZGLĘDNIE NIE UJAWNIAJ WEWNĘTRZNYCH KAR, REPRYMEND, NAGAN, ROZMÓW DYSCYPLINUJĄCYCH ANI KONSEKWENCJI SŁUŻBOWYCH PRACOWNIKÓW LUB ZAŁÓG ŚMIECIAREK. Zamiast kar komunikuj standardy jakościowe, procedury weryfikacyjne i podjęte działania systemowe.\n" +
-    "4. ZASADA PRAWDY: BEZWZGLĘDNIE NIE WYMYŚLAJ FAKTÓW ANI WYKONANYCH DZIAŁAŃ. Opieraj się wyłącznie na faktach i ustaleniach przekazanych w szablonie. Rozróżniaj działania zaplanowane (np. 'zaplanowano podjazd kontrolny') od zakończonych.\n" +
-    "5. OCHRONA PRAWNA SPÓŁKI: NIGDY nie deklaruj formalnego uznania winy przedsiębiorstwa ani uznania roszczeń reklamacyjnych. NIGDY nie obiecuj rekompensat finansowych, bonifikat, zniżek ani sztywnych terminów, których nie ma w szablonie.\n" +
-    "6. ZACHOWAJ KLUCZOWE DANE: Zachowaj numer identyfikacyjny zgłoszenia (np. ELW-...) oraz oficjalne dane kontaktowe do POK w Kartuzach.\n" +
-    "7. Odpowiedź zwróć w formacie JSON ze wskazanym kluczem stylizowanaTresc.";
+    "BEZWZGLĘDNE ZASADY PROFESJONALNEJ KOMUNIKACJI CX, PR I STANDARDÓW ETYCZNYCH (v0.2.8):\n" +
+    "1. CAŁKOWITE ELIMINOWANIE AGRESJI, OBELG I LEKCEWAŻENIA: Bezwzględnie wyklucz wszelkie obelgi, przekleństwa, sformułowania agresywne, pretensjonalne, sarkastyczne, protekcjonalne lub lekceważące mieszkańca.\n" +
+    "2. ŁAGODZENIE KONFLIKTÓW: Stosuj deeskalację emocji, wykazując empatię, spokój i profesjonalne zrozumienie dla sytuacji mieszkańca, unikając postawy konfrontacyjnej.\n" +
+    "3. ZACHOWANIE POTWIERDZONYCH FAKTÓW I STANOWISKA SPÓŁKI: Zachowaj wyłącznie potwierdzone fakty i merytoryczne stanowisko przedsiębiorstwa. Nie zmieniaj sensu ustaleń faktycznych.\n" +
+    "4. KULTURALNE PRZEDSTAWIANIE ODMOWY: Wszelkie odmowy (np. brak wystawionego pojemnika) przedstawiaj kulturalnie, ze spokojnym, życzliwym i rzeczowym wyjaśnieniem przyczyn regulaminowych, bez złośliwości ani pouczania.\n" +
+    "5. ZASADA PRAWDY - NIEWYMYŚLANIE FAKTÓW ANI DALSZYCH DZIAŁAŃ: Bezwzględnie nie dopisuj faktów, rzekomych ustaleń z kierowcami, decyzji ani kolejnych działań operacyjnych (np. fikcyjnych podjazdów śmieciarek), które nie wynikają z przekazanego tekstu roboczego.\n" +
+    "6. WYMAGANIE UZUPEŁNIENIA INFORMACJI (Gdy notatka nie zawiera wartości merytorycznej): Jeśli przekazany tekst roboczy nie zawiera żadnej merytorycznej wartości informacyjnej (np. zawiera same uwagi emocjonalne lub jest pusty), wygeneruj uprzejmą prośbę o sprecyzowanie szczegółów sprawy zamiast wymyślać fikcyjne ustalenia.\n" +
+    "7. POPRAWIAJ GRAMATYKĘ, ORTOGRAFIĘ, INTERPUNKCJĘ I STYL: Dbaj o wysoki standard polszczyzny, powitanie 'Dzień dobry,', uprzejmy zwrot końcowy 'Z poważaniem,' i oficjalne dane kontaktowe do POK w Kartuzach.\n" +
+    "8. OCHRONA WIZERUNKU PRZEDSIĘBIORSTWA I PRACOWNIKÓW: Bezwzględnie nie ujawniaj wewnętrznych kar, reprymend, nagan, rozmów dyscyplinujących ani konsekwencji służbowych pracowników lub załóg śmieciarek.\n" +
+    "9. USUWAJ PRZYPADKOWE ELEMENTY INTERFEJSU: Wytnij techniczne pozostałości, znaczniki UI lub etykiety formularza (np. '[Opis]', 'ID Zgłoszenia:', 'Pole edytowalne:', 'Wiersz:').\n" +
+    "10. OCHRONA PRAWNA SPÓŁKI: NIGDY nie deklaruj formalnego uznania winy spółki ani uznania roszczeń reklamacyjnych. NIGDY nie obiecuj rekompensat finansowych ani bonifikat.\n" +
+    "11. ZACHOWAJ NUMER SPRAWY: Zachowaj numer identyfikacyjny zgłoszenia (np. ELW-...) oraz oficjalne dane POK w Kartuzach.\n" +
+    "12. Odpowiedź zwróć w formacie JSON z kluczem stylizowanaTresc.";
 
   const polishSchema = {
     type: "OBJECT",
@@ -1904,6 +1987,11 @@ function polishMessageWithAiDirect(ticketId, templateText) {
 
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(targetModel)}:generateContent?key=${apiKey}`;
   
+  // Wspólna kontrola limitu zapytań Gemini (v0.2.8)
+  if (typeof enforceGeminiRateLimit === "function") {
+    enforceGeminiRateLimit(targetModel);
+  }
+
   let response;
   try {
     response = UrlFetchApp.fetch(endpoint, options);
@@ -1915,8 +2003,10 @@ function polishMessageWithAiDirect(ticketId, templateText) {
   const responseCode = response.getResponseCode();
   const responseText = response.getContentText();
 
-  if (responseCode === 429) {
-    throw new Error("Przekroczono limit zapytań Gemini API. Odczekaj chwilę i spróbuj ponownie.");
+  if (responseCode === 429 || (responseText && responseText.includes("RESOURCE_EXHAUSTED"))) {
+    const cooldownTime = Date.now() + 60000;
+    PropertiesService.getScriptProperties().setProperty("GEMINI_BACKOFF_UNTIL", String(cooldownTime));
+    throw new Error("Przekroczono limit zapytań Gemini API (HTTP 429 / RESOURCE_EXHAUSTED). Aktywowano 60s cooldown. Odczekaj chwilę i spróbuj ponownie.");
   }
   if (responseCode === 401 || responseCode === 403) {
     throw new Error("Błąd autoryzacji Gemini API (kod 401/403). Sprawdź klucz API.");

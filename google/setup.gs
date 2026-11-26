@@ -1612,9 +1612,9 @@ function installScheduledQueueTrigger(spreadsheet) {
   if (count === 0) {
     ScriptApp.newTrigger("scheduledQueueAndReconcile")
       .timeBased()
-      .everyMinutes(1)
+      .everyMinutes(5)
       .create();
-    Logger.log("Zainstalowano cykliczny wyzwalacz scheduledQueueAndReconcile (co 1 minutę).");
+    Logger.log("Zainstalowano cykliczny wyzwalacz scheduledQueueAndReconcile (co 5 minut).");
   }
 }
 
@@ -1681,6 +1681,42 @@ function recoverStuckAiAnalyses(ticketSheet) {
       }
     }
   }
+}
+
+/**
+ * Atomowa rezerwacja zgłoszenia do analizy AI we wszystkich ścieżkach (v0.2.8)
+ * Blokuje równoległe uruchomienie analizy tej samej sprawy przez formularz, kolejkę i pracownika.
+ */
+function tryAcquireTicketAiLock(ticketId) {
+  if (!ticketId) return false;
+  const lock = LockService.getScriptLock();
+  try {
+    if (!lock.waitLock(3000)) return false;
+    const props = PropertiesService.getScriptProperties();
+    const inProgressKey = "AI_IN_PROGRESS_" + ticketId;
+    const currentLockTime = Number(props.getProperty(inProgressKey) || 0);
+    const now = Date.now();
+    // Jeśli blokada jest aktywna i ma mniej niż 3 minuty, rezerwacja zajęta
+    if (currentLockTime && (now - currentLockTime < 180000)) {
+      return false;
+    }
+    props.setProperty(inProgressKey, String(now));
+    return true;
+  } catch (err) {
+    return false;
+  } finally {
+    try { lock.releaseLock(); } catch (_) {}
+  }
+}
+
+/**
+ * Zwalnia atomową rezerwację zgłoszenia do analizy AI (v0.2.8)
+ */
+function releaseTicketAiLock(ticketId) {
+  if (!ticketId) return;
+  try {
+    PropertiesService.getScriptProperties().deleteProperty("AI_IN_PROGRESS_" + ticketId);
+  } catch (_) {}
 }
 
 /**
@@ -2139,7 +2175,7 @@ function updateSystemToV026() {
 function reconcileUnprocessedFormResponses(ticketSheet) {
   const ss = ticketSheet ? ticketSheet.getParent() : getSmartCareSpreadsheet();
   const sheet = ticketSheet || (ss ? ss.getSheetByName(SMARTCARE_SETUP_CONFIG.sheetTabs.tickets) : null);
-  if (!sheet || sheet.getLastRow() <= 1) {
+  if (!sheet) {
     return { reconciledCount: 0, reconciledIds: [] };
   }
 
@@ -2287,6 +2323,7 @@ function apiGetTicketsList(filters = {}) {
   const nextActionIdx = getIdx("Następne działanie");
   const sideIdx = getIdx("Strona odpowiedzialna");
   const slaIdx = getIdx("Termin SLA 1. reakcji");
+  const firstContactIdx = getIdx("Data pierwszego kontaktu");
   const empIdx = getIdx("Pracownik odpowiedzialny");
   const nextActionDeadlineIdx = getIdx("Termin następnego działania");
 
@@ -2322,9 +2359,16 @@ function apiGetTicketsList(filters = {}) {
     }
 
     const slaDate = slaIdx !== -1 ? parseDateValue(row[slaIdx]) : null;
+    const firstContactTime = firstContactIdx !== -1 ? parseDateValue(row[firstContactIdx]) : null;
+    const hasFirstContact = Boolean(firstContactTime);
     const isClosed = statusVal === "Rozwiązane" || statusVal === "Zamknięte";
-    const isOverdue = Boolean(!isClosed && slaDate && slaDate < now.getTime());
+    
+    // Rozróżnienie aktualnej zaległości od historycznego przekroczenia (v0.2.8):
+    // Zgłoszenie z udzieloną już odpowiedzią NIE JEST oznaczane jako zalegające z 1. reakcją!
+    const isOverdueFirstResponse = Boolean(!hasFirstContact && !isClosed && slaDate && slaDate < now.getTime());
+    const slaBreachedHistorically = Boolean(hasFirstContact && slaDate && firstContactTime > slaDate);
     const nextActDeadlineTime = nextActionDeadlineIdx !== -1 ? parseDateValue(row[nextActionDeadlineIdx]) : null;
+    const isOverdueNextAction = Boolean(!isClosed && nextActDeadlineTime && nextActDeadlineTime < now.getTime());
 
     list.push({
       ticketId: ticketId,
@@ -2347,7 +2391,12 @@ function apiGetTicketsList(filters = {}) {
       responsibleSide: sideIdx !== -1 ? String(row[sideIdx] || "Przedsiębiorstwo") : "Przedsiębiorstwo",
       nextActionDeadline: nextActDeadlineTime ? Utilities.formatDate(new Date(nextActDeadlineTime), "Europe/Warsaw", "yyyy-MM-dd HH:mm") : "",
       slaDeadline: slaDate ? Utilities.formatDate(new Date(slaDate), "Europe/Warsaw", "yyyy-MM-dd HH:mm") : "",
-      overdueSla: isOverdue
+      hasFirstContact: hasFirstContact,
+      firstContactDate: firstContactTime ? Utilities.formatDate(new Date(firstContactTime), "Europe/Warsaw", "yyyy-MM-dd HH:mm") : "",
+      overdueSla: isOverdueFirstResponse,
+      isOverdueFirstResponse: isOverdueFirstResponse,
+      slaBreachedHistorically: slaBreachedHistorically,
+      isOverdueNextAction: isOverdueNextAction
     });
   }
 
@@ -2612,8 +2661,9 @@ function apiUpdateTicket(ticketId, updates = {}) {
       setField("Data rozwiązania", new Date());
     }
 
-    // Jeśli zaktualizowano priorytet, przelicz SLA na podstawie sygnatury czasowej zgłoszenia i godzin roboczych
+    // Jeśli pracownik zatwierdził lub zmienił priorytet, rejestrujemy świadome zatwierdzenie (v0.2.8)
     if (updates.priority) {
+      PropertiesService.getScriptProperties().setProperty("PRIORITY_APPROVED_" + ticketId, String(updates.priority).toUpperCase().trim());
       const timeCol = headers.indexOf("Sygnatura czasowa") + 1;
       const slaCol = headers.indexOf("Termin SLA 1. reakcji") + 1;
       if (slaCol > 0) {

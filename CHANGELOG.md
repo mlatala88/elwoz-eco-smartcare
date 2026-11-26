@@ -11,22 +11,23 @@ Wydanie **v0.2.8** stanowi kluczową aktualizację stabilizacyjną silnika przed
 
 #### Kluczowe poprawki i usprawnienia silnika (po audycie kodu v0.2.8):
 1. **Automatyczna cykliczna kolejka AI & Ochrona Limitów 15 RPM (`scheduledQueueAndReconcile`):**
-   - **Instalacja wyzwalacza czasowego:** Wprowadzono funkcję `installScheduledQueueTrigger` uruchamiającą cykliczne przetwarzanie kolejki i uzupełnianie pominiętych zgłoszeń co 5 minut.
+   - **Instalacja wyzwalacza czasowego (5 minut):** Wprowadzono funkcję `installScheduledQueueTrigger` uruchamiającą cykliczne przetwarzanie kolejki i uzupełnianie pominiętych zgłoszeń co 5 minut (`.everyMinutes(5)`), co optymalizuje zużycie dziennego limitu czasu wykonania Apps Script (90 min/dzień dla kont konsumenckich `@gmail.com`).
    - **Gwarancja unikalności wyzwalacza:** Mechanizm deduplikacji usuwa ewentualne zduplikowane wyzwalacze czasowe przed utworzeniem nowego (dokładnie 1 wyzwalacz typu `time-driven`).
    - **Odporność na brak aktywnego arkusza (Trigger Context):** Funkcje wyzwalane czasowo odzyskują arkusz poprzez trwały identyfikator w Script Properties: `SMARTCARE_SPREADSHEET_ID` w funkcji `getSmartCareSpreadsheet()`.
-   - **Wspólna bariera Rate Limiting (4200 ms dla Flash 15 RPM):** Zaimplementowano funkcję `enforceGeminiRateLimit(modelName)` gwarantującą minimalny odstęp 4200 ms pomiędzy kolejnymi wywołaniami API Gemini, zapobiegając przekroczeniu limitu 15 RPM bezpłatnego planu.
-   - **Współbieżny Backoff po błędzie HTTP 429 (`RESOURCE_EXHAUSTED`):** W przypadku błędu 429 system zapisuje w Script Properties blokadę `GEMINI_429_COOLDOWN_UNTIL` na 60 sekund. W tym czasie wszystkie kolejne żądania są bezpiecznie odraczane bez zbędnego obciążania API.
+   - **Wspólna bariera Rate Limiting (4200 ms dla Flash 15 RPM):** Zaimplementowano funkcję `enforceGeminiRateLimit(modelName)` gwarantującą minimalny odstęp 4200 ms pomiędzy kolejnymi wywołaniami API Gemini we WSZYSTKICH ścieżkach generowania (zarówno analiza zgłoszeń, jak i redagowanie wiadomości w `polishMessageWithAiDirect`).
+   - **Współbieżny Backoff po błędzie HTTP 429 (`RESOURCE_EXHAUSTED`):** W przypadku błędu 429 system zapisuje w Script Properties blokadę `GEMINI_BACKOFF_UNTIL` na 60 sekund. W tym czasie wszystkie kolejne żądania są bezpiecznie odraczane, a nowe zgłoszenia z formularza pozostają w stanie `"Oczekuje"` bez blokowania rejestracji.
    - **Limit maksymalnie 3 prób na zgłoszenie (`AI_RETRY_COUNT_${ticketId}`):** Po 3 nieudanych próbach stan AI przyjmuje wartość `"Błąd"`, a w kolumnie `Szczegóły błędu AI` zapisywany jest komunikat `"Przekroczono limit prób (3/3)"`.
-   - **Automatyczne odzyskiwanie zawieszonych analiz (`recoverStuckAiAnalyses`):** Zgłoszenia pozostające w stanie `"W trakcie"` dłużej niż 10 minut są automatycznie resetowane do stanu `"Oczekuje"`.
-   - **Blokada współbieżnego przetwarzania pojedynczej sprawy:** Wprowadzono blokadę `AI_IN_PROGRESS_${ticketId}` chroniącą przed równoległym przetwarzaniem tego samego zgłoszenia przez proces w tle i kliknięcie użytkownika.
+   - **Atomowa rezerwacja per-ticket & odzyskiwanie zawieszonych analiz:** Wprowadzono `tryAcquireTicketAiLock(ticketId)` i `releaseTicketAiLock(ticketId)` chroniące przed współbieżną analizą tego samego zgłoszenia przez formularz, kolejkę czasową i akcję pracownika. Zgłoszenia w stanie `"W trakcie"` starsze niż 10 minut są automatycznie resetowane do stanu `"Oczekuje"` (`recoverStuckAiAnalyses`).
 
 2. **Rejestracja zgłoszeń & Eliminacja wyścigu LockService (Race Condition):**
    - **Ponowny odczyt komórki pod blokadą:** W `reconcileUnprocessedFormResponses` komórka identyfikatora wiersza jest odczytywana *ponownie po* uzyskaniu blokady `LockService`. Zapobiega to nadpisaniu numeru ID, jeżeli `handleNewTicketSubmit` nadał identyfikator ułamek sekundy wcześniej.
    - **Brak spamu e-mail dla opóźnionych zgłoszeń:** Procedura uzupełniająca nigdy nie wysyła powiadomień e-mail dla zgłoszeń z przeszłości.
-   - **Błyskawiczne zwalnianie blokady:** Czas trzymania blokady `LockService` ograniczono do <200ms; blokada nigdy nie obejmuje operacji sieciowych ani zapytań AI.
+   - **Błyskawiczne zwalnianie blokady:** Czas trzymania blokady `LockService` ograniczono do <200ms; blokada jest zawsze zwalniana w bloku `finally` i nigdy nie obejmuje operacji sieciowych ani zapytań AI.
 
-3. **Komunikacja & Szablony Awaryjne (CX/PR):**
-   - **Dynamiczna treść `actionPrepareProgressUpdate`:** Całkowicie usunięto sztywny tekst dyspozytora. Treść jest generowana w 100% dynamicznie na podstawie rzeczywistych notatek pracownika (`employeeNote`), planowanego kroku (`nextAction`), strony odpowiedzialnej (`responsibleSide`) i wyniku kontaktu (`residentContactResult`).
+3. **Komunikacja, Szablony Awaryjne i Ochrona Jakości Treści (CX/PR):**
+   - **Wyłączenie poufnych notatek pracownika z wiadomości do mieszkańca:** W `actionPrepareProgressUpdate` wewnętrzne notatki pracownika (`ticket.employeeNote`) zawierające uwagi dyspozytora lub dane o pracownikach nie są dołączane do korespondencji wychodzącej.
+   - **Usunięcie niepotwierdzonych deklaracji operacyjnych:** Z szablonów i propozycji awaryjnych usunięto wzmianki o „przekazaniu pochwały kierownikowi” oraz „weryfikacji zlecenia przez dyspozytora”, opierając treść wyłącznie na faktach.
+   - **Serwerowy filtr jakości treści (`validateMessageContentQuality`):** Zaimplementowano weryfikację jakości w `processSendEmail`, blokującą wysyłkę wiadomości zawierających wulgaryzmy, sformułowania agresywne, obelżywe lub sarkastyczne, niezależnie od tego, czy pracownik skorzystał z AI.
    - **Dedykowane szablony awaryjne (`generateTailoredEmergencyConfirmation`):**
      - *Pochwała / Podziękowanie:* Ciepłe podziękowanie w imieniu załogi, informacja o rejestrze wyróżnień, bezwzględny zakaz wspominania o GPS śmieciarki lub dochodzeniu dyspozytorskim.
      - *Zgłoszenie niekompletne:* Precyzyjna prośba o uzupełnienie brakujących danych (np. numer posesji, frakcja).
@@ -34,10 +35,9 @@ Wydanie **v0.2.8** stanowi kluczową aktualizację stabilizacyjną silnika przed
    - **Ochrona przed błędnymi szkicami:** `actionPrepareConfirmation` ignoruje stary roboczy szkic CRM, jeśli `Stan analizy AI === "Błąd"`.
 
 4. **Priorytety & Robocze Godziny SLA (07:00-16:00):**
-   - **Podział priorytetów:** Rozróżniono domyślny (`STANDARDOWY`), sugerowany przez model (`Sugerowany priorytet AI`) oraz zatwierdzony/zmieniony przez człowieka (`Priorytet`). Model AI nigdy nie nadpisuje ręcznie zatwierdzonego priorytetu.
+   - **Trwałe rozróżnienie priorytetu domyślnego od zatwierdzonego:** Wprowadzono znacznik `PRIORITY_APPROVED_${ticketId}`. Model AI ani automatyczne procedury nigdy nie nadpisują żadnego ręcznie zatwierdzonego priorytetu pracownika (w tym priorytetu `STANDARDOWY`).
    - **Kalkulacja SLA w godzinach roboczych (`calculateBusinessHoursDeadline`):** Terminy SLA są obliczane wyłącznie w oknie poniedziałek–piątek w godzinach 07:00–16:00 (540 min roboczych/dzień). Noce i weekendy są pomijane; zgłoszenie weekendowe startuje w poniedziałek o 07:00.
-   - **Liczenie SLA od daty zgłoszenia:** Przy ponownym przeliczaniu termin SLA bazuje na `Sygnaturze czasowej` zgłoszenia, a nie chwili uruchomienia skryptu.
-   - **Precyzja Dashboardu:** Pierwszy kontakt nie jest oznaczany jako przeterminowany, jeżeli faktyczna data pierwszego kontaktu mieściła się w terminie SLA (`firstContactTime <= slaDeadline`). Odróżniono przeterminowanie pierwszej reakcji (`overdueFirstResponseSlaCount`) od przekroczenia terminu następnego działania (`overdueNextActionCount`).
+   - **Precyzja Dashboardu i Service API:** Pierwszy kontakt nie jest oznaczany jako przeterminowany, jeżeli faktyczna data pierwszego kontaktu mieściła się w terminie SLA (`firstContactTime <= slaDeadline`). W `apiGetTicketsList` wyraźnie odróżniono aktywną zaległość pierwszej reakcji (`isOverdueFirstResponse`) od historycznego naruszenia SLA (`slaBreachedHistorically`).
 
 5. **Rozszerzona Pre-walidacja & Edge Cases (`preValidateTicketData`):**
    - Odrzucenie wartości `"niewiadoma"` jako poprawnej nazwy ulicy (flaga braku ulicy).

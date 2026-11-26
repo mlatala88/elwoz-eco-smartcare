@@ -50,6 +50,17 @@ Jednocześnie model **bezwzględnie przestrzega**:
 - ✅ **Wyrażenia stosownych przeprosin za niedogodności** w przypadku uzasadnionych problemów mieszkańca,
 - ✅ **Zachowania numeru identyfikacyjnego sprawy (np. ELW-2026-XXXX)** oraz oficjalnych danych POK Kartuzy (`kartuzy@elwozeco.pl`, tel. `58 681 22 99`).
 
+### 2.1. Standardy CX/PR dla asystenta redakcyjnego (`polishMessageWithAiDirect`)
+Podczas redagowania i stylizacji wiadomości roboczych model Gemini stosuje rozszerzone wytyczne:
+1. **Całkowite eliminowanie agresji i lekceważenia:** Bezwzględne wykluczenie wulgaryzmów, obelg, pretensjonalnych, sarkastycznych lub protekcjonalnych zwrotów.
+2. **Łagodzenie konfliktów i deeskalacja:** Stosowanie empatii, spokoju i profesjonalizmu zamiast postawy konfrontacyjnej.
+3. **Zachowanie wyłącznie potwierdzonych faktów:** Zakaz dopisywania rzekomych ustaleń z kierowcami lub fikcyjnych podjazdów śmieciarek.
+4. **Kulturalne przedstawianie odmowy:** Spokojne wyjaśnienie przyczyn regulaminowych bez pouczania i złośliwości.
+5. **Wymóg uzupełnienia informacji:** Jeśli notatka robocza nie ma wartości merytorycznej, model generuje uprzejmą prośbę o doprecyzowanie zamiast wymyślać fikcyjne fakty.
+6. **Ochrona wizerunku pracowników:** Całkowity zakaz wspominania o karach, naganach, reprymendach czy konsekwencjach służbowych kierowców i ładowaczy.
+7. **Ochrona prawna spółki:** Zakaz formalnego uznawania winy lub obiecywania bonifikat/rekompensat finansowych.
+8. **Serwerowa kontrola jakości:** Niezależnie od AI, backend (`validateMessageContentQuality`) weryfikuje treść przed wysyłką e-mail.
+
 ---
 
 ## 3. Rygorystyczna procedura anonimizacji (Ochrona prywatności)

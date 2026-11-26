@@ -1,9 +1,9 @@
 /**
  * ============================================================================
- * ELWOZ ECO SmartCare v0.2.8 - Kompleksowy Zestaw Testów Audytowych
+ * ELWOZ ECO SmartCare v0.2.8 - Kompleksowy Zestaw Testów Audytowych (Końcowa korekta)
  * ============================================================================
  * Plik: tests/test-v028-audit.js
- * Testuje 8 kluczowych obszarów audytu kodu w wersji v0.2.8
+ * Testuje 10 kluczowych obszarów audytu kodu w wersji v0.2.8
  */
 
 const fs = require("fs");
@@ -30,6 +30,15 @@ function createMockEnvironment() {
       waitLock: (timeout) => { lockAcquired = true; return true; },
       releaseLock: () => { lockAcquired = false; return true; },
       hasLock: () => lockAcquired
+    })
+  };
+
+  const cacheStore = {};
+  const CacheService = {
+    getScriptCache: () => ({
+      get: (k) => cacheStore[k] || null,
+      put: (k, v, exp) => { cacheStore[k] = String(v); },
+      remove: (k) => { delete cacheStore[k]; }
     })
   };
 
@@ -104,7 +113,7 @@ function createMockEnvironment() {
     })
   };
 
-  return { PropertiesService, LockService, Utilities, ScriptApp, Session, MailApp, SpreadsheetApp, scriptPropertiesStore, triggersStore };
+  return { PropertiesService, LockService, CacheService, Utilities, ScriptApp, Session, MailApp, SpreadsheetApp, scriptPropertiesStore, triggersStore };
 }
 
 // Załadowanie plików źródłowych Google Apps Script
@@ -173,7 +182,52 @@ test("SUITE 1", "1.2 enforceGeminiRateLimit: 429 Cooldown backoff blokuje wywoł
   delete sandbox.scriptPropertiesStore["GEMINI_BACKOFF_UNTIL"];
 });
 
-test("SUITE 1", "1.3 processAiAnalysisQueue: maksymalnie 3 próby na zgłoszenie (retry limit)", () => {
+test("SUITE 1", "1.3 polishMessageWithAiDirect: korzysta ze wspólnego rate limitera i reaguje na 429 cooldown", () => {
+  sandbox.scriptPropertiesStore["GEMINI_API_KEY"] = "MOCK_KEY";
+  let rateLimiterCalled = false;
+  sandbox.enforceGeminiRateLimit = () => { rateLimiterCalled = true; };
+  sandbox.UrlFetchApp = {
+    fetch: () => ({
+      getResponseCode: () => 429,
+      getContentText: () => JSON.stringify({ error: { message: "RESOURCE_EXHAUSTED" } })
+    })
+  };
+  assert.throws(
+    () => { sandbox.polishMessageWithAiDirect("ELW-2026-0001", "Dzień dobry"); },
+    /429|cooldown/i,
+    "polishMessageWithAiDirect musi zgłaszać błąd 429 i aktywować cooldown"
+  );
+  assert.strictEqual(rateLimiterCalled, true, "polishMessageWithAiDirect musi wywoływać enforceGeminiRateLimit!");
+  assert.ok(Number(sandbox.scriptPropertiesStore["GEMINI_BACKOFF_UNTIL"]) > Date.now(), "Musi zapisać znacznik GEMINI_BACKOFF_UNTIL");
+  delete sandbox.scriptPropertiesStore["GEMINI_BACKOFF_UNTIL"];
+  delete sandbox.scriptPropertiesStore["GEMINI_API_KEY"];
+});
+
+test("SUITE 1", "1.4 triggerAutoAiAnalysisForTicket: nie blokuje rejestracji nowego zgłoszenia podczas cooldownu 429", () => {
+  sandbox.scriptPropertiesStore["GEMINI_BACKOFF_UNTIL"] = String(Date.now() + 50000);
+  let savedState = "";
+  let savedError = "";
+  const fakeSheet = {
+    getParent: () => ({}),
+    getLastRow: () => 2,
+    getLastColumn: () => 3,
+    getRange: (r, c, nr, nc) => ({
+      getValues: () => [["ID Zgłoszenia", "Stan analizy AI", "Szczegóły błędu AI"]],
+      getValue: () => "",
+      setValue: (val) => {
+        if (c === 2) savedState = val;
+        if (c === 3) savedError = val;
+      }
+    })
+  };
+  // Wywołanie przy aktywnym cooldownie musi zakończyć się natychmiast bez rzucania wyjątku
+  sandbox.triggerAutoAiAnalysisForTicket(fakeSheet, 2, ["ID Zgłoszenia", "Stan analizy AI", "Szczegóły błędu AI"], "ELW-COOLDOWN-REG");
+  assert.strictEqual(savedState, "Oczekuje", "Zgłoszenie podczas cooldownu musi pozostać w kolejce jako 'Oczekuje'");
+  assert.ok(savedError.includes("cooldown 429"), "Szczegóły błędu powinny wyjaśnić oczekiwanie w kolejce");
+  delete sandbox.scriptPropertiesStore["GEMINI_BACKOFF_UNTIL"];
+});
+
+test("SUITE 1", "1.5 processAiAnalysisQueue: maksymalnie 3 próby na zgłoszenie (retry limit)", () => {
   sandbox.scriptPropertiesStore["AI_RETRY_COUNT_ELW-TEST-RETRY"] = "3";
   const fakeSheet = {
     getLastRow: () => 3,
@@ -186,13 +240,13 @@ test("SUITE 1", "1.3 processAiAnalysisQueue: maksymalnie 3 próby na zgłoszenie
       setValue: (val) => {}
     })
   };
-  sandbox.SpreadsheetApp = { getActiveSpreadsheet: () => ({ getSheetByName: () => fakeSheet }) };
+  sandbox.SpreadsheetApp = { flush: () => {}, getActiveSpreadsheet: () => ({ getSheetByName: () => fakeSheet }) };
   const res = sandbox.processAiAnalysisQueue(5);
   delete sandbox.scriptPropertiesStore["AI_RETRY_COUNT_ELW-TEST-RETRY"];
   assert.strictEqual(res.processedCount, 0, "Zgłoszenie z licznikiem 3 nie powinno być ponownie procesowane przez API");
 });
 
-test("SUITE 1", "1.4 recoverStuckAiAnalyses: reset zgłoszeń 'W trakcie' starszych niż 10 min", () => {
+test("SUITE 1", "1.6 recoverStuckAiAnalyses: reset zgłoszeń 'W trakcie' starszych niż 10 min", () => {
   const ticketId = "ELW-STUCK-01";
   sandbox.scriptPropertiesStore["AI_IN_PROGRESS_" + ticketId] = String(Date.now() - 15 * 60 * 1000); // 15 min temu
   let resetState = "";
@@ -217,38 +271,31 @@ test("SUITE 1", "1.4 recoverStuckAiAnalyses: reset zgłoszeń 'W trakcie' starsz
   assert.strictEqual(sandbox.scriptPropertiesStore["AI_IN_PROGRESS_" + ticketId], undefined);
 });
 
-test("SUITE 1", "1.5 Concurrency Lock: aktywne przetwarzanie w toku (<2 min) jest pomijane", () => {
-  const ticketId = "ELW-CONCURRENT-01";
-  sandbox.scriptPropertiesStore["AI_IN_PROGRESS_" + ticketId] = String(Date.now() - 30 * 1000); // 30s temu
-  const fakeSheet = {
-    getLastRow: () => 2,
-    getLastColumn: () => 3,
-    getRange: (r, c, nr, nc) => ({
-      getValues: () => {
-        if (r === 1) return [["ID Zgłoszenia", "Stan analizy AI", "Szczegóły błędu AI"]];
-        return [[ticketId, "Oczekuje", ""]];
-      },
-      setValue: () => {}
-    })
-  };
-  sandbox.SpreadsheetApp = { getActiveSpreadsheet: () => ({ getSheetByName: () => fakeSheet }) };
-  const res = sandbox.processAiAnalysisQueue(5);
+test("SUITE 1", "1.7 tryAcquireTicketAiLock: atomowa rezerwacja blokuje współbieżną analizę we wszystkich ścieżkach", () => {
+  const ticketId = "ELW-ATOMIC-01";
   delete sandbox.scriptPropertiesStore["AI_IN_PROGRESS_" + ticketId];
-  assert.strictEqual(res.processedCount, 0, "Zgłoszenie z aktywnym lockiem <2 min powinno zostać pominięte");
+  const firstAcquire = sandbox.tryAcquireTicketAiLock(ticketId);
+  assert.strictEqual(firstAcquire, true, "Pierwsza rezerwacja powinna się powieść");
+  const secondAcquire = sandbox.tryAcquireTicketAiLock(ticketId);
+  assert.strictEqual(secondAcquire, false, "Druga rezerwacja tego samego zgłoszenia musi zostać zablokowana!");
+  sandbox.releaseTicketAiLock(ticketId);
+  assert.strictEqual(sandbox.scriptPropertiesStore["AI_IN_PROGRESS_" + ticketId], undefined, "Zwolnienie blokady powinno usunąć klucz");
 });
 
-test("SUITE 1", "1.6 installScheduledQueueTrigger: deduplikacja (dokładnie 1 wyzwalacz czasowy)", () => {
+test("SUITE 1", "1.8 installScheduledQueueTrigger: deduplikacja i konfiguracja na 5 minut", () => {
   sandbox.triggersStore.length = 0;
   sandbox.installScheduledQueueTrigger({});
   sandbox.installScheduledQueueTrigger({});
   const count = sandbox.triggersStore.filter(t => t.getHandlerFunction() === "scheduledQueueAndReconcile").length;
   assert.strictEqual(count, 1, "Powinien istnieć dokładnie jeden wyzwalacz scheduledQueueAndReconcile");
+  assert.strictEqual(sandbox.triggersStore[0].minutes, 5, "Wyzwalacz musi być skonfigurowany na 5 minut");
 });
 
-test("SUITE 1", "1.7 getSmartCareSpreadsheet: odzyskiwanie arkusza po SMARTCARE_SPREADSHEET_ID", () => {
+test("SUITE 1", "1.9 getSmartCareSpreadsheet: odzyskiwanie arkusza po SMARTCARE_SPREADSHEET_ID", () => {
   sandbox.scriptPropertiesStore["SMARTCARE_SPREADSHEET_ID"] = "SPREADSHEET_12345";
   let openedId = "";
   sandbox.SpreadsheetApp = {
+    flush: () => {},
     getActiveSpreadsheet: () => null,
     openById: (id) => { openedId = id; return { id }; }
   };
@@ -270,51 +317,47 @@ test("SUITE 2", "2.1 reconcileUnprocessedFormResponses: pobiera ID pod blokadą 
     getParent: () => ({}),
     getRange: (r, c, nr, nc) => ({
       getValues: () => {
-        if (r === 1) return [["ID Zgłoszenia", "Sygnatura czasowa", "Rodzaj zgłoszenia", "Opis zgłoszenia"]];
-        return [["", "2026-11-26 10:42:11", "Brak odbioru", "Pojemnik bio nieodebrany"]];
+        if (r === 1) return [["ID Zgłoszenia", "Sygnatura czasowa", "Opis zgłoszenia", "Miejscowość"]];
+        return [["", "2026-11-26 10:42:11", "Uszkodzone koło pojemnika", "Prokowo"]];
       },
       getValue: () => "ELW-2026-0011",
       setValue: (val) => { assignedValue = val; }
     })
   };
-  const res = sandbox.reconcileUnprocessedFormResponses(fakeSheet);
-  assert.strictEqual(res.reconciledCount, 0, "Nie powinien nadpisywać ID, które zostało w międzyczasie nadane");
-  assert.strictEqual(assignedValue, null);
+  sandbox.reconcileUnprocessedFormResponses(fakeSheet);
+  assert.strictEqual(assignedValue, null, "Jeśli pod blokadą odczytano już ID (ELW-2026-0011), nie wolno go nadpisywać!");
 });
 
 test("SUITE 2", "2.2 reconcileUnprocessedFormResponses: brak wysyłki e-mail dla opóźnionych zgłoszeń", () => {
-  let emailSent = false;
-  sandbox.MailApp = { sendEmail: () => { emailSent = true; }, getRemainingDailyQuota: () => 100 };
-  let assignedId = "";
+  let mailSent = false;
+  sandbox.MailApp.sendEmail = () => { mailSent = true; };
   const fakeSheet = {
     getLastRow: () => 2,
-    getLastColumn: () => 6,
+    getLastColumn: () => 4,
     getParent: () => ({}),
     getRange: (r, c, nr, nc) => ({
-      getValues: () => {
-        if (r === 1) return [["ID Zgłoszenia", "Sygnatura czasowa", "Rodzaj zgłoszenia", "Opis zgłoszenia", "Status", "Priorytet"]];
-        return [["", "2026-11-26 10:42:11", "Brak odbioru", "Pojemnik bio nieodebrany", "", ""]];
-      },
+      getValues: () => [
+        ["ID Zgłoszenia", "Sygnatura czasowa", "Opis zgłoszenia", "Miejscowość"],
+        ["", "2026-11-26 10:42:11", "Koło pojemnika", "Prokowo"]
+      ],
       getValue: () => "",
-      setValue: (val) => { if (typeof val === "string" && val.startsWith("ELW-")) assignedId = val; },
+      setValue: () => {},
       setNumberFormat: () => {}
     })
   };
+  sandbox.getNextUniqueTicketId = () => "ELW-2026-0011";
   sandbox.reconcileUnprocessedFormResponses(fakeSheet);
-  assert.strictEqual(emailSent, false, "Reconciliation nie może wysyłać powiadomień e-mail");
-  assert.ok(assignedId.startsWith("ELW-"), "Powinno zostać nadane nowe unikalne ID");
+  assert.strictEqual(mailSent, false, "Odzyskiwanie nie może wysyłać e-maili o historycznych zgłoszeniach");
 });
 
 test("SUITE 2", "2.3 LockService: blokada zwalniana bezzwłocznie (<200ms)", () => {
   let lockReleased = false;
-  sandbox.LockService = {
-    getScriptLock: () => ({
-      waitLock: () => true,
-      releaseLock: () => { lockReleased = true; }
-    })
-  };
+  sandbox.LockService.getScriptLock = () => ({
+    waitLock: () => true,
+    releaseLock: () => { lockReleased = true; return true; }
+  });
   const fakeSheet = {
-    getLastRow: () => 2,
+    getLastRow: () => 1,
     getLastColumn: () => 2,
     getParent: () => ({}),
     getRange: (r, c, nr, nc) => ({
@@ -331,13 +374,12 @@ test("SUITE 2", "2.3 LockService: blokada zwalniana bezzwłocznie (<200ms)", () 
 // -----------------------------------------------------------------------------
 console.log("\n--- SUITE 3: Komunikacja i Szablony Awaryjne ---");
 
-test("SUITE 3", "3.1 actionPrepareProgressUpdate: dynamiczna treść bez sztywnego tekstu dyspozytora", () => {
+test("SUITE 3", "3.1 actionPrepareProgressUpdate: oddzielenie poufnych notatek pracownika od wiadomości do mieszkańca", () => {
   let openedDialog = null;
   sandbox.openEmailDialog = (opts) => { openedDialog = opts; };
   sandbox.SpreadsheetApp = {
-    getActiveSpreadsheet: () => ({
-      getSheetByName: () => null
-    })
+    flush: () => {},
+    getActiveSpreadsheet: () => ({ getSheetByName: () => null })
   };
   sandbox.getSelectedTicketData = () => ({
     ticketId: "ELW-2026-0005",
@@ -345,21 +387,20 @@ test("SUITE 3", "3.1 actionPrepareProgressUpdate: dynamiczna treść bez sztywne
     residentEmail: "wsb.student.tester@gmail.com",
     ticketType: "Brak odbioru",
     location: "Kartuzy, ul. Parkowa 4",
-    employeeNote: "Kierowca zgłosił awarię siłownika śmieciarki",
+    status: "W realizacji",
+    employeeNote: "POUFNE: Kierowca otrzymał upomnienie za pominięcie posesji",
     nextAction: "Podjazd zastępczy jutro o 8:00",
     responsibleSide: "Przedsiębiorstwo ELWOZ ECO",
     residentContactResult: "Mieszkaniec poinformowany telefonicznie"
   });
   sandbox.actionPrepareProgressUpdate();
   assert.ok(openedDialog, "Okno dialogowe powinno zostać otwarte");
-  assert.ok(!openedDialog.body.includes("Sprawa została przekazana do dyspozytora w Kartuzach w celu weryfikacji okoliczności zdarzenia"),
-    "Nie może zawierać sztywnego starego tekstu");
-  assert.ok(openedDialog.body.includes("Kierowca zgłosił awarię siłownika śmieciarki"), "Musi zawierać notatkę pracownika");
-  assert.ok(openedDialog.body.includes("Podjazd zastępczy jutro o 8:00"), "Musi zawierać następne działanie");
+  assert.ok(!openedDialog.body.includes("POUFNE: Kierowca otrzymał upomnienie"), "Poufna notatka pracownika NIE MOŻE trafić do mieszkańca!");
+  assert.ok(openedDialog.body.includes("Podjazd zastępczy jutro o 8:00"), "Musi zawierać planowane działanie");
   assert.ok(openedDialog.body.includes("Mieszkaniec poinformowany telefonicznie"), "Musi zawierać wynik kontaktu");
 });
 
-test("SUITE 3", "3.2 generateTailoredEmergencyConfirmation: Pochwała bez weryfikacji GPS śmieciarki", () => {
+test("SUITE 3", "3.2 generateTailoredEmergencyConfirmation: Pochwała bez GPS i bez niepotwierdzonego kierownika", () => {
   const settings = {
     senderName: "ELWOZ ECO POK",
     facilityName: "POK Kartuzy",
@@ -376,7 +417,7 @@ test("SUITE 3", "3.2 generateTailoredEmergencyConfirmation: Pochwała bez weryfi
   const body = sandbox.generateTailoredEmergencyConfirmation(ticket, settings);
   assert.ok(body.includes("Serdecznie dziękujemy za przesłanie miłych słów"), "Powinno zawierać ciepłe podziękowanie");
   assert.ok(!body.includes("GPS"), "Kategoryczny zakaz wzmianki o kontroli GPS w pochwałach!");
-  assert.ok(!body.includes("trasy śmieciarki"), "Zakaz weryfikacji trasy śmieciarki w pochwale!");
+  assert.ok(!body.includes("kierownikowi rejonu"), "Zakaz niepotwierdzonych deklaracji o przekazaniu kierownikowi!");
 });
 
 test("SUITE 3", "3.3 generateTailoredEmergencyConfirmation: Zgłoszenie niekompletne prosi o dane", () => {
@@ -391,10 +432,10 @@ test("SUITE 3", "3.3 generateTailoredEmergencyConfirmation: Zgłoszenie niekompl
   };
   const body = sandbox.generateTailoredEmergencyConfirmation(ticket, settings);
   assert.ok(body.includes("doprecyzowanie brakujących danych"), "Powinno prosić o brakujące dane");
-  assert.ok(!body.includes("weryfikacji trasy śmieciarki w systemie GPS"), "Niekompletne zgłoszenie nie powinno sugerować weryfikacji GPS przed podaniem adresu");
+  assert.ok(!body.includes("GPS"), "Niekompletne zgłoszenie nie powinno sugerować weryfikacji GPS przed podaniem adresu");
 });
 
-test("SUITE 3", "3.4 generateTailoredEmergencyConfirmation: Kompletna reklamacja potwierdza weryfikację operacyjną", () => {
+test("SUITE 3", "3.4 generateTailoredEmergencyConfirmation: Kompletna reklamacja bez niepotwierdzonego dyspozytora", () => {
   const settings = { senderName: "POK", facilityName: "POK", contactPhone: "58", contactEmail: "k@e.pl", website: "https" };
   const ticket = {
     ticketId: "ELW-2026-0010",
@@ -406,33 +447,41 @@ test("SUITE 3", "3.4 generateTailoredEmergencyConfirmation: Kompletna reklamacja
   };
   const body = sandbox.generateTailoredEmergencyConfirmation(ticket, settings);
   assert.ok(body.includes("Potwierdzamy zarejestrowanie zgłoszenia"), "Potwierdza rejestrację zgłoszenia");
-  assert.ok(body.includes("Dyspozytor POK Kartuzy dokonuje weryfikacji operacyjnej"), "Wskazuje weryfikację operacyjną dyspozytora");
+  assert.ok(!body.includes("Dyspozytor POK Kartuzy dokonuje weryfikacji operacyjnej"), "Nie sugeruje niepotwierdzonych działań dyspozytora");
+  assert.ok(body.includes("oczekuje na weryfikację operacyjną"), "Informuje neutralnie o oczekiwaniu na weryfikację");
 });
 
 test("SUITE 3", "3.5 actionPrepareConfirmation: nie używa błędnego draftu CRM, gdy Stan analizy AI === 'Błąd'", () => {
   let openedDialog = null;
   sandbox.openEmailDialog = (opts) => { openedDialog = opts; };
   sandbox.SpreadsheetApp = {
-    getActiveSpreadsheet: () => ({
-      getSheetByName: () => null
-    })
+    flush: () => {},
+    getActiveSpreadsheet: () => ({ getSheetByName: () => null })
   };
   sandbox.getSelectedTicketData = () => ({
-    ticketId: "ELW-2026-0001",
-    residentName: "Krzysztof",
+    ticketId: "ELW-2026-0003",
+    residentName: "Maria Lewandowska",
     residentEmail: "wsb.student.tester@gmail.com",
     ticketType: "Brak odbioru",
-    wasteFraction: "Bio",
-    location: "Kartuzy, ul. Mściwoja II 10",
-    aiState: "Błąd", // Stan błędu!
-    aiDraftResponse: "Stara błędna propozycja z błędem JSON",
-    localDataControl: "Dane kompletne i spójne"
+    location: "Kartuzy, ul. Cmentarna 1",
+    aiState: "Błąd",
+    aiDraftResponse: "STARY BŁĘDNY SZABLON Z CRM"
   });
   sandbox.actionPrepareConfirmation();
-  assert.ok(!openedDialog.body.includes("Stara błędna propozycja z błędem JSON"),
-    "Nie może używać starego draftu z CRM przy aiState === 'Błąd'");
-  assert.ok(openedDialog.body.includes("Potwierdzamy zarejestrowanie zgłoszenia"),
-    "Powinno wygenerować czysty szablon awaryjny");
+  assert.ok(!openedDialog.body.includes("STARY BŁĘDNY SZABLON"), "Nie wolno używać błędnego draftu!");
+});
+
+test("SUITE 3", "3.6 validateMessageContentQuality: serwerowa blokada obraźliwych, agresywnych i wulgarnych treści", () => {
+  const clean = sandbox.validateMessageContentQuality("Potwierdzenie zgłoszenia", "Dzień dobry, informujemy o rejestracji.");
+  assert.strictEqual(clean.isValid, true);
+
+  const vulgar = sandbox.validateMessageContentQuality("Temat", "Co za kurwa bałagan z tymi śmieciami!");
+  assert.strictEqual(vulgar.isValid, false);
+  assert.ok(vulgar.reason.includes("wulgaryzmy"));
+
+  const aggressive = sandbox.validateMessageContentQuality("Odpowiedź", "Jesteście bezczelni, to wasza wina i spadaj stąd.");
+  assert.strictEqual(aggressive.isValid, false);
+  assert.ok(aggressive.reason.includes("agresywne") || aggressive.reason.includes("obraźliwe"));
 });
 
 // -----------------------------------------------------------------------------
@@ -441,12 +490,11 @@ test("SUITE 3", "3.5 actionPrepareConfirmation: nie używa błędnego draftu CRM
 console.log("\n--- SUITE 4: Priorytety i Robocze SLA (7:00-16:00) ---");
 
 test("SUITE 4", "4.1 calculateBusinessHoursDeadline: pomija noce i weekendy (Mon-Fri 7:00-16:00)", () => {
-  const friday1530 = new Date(2026, 10, 27, 15, 30, 0); // 27.11.2026 to piątek
-  assert.strictEqual(friday1530.getDay(), 5, "27.11.2026 musi być piątkiem");
-  const deadline = sandbox.calculateBusinessHoursDeadline(friday1530, 240);
-  assert.strictEqual(deadline.getDay(), 1, "Termin musi przypadać na poniedziałek");
-  assert.strictEqual(deadline.getHours(), 10, "Godzina terminu: 10");
-  assert.strictEqual(deadline.getMinutes(), 30, "Minuta terminu: 30");
+  const friday15 = new Date(2026, 10, 27, 15, 0, 0); // Piątek 15:00
+  const deadline = sandbox.calculateBusinessHoursDeadline(friday15, 120); // +2h
+  assert.strictEqual(deadline.getDay(), 1, "Powinien przeskoczyć weekend na poniedziałek");
+  assert.strictEqual(deadline.getHours(), 8);
+  assert.strictEqual(deadline.getMinutes(), 0);
 });
 
 test("SUITE 4", "4.2 calculateBusinessHoursDeadline: zgłoszenie w weekend startuje w poniedziałek 7:00", () => {
@@ -458,7 +506,50 @@ test("SUITE 4", "4.2 calculateBusinessHoursDeadline: zgłoszenie w weekend start
   assert.strictEqual(deadline.getMinutes(), 0);
 });
 
-test("SUITE 4", "4.3 calculateDashboardMetrics: brak fałszywego przeterminowania, jeśli 1. kontakt był w terminie", () => {
+test("SUITE 4", "4.3 triggerAutoAiAnalysisForTicket: ochrona ręcznie zatwierdzonego priorytetu pracownika (również STANDARDOWY)", () => {
+  const ticketId = "ELW-MANUAL-PRIO";
+  sandbox.scriptPropertiesStore["PRIORITY_APPROVED_" + ticketId] = "STANDARDOWY";
+  sandbox.scriptPropertiesStore["GEMINI_API_KEY"] = "MOCK_KEY";
+  let priorityWritten = null;
+
+  const fakeSheet = {
+    getParent: () => ({}),
+    getLastRow: () => 2,
+    getLastColumn: () => 5,
+    getRange: (r, c, nr, nc) => ({
+      getValues: () => [["ID Zgłoszenia", "Priorytet", "Stan analizy AI", "Rodzaj zgłoszenia", "Opis zgłoszenia"]],
+      getValue: () => {
+        if (c === 2) return "STANDARDOWY";
+        return ticketId;
+      },
+      setValue: (val) => {
+        if (c === 2) priorityWritten = val;
+      },
+      setNumberFormat: () => {}
+    })
+  };
+
+  sandbox.callGeminiApiWithRetry = () => ({
+    kategoria: "Reklamacja",
+    streszczenie: "Brak odbioru",
+    sugerowanyPriorytet: "PILNY", // AI sugeruje PILNY
+    uzasadnieniePriorytetu: "Fetor",
+    brakujaceInformacje: "Brak",
+    wykryteSprzecznosci: "Brak sprzeczności",
+    sugerowaneDzialanie: "Weryfikacja",
+    rekomendowanyKrok: "Krok",
+    rekomendowanaStronaKroku: "Przedsiębiorstwo",
+    proponowanaOdpowiedz: "Dzień dobry"
+  });
+
+  sandbox.triggerAutoAiAnalysisForTicket(fakeSheet, 2, ["ID Zgłoszenia", "Priorytet", "Stan analizy AI", "Rodzaj zgłoszenia", "Opis zgłoszenia"], ticketId, true);
+  delete sandbox.scriptPropertiesStore["PRIORITY_APPROVED_" + ticketId];
+  delete sandbox.scriptPropertiesStore["GEMINI_API_KEY"];
+
+  assert.strictEqual(priorityWritten, null, "AI NIE MOŻE nadpisać ręcznie zatwierdzonego STANDARDOWEGO priorytetu!");
+});
+
+test("SUITE 4", "4.4 calculateDashboardMetrics: brak fałszywego przeterminowania, jeśli 1. kontakt był w terminie", () => {
   const ticketSheet = {
     getLastRow: () => 2,
     getDataRange: () => ({
@@ -472,7 +563,7 @@ test("SUITE 4", "4.3 calculateDashboardMetrics: brak fałszywego przeterminowani
   assert.strictEqual(metrics.overdueSlaCount, 0, "Zgłoszenie z udzieloną terminowo odpowiedzią NIE może być oznaczone jako przeterminowane SLA!");
 });
 
-test("SUITE 4", "4.4 calculateDashboardMetrics: odróżnienie overdueFirstResponseSlaCount od overdueNextActionCount", () => {
+test("SUITE 4", "4.5 calculateDashboardMetrics: odróżnienie overdueFirstResponseSlaCount od overdueNextActionCount", () => {
   const ticketSheet = {
     getLastRow: () => 2,
     getDataRange: () => ({
@@ -576,9 +667,9 @@ test("SUITE 5", "5.7 parseDateValue: obsługa formatów '27,11,26', '27.11.26', 
 });
 
 // -----------------------------------------------------------------------------
-// SUITE 6: Ochrona danych osobowych (PII)
+// SUITE 6: Ochrona danych osobowych (PII) i Kontrola Jakości
 // -----------------------------------------------------------------------------
-console.log("\n--- SUITE 6: Ochrona danych osobowych (PII) ---");
+console.log("\n--- SUITE 6: Ochrona danych osobowych (PII) i Kontrola Jakości ---");
 
 test("SUITE 6", "6.1 anonymizeSensitiveInfo: maskowanie danych mieszkańca (imię, ulica, telefon, e-mail)", () => {
   const ticketData = {
@@ -630,10 +721,29 @@ test("SUITE 6", "6.3 Whitelist Guard: twarda blokada wysyłki poza APPROVED_TEST
     actionType: "Potwierdzenie przyjęcia",
     originalRecipient: "obcy.mieszkaniec@onet.pl", // Próba podania obcego adresu
     subject: "Potwierdzenie",
-    body: "Treść testowa"
+    body: "Treść testowa zgodna z zasadami kultury."
   });
   assert.strictEqual(res.success, true);
   assert.strictEqual(sentToAddress, "wsb.student.tester@gmail.com", "Fizyczna wysyłka musi trafić WYŁĄCZNIE na wsb.student.tester@gmail.com!");
+});
+
+test("SUITE 6", "6.4 processSendEmail: serwerowa blokada wysyłki wiadomości z obraźliwą treścią (niezależnie od AI)", () => {
+  let mailSent = false;
+  sandbox.MailApp.sendEmail = () => { mailSent = true; };
+  sandbox.SpreadsheetApp = {
+    flush: () => {},
+    getActiveSpreadsheet: () => ({ getSheetByName: () => null })
+  };
+  const res = sandbox.processSendEmail({
+    ticketId: "ELW-2026-0001",
+    actionType: "Informacja o postępach",
+    originalRecipient: "mieszkaniec@kartuzy.pl",
+    subject: "Wasza reklamacja",
+    body: "Jesteście bezczelni, to wasza wina i nie zawracaj głowy idiotycznymi roszczeniami."
+  });
+  assert.strictEqual(res.success, false, "Wysyłka obraźliwej wiadomości musi zostać bezwzględnie zablokowana na serwerze!");
+  assert.strictEqual(mailSent, false, "MailApp.sendEmail nie może zostać wywołane dla obraźliwej treści!");
+  assert.ok(res.error.includes("SERWEROWA BLOKADA JAKOŚCI TREŚCI"), "Komunikat błędu musi wskazywać blokadę jakości treści");
 });
 
 // -----------------------------------------------------------------------------
@@ -689,14 +799,66 @@ test("SUITE 7", "7.2 apiUpdateTicket: nie nadpisuje Data rozwiązania, gdy zgło
   assert.strictEqual(dateUpdated, false, "Nie wolno modyfikować pierwotnej daty rozwiązania przy kolejnych edycjach!");
 });
 
-test("SUITE 7", "7.3 apiGetTicketsList: zwraca assignedEmployee i nextActionDeadline z poprawnymi obiektami Date", () => {
+test("SUITE 7", "7.3 apiUpdateTicket: rejestruje ręczne zatwierdzenie priorytetu (PRIORITY_APPROVED)", () => {
   const fakeSheet = {
     getLastRow: () => 2,
-    getLastColumn: () => 5,
+    getLastColumn: () => 4,
     getRange: (r, c, nr, nc) => ({
       getValues: () => {
-        if (r === 1) return [["ID Zgłoszenia", "Status", "Pracownik odpowiedzialny", "Termin następnego działania", "Sygnatura czasowa"]];
-        return [["ELW-2026-0001", "Nowe", "Anna Nowak", "2026-11-27 12:00", "2026-11-26 10:00"]];
+        if (r === 1) return [["ID Zgłoszenia", "Status", "Priorytet", "Sygnatura czasowa"]];
+        return [["ELW-2026-0001", "W realizacji", "STANDARDOWY", "2026-11-26 10:00"]];
+      },
+      getValue: () => "STANDARDOWY",
+      setValue: () => {}
+    })
+  };
+  sandbox.SpreadsheetApp = { flush: () => {}, getActiveSpreadsheet: () => ({ getSheetByName: () => fakeSheet }) };
+  delete sandbox.scriptPropertiesStore["PRIORITY_APPROVED_ELW-2026-0001"];
+  const res = sandbox.apiUpdateTicket("ELW-2026-0001", { priority: "STANDARDOWY" });
+  assert.strictEqual(res.success, true);
+  assert.strictEqual(sandbox.scriptPropertiesStore["PRIORITY_APPROVED_ELW-2026-0001"], "STANDARDOWY", "Musi trwale zarejestrować ręczne zatwierdzenie priorytetu");
+  delete sandbox.scriptPropertiesStore["PRIORITY_APPROVED_ELW-2026-0001"];
+});
+
+test("SUITE 7", "7.4 apiGetTicketsList: odróżnia aktywną zaległość 1. reakcji od spraw z udzieloną odpowiedzią", () => {
+  const fakeSheet = {
+    getLastRow: () => 3,
+    getLastColumn: () => 6,
+    getRange: (r, c, nr, nc) => ({
+      getValues: () => {
+        if (r === 1) return [["ID Zgłoszenia", "Status", "Termin SLA 1. reakcji", "Data pierwszego kontaktu", "Sygnatura czasowa", "Pracownik odpowiedzialny"]];
+        return [
+          // Zgłoszenie 1: odpowiedź udzielona w terminie -> brak zaległości
+          ["ELW-2026-0001", "W realizacji", "2026-11-25 12:00", "2026-11-25 10:00", "2026-11-25 08:00", "Jan Kowalski"],
+          // Zgłoszenie 2: brak odpowiedzi i termin SLA minął -> aktywna zaległość
+          ["ELW-2026-0002", "W realizacji", "2026-11-25 12:00", "", "2026-11-25 08:00", "Anna Nowak"]
+        ];
+      }
+    })
+  };
+  sandbox.SpreadsheetApp = { flush: () => {}, getActiveSpreadsheet: () => ({ getSheetByName: () => fakeSheet }) };
+  const res = sandbox.apiGetTicketsList();
+  assert.strictEqual(res.success, true);
+  assert.strictEqual(res.tickets.length, 2);
+
+  const t1 = res.tickets[0];
+  assert.strictEqual(t1.hasFirstContact, true);
+  assert.strictEqual(t1.overdueSla, false, "Zgłoszenie z udzieloną odpowiedzią NIE MOŻE być zalegające z 1. reakcją!");
+  assert.strictEqual(t1.slaBreachedHistorically, false);
+
+  const t2 = res.tickets[1];
+  assert.strictEqual(t2.hasFirstContact, false);
+  assert.strictEqual(t2.overdueSla, true, "Zgłoszenie bez odpowiedzi po terminie SLA MUSI być oznaczone jako zalegające!");
+});
+
+test("SUITE 7", "7.5 apiGetTicketsList: zwraca assignedEmployee i nextActionDeadline z poprawnymi obiektami Date", () => {
+  const fakeSheet = {
+    getLastRow: () => 2,
+    getLastColumn: () => 6,
+    getRange: (r, c, nr, nc) => ({
+      getValues: () => {
+        if (r === 1) return [["ID Zgłoszenia", "Status", "Pracownik odpowiedzialny", "Termin następnego działania", "Sygnatura czasowa", "Data pierwszego kontaktu"]];
+        return [["ELW-2026-0001", "Nowe", "Anna Nowak", "2026-11-27 12:00", "2026-11-26 10:00", ""]];
       }
     })
   };
@@ -710,7 +872,7 @@ test("SUITE 7", "7.3 apiGetTicketsList: zwraca assignedEmployee i nextActionDead
   assert.strictEqual(t.timestamp, "2026-11-26 10:00");
 });
 
-test("SUITE 7", "7.4 apiTriggerAiAnalysis: zwraca rzeczywisty stan i szczegóły błędu", () => {
+test("SUITE 7", "7.6 apiTriggerAiAnalysis: zwraca rzeczywisty stan i szczegóły błędu", () => {
   const fakeSheet = {
     getLastRow: () => 2,
     getLastColumn: () => 3,

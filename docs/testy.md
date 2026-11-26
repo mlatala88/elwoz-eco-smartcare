@@ -9,13 +9,23 @@
 
 ## 1. Cel i zasady przeprowadzania testów
 
-Niniejsza procedura służy do zweryfikowania poprawności działania aplikacji **ELWOZ ECO SmartCare** po wprowadzeniu poprawek końcowych v0.2.6:
-1. **Wyłącznie dane fikcyjne:** Żadne testowe zgłoszenie nie może zawierać rzeczywistych nazwisk, prywatnych adresów ani numerów telefonów mieszkańców Kartuz.
-2. **Brak zmyślonych rezultatów:** W tabelach poniżej pola dotyczące rzeczywistych rezultatów i pomiarów czasu pozostawiono do uzupełnienia w trakcie faktycznych sesji testowych przez zespół.
-3. **Twarde zabezpieczenie serwerowe (Backend Whitelist Guard):** Backend bezwzględnie blokuje wysyłkę na jakikolwiek inny adres niż `wsb.student.tester@gmail.com`, a temat wiadomości zawsze otrzymuje prefiks `[TEST]`.
-4. **Zasady etyczne Google Reviews:** Prośba o recenzję jest neutralna, bez nagród, bez sugerowania ocen, bez filtrowania zadowolonych/niezadowolonych mieszkańców i BEZ TEKSTU ZASTĘPCZEGO (placeholdera).
-5. **Natywne Structured Outputs i filtracja thought:** Odpowiedź AI jest wymuszana w schemacie JSON, a bloki myśli modelu rozumującego są ignorowane.
-6. **Dynamiczny Dashboard i wykresy:** Formuły bazują na dynamicznym wyszukiwaniu nagłówków kolumn i składni przecinkowej, a wykresy nie ulegają duplikacji.
+Niniejsza procedura służy do zweryfikowania poprawności działania aplikacji **ELWOZ ECO SmartCare** po wprowadzeniu stabilizacji silnika i audycie końcowym v0.2.8:
+1. **Zautomatyzowany audyt silnika (`tests/test-v028-audit.js`):** 40 testów automatycznych pokrywających kolejkę AI, blokady współbieżności, szablony awaryjne, robocze SLA (7:00-16:00), walidację danych, ochronę PII oraz Service API (100% PASS, 40/40).
+2. **Wyłącznie dane fikcyjne:** Żadne testowe zgłoszenie nie może zawierać rzeczywistych nazwisk, prywatnych adresów ani numerów telefonów mieszkańców Kartuz.
+3. **Brak zmyślonych rezultatów:** W tabelach poniżej pola dotyczące rzeczywistych rezultatów i pomiarów czasu w interfejsie Google Sheets pozostawiono do weryfikacji w chmurze.
+4. **Twarde zabezpieczenie serwerowe (Backend Whitelist Guard):** Backend bezwzględnie blokuje wysyłkę na jakikolwiek inny adres niż `wsb.student.tester@gmail.com`, a temat wiadomości zawsze otrzymuje prefiks `[TEST]`.
+5. **Zasady etyczne Google Reviews:** Prośba o recenzję jest neutralna, bez nagród, bez sugerowania ocen, bez filtrowania zadowolonych/niezadowolonych mieszkańców i BEZ TEKSTU ZASTĘPCZEGO (placeholdera).
+6. **Natywne Structured Outputs i filtracja thought:** Odpowiedź AI jest wymuszana w schemacie JSON, a bloki myśli modelu rozumującego są ignorowane.
+7. **Wspólna ochrona limitów 15 RPM i Backoff 429:** Minimalny odstęp 4200 ms pomiędzy zapytaniami oraz 60-sekundowy cooldown po HTTP 429.
+
+### Rejestr zestawów testów automatycznych (`tests/test-v028-audit.js`):
+- **SUITE 1: Automatyczna kolejka AI i Rate Limiting** (9/9 PASS): Minimalny odstęp 4200 ms, 429 backoff cooldown (60s), wspólna bariera dla `polishMessageWithAiDirect`, nieblokująca rejestracja podczas cooldownu, limit 3 prób na zgłoszenie, odzyskiwanie zawieszonych analiz (>10 min), atomowa rezerwacja per-ticket `tryAcquireTicketAiLock`, unikalny wyzwalacz czasowy (5 min), trwałe odzyskiwanie arkusza po ID.
+- **SUITE 2: Rejestracja zgłoszeń & Reconciliation Lock Race** (3/3 PASS): Pobieranie ID pod blokadą bez nadpisywania, brak spamu e-mail dla zgłoszeń z przeszłości, natychmiastowe zwalnianie blokady `LockService` w bloku `finally`.
+- **SUITE 3: Komunikacja i Szablony Awaryjne** (6/6 PASS): Oddzielenie poufnych notatek pracownika od korespondencji z mieszkańcem, szablon pochwały bez GPS i niepotwierdzonego kierownika, szablon niekompletny, szablon reklamacji bez niepotwierdzonego dyspozytora, ochrona przed błędnym szkicem CRM, serwerowa walidacja jakości treści (`validateMessageContentQuality`).
+- **SUITE 4: Priorytety i Robocze SLA (7:00-16:00)** (5/5 PASS): Pomijanie nocy i weekendów w SLA, start spraw weekendowych w poniedziałek o 7:00, ochrona ręcznie zatwierdzonego priorytetu pracownika (`PRIORITY_APPROVED`), brak fałszywego przeterminowania przy terminowym 1. kontakcie, odróżnienie wskaźników 1. reakcji i kolejnego kroku.
+- **SUITE 5: Walidacja danych i Edge Cases** (7/7 PASS): Odrzucenie 'niewiadoma' jako ulicy, wykrywanie braku miejscowości, niewrażliwość na wielkość liter frakcji, wykrywanie wielokrotności i fetoru, opcjonalność kontaktu, elastyczny parser dat (dwucyfrowe, separatory przecinkowe).
+- **SUITE 6: Ochrona danych osobowych (PII) i Kontrola Jakości** (4/4 PASS): Lokalne maskowanie danych identyfikacyjnych, blokada AI przy danych wysokiego ryzyka (karty/dowody), ścisła biała lista e-mail, serwerowa blokada agresywnych wiadomości.
+- **SUITE 7: Warstwa Service API** (6/6 PASS): Blokada statusu Rozwiązane bez sposobu załatwienia, brak nadpisywania daty rozwiązania, utrwalanie zatwierdzonego priorytetu, odróżnienie aktywnej zaległości od historycznego naruszenia SLA, walidacja obiektów Date dla kolejnego kroku i pracownika, precyzyjne kody błędów AI.
 
 ---
 
