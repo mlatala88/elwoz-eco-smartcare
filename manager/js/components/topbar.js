@@ -1,3 +1,5 @@
+import { escapeHtml } from "./escapeHtml.js";
+
 /**
  * ELWOZ ECO SmartCare Manager v0.3.0
  * Topbar Component
@@ -24,7 +26,7 @@ export class Topbar {
     const userNameEl = this.container.querySelector("#topbar-user-name");
     const userAvatarEl = this.container.querySelector("#topbar-user-avatar");
 
-    const currentStaff = this.state.currentUser || this.staffList[0] || { name: "Anna Nowak", role: "Dyspozytor Główny" };
+    const currentStaff = this.state.currentUser || (this.state.mode === "demo" ? this.staffList[0] : null) || { name: "Brak użytkownika", role: "Brak dostępu" };
 
     if (userNameEl) userNameEl.textContent = currentStaff.name;
     if (userRoleEl) userRoleEl.textContent = currentStaff.role;
@@ -55,14 +57,14 @@ export class Topbar {
           notifList.innerHTML = `<div style="padding: 16px; text-align: center; font-size: 12px; color: var(--text-secondary);">Brak nowych powiadomień.</div>`;
         } else {
           notifList.innerHTML = urgentOrOverdue.map(t => `
-            <div class="notification-item unread" data-ticket-id="${t.id}">
+            <div class="notification-item unread" data-ticket-id="${escapeHtml(t.id)}">
               <div class="notification-item-title">
-                ${isOverdue(t) ? "⚠️ Przekroczenie SLA:" : "🔥 Sprawa PILNA:"} ${t.id}
+                ${isOverdue(t) ? "⚠️ Przekroczenie SLA:" : "🔥 Sprawa PILNA:"} ${escapeHtml(t.id)}
               </div>
               <div style="font-size: 11px; color: var(--text-secondary);">
-                ${t.city}, ${t.street} ${t.houseNumber} (${t.type})
+                ${escapeHtml(t.city)}, ${escapeHtml(t.street)} ${escapeHtml(t.houseNumber)} (${escapeHtml(t.type)})
               </div>
-              <div class="notification-item-time">${t.timestamp}</div>
+              <div class="notification-item-time">${escapeHtml(t.timestamp)}</div>
             </div>
           `).join("");
 
@@ -198,7 +200,14 @@ export class Topbar {
 
     // Przełącznik pracownika
     const profileBtn = this.container.querySelector("#user-profile-btn");
-    profileBtn.onclick = () => this.showStaffSwitchModal();
+    if (this.state.mode === "connected") {
+      profileBtn.title = "Tożsamość potwierdzona przez konto Google";
+      profileBtn.style.cursor = "default";
+      const chevron = profileBtn.querySelector('[data-lucide="chevron-down"]');
+      if (chevron) chevron.style.display = "none";
+    } else {
+      profileBtn.onclick = () => this.showStaffSwitchModal();
+    }
 
     if (window.lucide) {
       window.lucide.createIcons({ root: this.container });
@@ -225,8 +234,9 @@ export class Topbar {
   }
 
   showStaffSwitchModal() {
+    if (this.state.mode !== "demo") return;
     const listHtml = this.staffList.map(s => `
-      <div class="staff-select-card" data-staff-id="${s.id}" style="
+      <div class="staff-select-card" data-staff-id="${escapeHtml(s.id)}" style="
         display: flex; align-items: center; justify-content: space-between;
         padding: 12px 16px; border: 1px solid var(--border-color); border-radius: var(--radius-sm);
         margin-bottom: 8px; cursor: pointer; transition: all 0.15s ease;
@@ -235,10 +245,10 @@ export class Topbar {
           <div style="
             width: 36px; height: 36px; border-radius: 4px; background-color: var(--brand-navy);
             color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-weight: 600;
-          ">${s.name.split(" ").map(n => n[0]).join("")}</div>
+          ">${escapeHtml(s.name.split(" ").map(n => n[0]).join(""))}</div>
           <div>
-            <div style="font-weight: 600; font-size: 13px;">${s.name}</div>
-            <div style="font-size: 11px; color: var(--text-secondary);">${s.role} • ${s.email}</div>
+            <div style="font-weight: 600; font-size: 13px;">${escapeHtml(s.name)}</div>
+            <div style="font-size: 11px; color: var(--text-secondary);">${escapeHtml(s.role)} • ${escapeHtml(s.email)}</div>
           </div>
         </div>
         ${this.state.currentUser && this.state.currentUser.id === s.id ? '<span class="badge badge-ai-przeanalizowano">Aktywny</span>' : ''}

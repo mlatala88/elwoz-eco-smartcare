@@ -1,3 +1,5 @@
+import { escapeHtml } from "../components/escapeHtml.js";
+
 /**
  * ELWOZ ECO SmartCare Manager v0.3.0
  * Settings View (Ustawienia systemu i konfiguracja POK)
@@ -59,7 +61,7 @@ export class SettingsView {
             </div>
             <div class="form-group" id="group-gas-endpoint" style="margin-bottom: 0; display: ${this.state.mode === 'connected' ? 'block' : 'none'};">
               <label class="form-label">Adres URL Web App Google Apps Script (Wariant B)</label>
-              <input type="url" class="form-control" id="set-gas-endpoint" value="${typeof localStorage !== 'undefined' ? (localStorage.getItem('smartcare_gas_endpoint') || '') : ''}" placeholder="https://script.google.com/macros/s/.../exec" />
+              <input type="url" class="form-control" id="set-gas-endpoint" value="${escapeHtml(typeof localStorage !== 'undefined' ? (localStorage.getItem('smartcare_gas_endpoint') || '') : '')}" placeholder="https://script.google.com/macros/s/.../exec" />
               <span class="form-hint">W środowisku Web App (Wariant A) aplikacja korzysta bezpośrednio z google.script.run.</span>
             </div>
           </div>
@@ -95,9 +97,9 @@ export class SettingsView {
                 <tbody id="settings-staff-tbody">
                   ${this.staffList.map(s => `
                     <tr>
-                      <td style="font-weight: 600;">${s.name}</td>
-                      <td style="font-size: 12px; color: var(--text-secondary);">${s.role}</td>
-                      <td style="font-size: 12px;">${s.email}</td>
+                      <td style="font-weight: 600;">${escapeHtml(s.name)}</td>
+                      <td style="font-size: 12px; color: var(--text-secondary);">${escapeHtml(s.role)}</td>
+                      <td style="font-size: 12px;">${escapeHtml(s.email)}</td>
                       <td style="text-align: right;">
                         <span class="badge badge-ai-przeanalizowano">Aktywny</span>
                       </td>
@@ -120,33 +122,33 @@ export class SettingsView {
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                 <div class="form-group">
                   <label class="form-label">Nazwa przedsiębiorstwa</label>
-                  <input type="text" class="form-control" id="set-company" value="${this.settings.companyName}" />
+                  <input type="text" class="form-control" id="set-company" value="${escapeHtml(this.settings.companyName)}" />
                 </div>
                 <div class="form-group">
                   <label class="form-label">Oddział / POK</label>
-                  <input type="text" class="form-control" id="set-branch" value="${this.settings.branch}" />
+                  <input type="text" class="form-control" id="set-branch" value="${escapeHtml(this.settings.branch)}" />
                 </div>
               </div>
 
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                 <div class="form-group">
                   <label class="form-label">Oficjalny e-mail POK</label>
-                  <input type="email" class="form-control" id="set-email" value="${this.settings.email}" />
+                  <input type="email" class="form-control" id="set-email" value="${escapeHtml(this.settings.email)}" />
                 </div>
                 <div class="form-group">
                   <label class="form-label">Infolinia / Telefon</label>
-                  <input type="text" class="form-control" id="set-phone" value="${this.settings.phone}" />
+                  <input type="text" class="form-control" id="set-phone" value="${escapeHtml(this.settings.phone)}" />
                 </div>
               </div>
 
               <div class="form-group">
                 <label class="form-label">Godziny pracy dyspozytorni</label>
-                <input type="text" class="form-control" id="set-hours" value="${this.settings.workingHours}" />
+                <input type="text" class="form-control" id="set-hours" value="${escapeHtml(this.settings.workingHours)}" />
               </div>
 
               <div class="form-group" style="margin-bottom: 0;">
                 <label class="form-label">Zweryfikowany link opinii Google</label>
-                <input type="url" class="form-control" id="set-google-url" value="${this.settings.googleReviewUrl}" />
+                <input type="url" class="form-control" id="set-google-url" value="${escapeHtml(this.settings.googleReviewUrl)}" />
                 <span class="form-hint">Docelowy link przekazywany w neutralnych zaproszeniach.</span>
               </div>
             </div>
@@ -226,7 +228,7 @@ export class SettingsView {
 
               <div class="form-group" style="margin-bottom: 12px;">
                 <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
-                  <input type="checkbox" id="set-allow-employee-keys" ${this.settings.allowEmployeeApiKeys ? 'checked' : ''} />
+                  <input type="checkbox" id="set-allow-employee-keys" ${this.settings.allowEmployeeApiKeys ? 'checked' : ''} ${this.state.mode === 'connected' ? 'disabled' : ''} />
                   <span>Zezwalaj pracownikom na indywidualny klucz API (jeżeli administrator zezwoli)</span>
                 </label>
                 <span class="form-hint" style="margin-left: 22px;">Umożliwia zaawansowanym pracownikom użycie własnego klucza sesyjnego bez ujawniania go w localStorage.</span>
@@ -315,23 +317,34 @@ export class SettingsView {
     saveBtn.onclick = async () => {
       const allowKeysEl = this.container.querySelector("#set-allow-employee-keys");
       const updatedSettings = {
-        ...this.settings,
+        ...(this.state.mode === 'connected' ? {} : this.settings),
         companyName: this.container.querySelector("#set-company").value.trim(),
         branch: this.container.querySelector("#set-branch").value.trim(),
         email: this.container.querySelector("#set-email").value.trim(),
         phone: this.container.querySelector("#set-phone").value.trim(),
         workingHours: this.container.querySelector("#set-hours").value.trim(),
         googleReviewUrl: this.container.querySelector("#set-google-url").value.trim(),
-        allowEmployeeApiKeys: allowKeysEl ? allowKeysEl.checked : false
+        ...(this.state.mode === 'connected' ? {} : { allowEmployeeApiKeys: allowKeysEl ? allowKeysEl.checked : false })
       };
 
-      await this.dataProvider.updateSettings(updatedSettings);
-      import("../components/toast.js").then(({ Toast }) => {
-        Toast.success("Zapisano ustawienia systemowe.");
-      });
+      saveBtn.disabled = true;
+      try {
+        await this.dataProvider.updateSettings(updatedSettings);
+        this.settings = await this.dataProvider.getSettings();
+        import("../components/toast.js").then(({ Toast }) => Toast.success("Zapisano ustawienia systemowe."));
+      } catch (error) {
+        import("../components/toast.js").then(({ Toast }) => Toast.error(error.message || "Nie zapisano ustawień."));
+      } finally {
+        saveBtn.disabled = false;
+      }
     };
 
     const addStaffBtn = this.container.querySelector("#btn-add-staff");
+    if (this.state.mode === 'connected') {
+      addStaffBtn.disabled = true;
+      addStaffBtn.title = "Lista uprawnionych pracowników jest zarządzana w konfiguracji CRM.";
+      return;
+    }
     addStaffBtn.onclick = () => {
       import("../components/modal.js").then(({ Modal }) => {
         const modal = new Modal({

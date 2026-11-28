@@ -59,7 +59,12 @@ class App {
 
   async init() {
     // 2. Inicjalizacja tożsamości użytkownika i zespołu POK Kartuzy
-    await this.resolveUserIdentity();
+    try {
+      await this.resolveUserIdentity();
+    } catch (_) {
+      this.showAccessError();
+      return;
+    }
 
     const topbarContainer = document.getElementById("topbar-container");
     const sidebarContainer = document.getElementById("sidebar-container");
@@ -85,57 +90,37 @@ class App {
   }
 
   async resolveUserIdentity() {
-    try {
-      const staffList = await this.dataProvider.getStaff();
-
-      // W trybie CONNECTED sprawdź sesję Google lub zapamiętany PIN
-      if (typeof this.dataProvider.checkAuth === "function") {
-        try {
-          const auth = await this.dataProvider.checkAuth();
-          if (auth && auth.authenticated && auth.user) {
-            this.state.currentUser = auth.user;
-            this.dataProvider.setCurrentUser(auth.user);
-            return;
-          }
-        } catch (_) {}
+    this.state.currentUser = null;
+    if (typeof this.dataProvider.setCurrentUser === "function") this.dataProvider.setCurrentUser(null);
+    if (this.mode === "connected") {
+      // Autoryzacja przed pobraniem listy zespołu lub jakichkolwiek danych CRM.
+      // Pamięć przeglądarki oraz przełącznik profilu nie potwierdzają tożsamości.
+      const auth = await this.dataProvider.checkAuth();
+      if (!auth || auth.authenticated !== true || !auth.user) {
+        throw new Error("Brak dostępu: nie potwierdzono tożsamości Google.");
       }
-
-      // Sprawdź sessionStorage (dla środowiska konsumenckiego @gmail.com)
-      if (typeof sessionStorage !== "undefined") {
-        const sessionUser = sessionStorage.getItem("smartcare_session_user");
-        if (sessionUser) {
-          try {
-            const parsed = JSON.parse(sessionUser);
-            this.state.currentUser = parsed;
-            if (typeof this.dataProvider.setCurrentUser === "function") {
-              this.dataProvider.setCurrentUser(parsed);
-            }
-            return;
-          } catch (_) {}
-        }
-      }
-
-      // Domyślny użytkownik (Michał Latała – Administrator)
-      this.state.currentUser = (staffList && staffList[0]) || {
-        id: "staff-1",
-        name: "Michał Latała",
-        role: "Administrator",
-        email: "wsb.student.tester@gmail.com"
-      };
-
-      if (typeof this.dataProvider.setCurrentUser === "function") {
-        this.dataProvider.setCurrentUser(this.state.currentUser);
-      }
-
-    } catch (e) {
-      console.warn("Błąd inicjalizacji tożsamości:", e);
-      this.state.currentUser = {
-        id: "staff-1",
-        name: "Michał Latała",
-        role: "Administrator",
-        email: "wsb.student.tester@gmail.com"
-      };
+      this.state.currentUser = auth.user;
+      this.dataProvider.setCurrentUser(auth.user);
+      return;
     }
+
+    const staffList = await this.dataProvider.getStaff();
+    this.state.currentUser = (staffList && staffList[0]) || null;
+    if (typeof this.dataProvider.setCurrentUser === "function") this.dataProvider.setCurrentUser(this.state.currentUser);
+  }
+
+  showAccessError() {
+    if (this.pollingTimer) clearInterval(this.pollingTimer);
+    this.state.currentUser = null;
+    if (typeof this.dataProvider.setCurrentUser === "function") this.dataProvider.setCurrentUser(null);
+    const container = document.getElementById("content-container");
+    if (!container) return;
+    container.innerHTML = `
+      <div class="card" role="alert" style="padding: 24px; max-width: 680px; margin: 32px auto;">
+        <h2>Nie można potwierdzić dostępu do SmartCare</h2>
+        <p>Zaloguj się na uprawnione konto Google i otwórz aplikację ponownie. Jeśli problem się powtarza, skontaktuj się z administratorem.</p>
+        <p>Nie udało się potwierdzić tożsamości lub połączenia. Dane CRM nie zostały pobrane.</p>
+      </div>`;
   }
 
   startAutoRefreshPolling(intervalMs = 30000) {
@@ -199,6 +184,7 @@ class App {
   }
 
   async handleHashChange() {
+    if (this.mode === "connected" && !this.state.currentUser) return;
     let hash = window.location.hash.substring(1) || "dashboard";
     let route = hash;
     let params = {};

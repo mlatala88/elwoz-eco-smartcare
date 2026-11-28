@@ -1973,6 +1973,16 @@ textarea.form-control {
 (function() {
 
 // ==========================================
+// MODUŁ: js/components/escapeHtml.js
+// ==========================================
+/** Escape text at HTML text, quoted attribute and textarea rendering boundaries. */
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, character => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[character]);
+}
+
+// ==========================================
 // MODUŁ: js/data/initialDataset.js
 // ==========================================
 /**
@@ -4739,6 +4749,10 @@ class AppsScriptDataProvider extends DataProviderInterface {
           .withSuccessHandler(result => {
             this.connectionStatus = "online";
             this.lastSyncTime = new Date().toISOString();
+            if (result && result.success === false) {
+              reject(new Error(result.error || "Operacja nie powiodła się."));
+              return;
+            }
             resolve(result);
           })
           .withFailureHandler(error => {
@@ -4784,7 +4798,9 @@ class AppsScriptDataProvider extends DataProviderInterface {
 
       this.connectionStatus = "online";
       this.lastSyncTime = new Date().toISOString();
-      return json.data !== undefined ? json.data : json;
+      const result = json.data !== undefined ? json.data : json;
+      if (result && result.success === false) throw new Error(result.error || "Operacja nie powiodła się.");
+      return result;
 
     } catch (err) {
       this.connectionStatus = "offline";
@@ -4960,12 +4976,13 @@ class ToastService {
 
     toast.innerHTML = `
       <i data-lucide="${iconName}" style="width: 18px; height: 18px; flex-shrink: 0;"></i>
-      <span style="flex: 1; line-height: 1.4;">${message}</span>
+      <span class="toast-message" style="flex: 1; line-height: 1.4;"></span>
       <button style="background: transparent; border: none; cursor: pointer; color: #94A3B8; padding: 2px;" aria-label="Zamknij">
         <i data-lucide="x" style="width: 14px; height: 14px;"></i>
       </button>
     `;
 
+    toast.querySelector(".toast-message").textContent = String(message ?? "");
     const closeBtn = toast.querySelector("button");
     closeBtn.onclick = () => {
       toast.remove();
@@ -5028,7 +5045,7 @@ class Modal {
     this.element.innerHTML = `
       <div class="modal-dialog ${sizeClass}" role="dialog" aria-modal="true">
         <div class="modal-header">
-          <h3 class="modal-title">${this.title}</h3>
+          <h3 class="modal-title"></h3>
           <button class="modal-close-btn" aria-label="Zamknij okno">
             <i data-lucide="x" style="width: 18px; height: 18px;"></i>
           </button>
@@ -5040,6 +5057,7 @@ class Modal {
       </div>
     `;
 
+    this.element.querySelector(".modal-title").textContent = String(this.title);
     if (typeof this.content !== "string" && this.content instanceof HTMLElement) {
       this.element.querySelector(".modal-body").appendChild(this.content);
     }
@@ -5080,15 +5098,18 @@ class Modal {
     const modal = new Modal({
       title,
       size: "sm",
-      content: `<p style="font-size: 14px; line-height: 1.5; color: var(--text-primary);">${message}</p>`,
+      content: `<p class="modal-confirm-message" style="font-size: 14px; line-height: 1.5; color: var(--text-primary);"></p>`,
       footer: `
-        <button class="btn btn-secondary btn-sm" id="modal-cancel-btn">${cancelText}</button>
-        <button class="btn ${isDanger ? 'btn-danger' : 'btn-primary'} btn-sm" id="modal-confirm-btn">${confirmText}</button>
+        <button class="btn btn-secondary btn-sm" id="modal-cancel-btn"></button>
+        <button class="btn ${isDanger ? 'btn-danger' : 'btn-primary'} btn-sm" id="modal-confirm-btn"></button>
       `
     });
 
     const confirmBtn = modal.element.querySelector("#modal-confirm-btn");
     const cancelBtn = modal.element.querySelector("#modal-cancel-btn");
+    modal.element.querySelector(".modal-confirm-message").textContent = String(message ?? "");
+    confirmBtn.textContent = String(confirmText);
+    cancelBtn.textContent = String(cancelText);
 
     confirmBtn.onclick = () => {
       modal.close();
@@ -5263,6 +5284,8 @@ class Sidebar {
 // ==========================================
 // MODUŁ: js/components/topbar.js
 // ==========================================
+
+
 /**
  * ELWOZ ECO SmartCare Manager v0.3.0
  * Topbar Component
@@ -5289,7 +5312,7 @@ class Topbar {
     const userNameEl = this.container.querySelector("#topbar-user-name");
     const userAvatarEl = this.container.querySelector("#topbar-user-avatar");
 
-    const currentStaff = this.state.currentUser || this.staffList[0] || { name: "Anna Nowak", role: "Dyspozytor Główny" };
+    const currentStaff = this.state.currentUser || (this.state.mode === "demo" ? this.staffList[0] : null) || { name: "Brak użytkownika", role: "Brak dostępu" };
 
     if (userNameEl) userNameEl.textContent = currentStaff.name;
     if (userRoleEl) userRoleEl.textContent = currentStaff.role;
@@ -5320,14 +5343,14 @@ class Topbar {
           notifList.innerHTML = `<div style="padding: 16px; text-align: center; font-size: 12px; color: var(--text-secondary);">Brak nowych powiadomień.</div>`;
         } else {
           notifList.innerHTML = urgentOrOverdue.map(t => `
-            <div class="notification-item unread" data-ticket-id="${t.id}">
+            <div class="notification-item unread" data-ticket-id="${escapeHtml(t.id)}">
               <div class="notification-item-title">
-                ${isOverdue(t) ? "⚠️ Przekroczenie SLA:" : "🔥 Sprawa PILNA:"} ${t.id}
+                ${isOverdue(t) ? "⚠️ Przekroczenie SLA:" : "🔥 Sprawa PILNA:"} ${escapeHtml(t.id)}
               </div>
               <div style="font-size: 11px; color: var(--text-secondary);">
-                ${t.city}, ${t.street} ${t.houseNumber} (${t.type})
+                ${escapeHtml(t.city)}, ${escapeHtml(t.street)} ${escapeHtml(t.houseNumber)} (${escapeHtml(t.type)})
               </div>
-              <div class="notification-item-time">${t.timestamp}</div>
+              <div class="notification-item-time">${escapeHtml(t.timestamp)}</div>
             </div>
           `).join("");
 
@@ -5463,7 +5486,14 @@ class Topbar {
 
     // Przełącznik pracownika
     const profileBtn = this.container.querySelector("#user-profile-btn");
-    profileBtn.onclick = () => this.showStaffSwitchModal();
+    if (this.state.mode === "connected") {
+      profileBtn.title = "Tożsamość potwierdzona przez konto Google";
+      profileBtn.style.cursor = "default";
+      const chevron = profileBtn.querySelector('[data-lucide="chevron-down"]');
+      if (chevron) chevron.style.display = "none";
+    } else {
+      profileBtn.onclick = () => this.showStaffSwitchModal();
+    }
 
     if (window.lucide) {
       window.lucide.createIcons({ root: this.container });
@@ -5490,8 +5520,9 @@ class Topbar {
   }
 
   showStaffSwitchModal() {
+    if (this.state.mode !== "demo") return;
     const listHtml = this.staffList.map(s => `
-      <div class="staff-select-card" data-staff-id="${s.id}" style="
+      <div class="staff-select-card" data-staff-id="${escapeHtml(s.id)}" style="
         display: flex; align-items: center; justify-content: space-between;
         padding: 12px 16px; border: 1px solid var(--border-color); border-radius: var(--radius-sm);
         margin-bottom: 8px; cursor: pointer; transition: all 0.15s ease;
@@ -5500,10 +5531,10 @@ class Topbar {
           <div style="
             width: 36px; height: 36px; border-radius: 4px; background-color: var(--brand-navy);
             color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-weight: 600;
-          ">${s.name.split(" ").map(n => n[0]).join("")}</div>
+          ">${escapeHtml(s.name.split(" ").map(n => n[0]).join(""))}</div>
           <div>
-            <div style="font-weight: 600; font-size: 13px;">${s.name}</div>
-            <div style="font-size: 11px; color: var(--text-secondary);">${s.role} • ${s.email}</div>
+            <div style="font-weight: 600; font-size: 13px;">${escapeHtml(s.name)}</div>
+            <div style="font-size: 11px; color: var(--text-secondary);">${escapeHtml(s.role)} • ${escapeHtml(s.email)}</div>
           </div>
         </div>
         ${this.state.currentUser && this.state.currentUser.id === s.id ? '<span class="badge badge-ai-przeanalizowano">Aktywny</span>' : ''}
@@ -5548,6 +5579,8 @@ class Topbar {
 // ==========================================
 // MODUŁ: js/views/dashboardView.js
 // ==========================================
+
+
 /**
  * ELWOZ ECO SmartCare Manager v0.3.0
  * Dashboard View (Pulpit - Customer Service Intelligence)
@@ -5593,9 +5626,9 @@ class DashboardView {
 
         <div class="custom-range-inputs" id="custom-range-inputs" style="display: ${this.currentPeriod === 'custom' ? 'flex' : 'none'};">
           <label style="color: var(--text-secondary);">Od:</label>
-          <input type="date" id="range-from" class="custom-date-input" value="${this.customRange ? this.customRange.from : ''}" />
+          <input type="date" id="range-from" class="custom-date-input" value="${escapeHtml(this.customRange ? this.customRange.from : '')}" />
           <label style="color: var(--text-secondary);">Do:</label>
-          <input type="date" id="range-to" class="custom-date-input" value="${this.customRange ? this.customRange.to : ''}" />
+          <input type="date" id="range-to" class="custom-date-input" value="${escapeHtml(this.customRange ? this.customRange.to : '')}" />
           <button class="btn btn-secondary btn-xs" id="btn-apply-custom-range">Zastosuj</button>
         </div>
       </div>
@@ -5835,7 +5868,7 @@ class DashboardView {
           <i data-lucide="${k.icon}" class="kpi-icon"></i>
         </div>
         <div class="kpi-value-row">
-          <div class="kpi-value">${k.val}</div>
+          <div class="kpi-value">${escapeHtml(k.val)}</div>
         </div>
         <div class="kpi-hint">
           <span>${k.hint}</span>
@@ -5868,30 +5901,30 @@ class DashboardView {
     }
 
     tbody.innerHTML = tickets.map(t => `
-      <tr class="row-clickable ${t.priority === 'PILNY' ? 'row-urgent' : ''}" data-ticket-id="${t.id}">
-        <td class="table-ticket-id">${t.id}</td>
+      <tr class="row-clickable ${t.priority === 'PILNY' ? 'row-urgent' : ''}" data-ticket-id="${escapeHtml(t.id)}">
+        <td class="table-ticket-id">${escapeHtml(t.id)}</td>
         <td>
-          <div style="font-weight: 600;">${t.city}</div>
-          <div style="font-size: 11px; color: var(--text-secondary);">${t.street} ${t.houseNumber || '(brak nr)'}</div>
+          <div style="font-weight: 600;">${escapeHtml(t.city)}</div>
+          <div style="font-size: 11px; color: var(--text-secondary);">${escapeHtml(t.street)} ${escapeHtml(t.houseNumber || '(brak nr)')}</div>
         </td>
         <td>
-          <div>${t.type}</div>
-          <div style="font-size: 11px; color: var(--text-secondary);">${t.fraction}</div>
+          <div>${escapeHtml(t.type)}</div>
+          <div style="font-size: 11px; color: var(--text-secondary);">${escapeHtml(t.fraction)}</div>
         </td>
         <td>
-          <span class="badge badge-prio-${t.priority.toLowerCase()}">${t.priority}</span>
+          <span class="badge badge-prio-${escapeHtml(t.priority.toLowerCase())}">${escapeHtml(t.priority)}</span>
         </td>
         <td>
           ${((t.slaDeadline && new Date(t.slaDeadline) < new Date()) || (t.nextActionDeadline && new Date(t.nextActionDeadline) < new Date()))
             ? '<span class="badge badge-prio-pilny">⚠️ Przekroczone SLA</span>' 
-            : `<span style="font-size: 11px; color: var(--text-secondary);">${t.slaDeadline ? 'Do: ' + t.slaDeadline.substring(11, 16) : 'Brak terminu'}</span>`}
+            : `<span style="font-size: 11px; color: var(--text-secondary);">${escapeHtml(t.slaDeadline ? 'Do: ' + t.slaDeadline.substring(11, 16) : 'Brak terminu')}</span>`}
         </td>
-        <td>${t.assignee || 'Nieprzypisany'}</td>
+        <td>${escapeHtml(t.assignee || 'Nieprzypisany')}</td>
         <td style="max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-          ${t.nextAction || '<span style="color: var(--prio-urgent); font-weight: 600;">Brak kolejnego kroku!</span>'}
+          ${escapeHtml(t.nextAction) || '<span style="color: var(--prio-urgent); font-weight: 600;">Brak kolejnego kroku!</span>'}
         </td>
         <td style="text-align: right;">
-          <button class="btn btn-navy btn-xs btn-open-detail" data-ticket-id="${t.id}">Otwórz</button>
+          <button class="btn btn-navy btn-xs btn-open-detail" data-ticket-id="${escapeHtml(t.id)}">Otwórz</button>
         </td>
       </tr>
     `).join("");
@@ -6224,6 +6257,8 @@ class DashboardView {
 // ==========================================
 // MODUŁ: js/views/tasksView.js
 // ==========================================
+
+
 /**
  * ELWOZ ECO SmartCare Manager v0.3.0
  * Tasks View (Moje zadania – Operacyjna Kolejka CRM)
@@ -6246,12 +6281,12 @@ class TasksView {
       <div class="view-header">
         <div class="view-title-group">
           <h1 class="view-title">Moje zadania – Kolejka operacyjna</h1>
-          <div class="view-description">Bieżący rejestr spraw wg pilności i terminów wykonania • Aktywny pracownik: <strong>${currentUserName}</strong></div>
+          <div class="view-description">Bieżący rejestr spraw wg pilności i terminów wykonania • Aktywny pracownik: <strong>${escapeHtml(currentUserName)}</strong></div>
         </div>
         <div class="view-actions">
           <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; cursor: pointer; user-select: none;">
             <input type="checkbox" id="toggle-only-mine" ${this.filterOnlyMine ? 'checked' : ''} style="width: 16px; height: 16px; accent-color: var(--brand-navy);" />
-            <span>Tylko moje zadania (${currentUserName})</span>
+            <span>Tylko moje zadania (${escapeHtml(currentUserName)})</span>
           </label>
         </div>
       </div>
@@ -6361,10 +6396,10 @@ class TasksView {
 
     // Wyklucz sprawy zakończone (Rozwiązane i Zamknięte)
     const isClosed = s => s === "Rozwiązane" || s === "Zamknięte";
-    const openTickets = tickets.filter(t => !isClosed(t.status));
+    const openTickets = tickets.filter(t => !isClosed(t.status) && (!this.filterOnlyMine || t.assignee === currentUserName));
 
     const now = new Date();
-    const todayStr = now.toISOString().split("T")[0];
+    const todayStr = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Warsaw", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
 
     // Dynamiczny sprawdzian SLA bez opierania się na historycznej fladze
     // Zgłoszenie z udzieloną odpowiedzią NIE JEST oznaczane jako zalegające z 1. reakcją
@@ -6459,43 +6494,43 @@ class TasksView {
       const isMine = t.assignee === currentUserName;
 
       return `
-        <tr class="row-clickable ${t.priority === 'PILNY' ? 'row-urgent' : ''}" data-ticket-id="${t.id}">
-          <td class="table-ticket-id">${t.id}</td>
+        <tr class="row-clickable ${t.priority === 'PILNY' ? 'row-urgent' : ''}" data-ticket-id="${escapeHtml(t.id)}">
+          <td class="table-ticket-id">${escapeHtml(t.id)}</td>
           <td>
-            <div style="font-weight: 600;">${t.city}</div>
-            <div style="font-size: 11px; color: var(--text-secondary);">${t.street} ${t.houseNumber || '(brak posesji)'}</div>
+            <div style="font-weight: 600;">${escapeHtml(t.city)}</div>
+            <div style="font-size: 11px; color: var(--text-secondary);">${escapeHtml(t.street)} ${escapeHtml(t.houseNumber || '(brak posesji)')}</div>
           </td>
           <td>
-            <div>${t.type}</div>
+            <div>${escapeHtml(t.type)}</div>
             <span class="fraction-pill" style="margin-top: 2px;">
-              <span class="fraction-dot fraction-${t.fraction.toLowerCase().split(' ')[0]}"></span>
-              ${t.fraction}
+              <span class="fraction-dot fraction-${escapeHtml(t.fraction.toLowerCase().split(' ')[0])}"></span>
+              ${escapeHtml(t.fraction)}
             </span>
           </td>
           <td>
-            <span class="badge badge-prio-${t.priority.toLowerCase()}">${t.priority}</span>
+            <span class="badge badge-prio-${escapeHtml(t.priority.toLowerCase())}">${escapeHtml(t.priority)}</span>
           </td>
           <td>
             ${isOverdue 
               ? '<span class="badge badge-prio-pilny">⚠️ Przekroczone!</span>' 
-              : `<span style="font-size: 11px; color: var(--text-secondary);">SLA do: ${t.slaDeadline ? t.slaDeadline.substring(11, 16) : '-'}</span>`}
+              : `<span style="font-size: 11px; color: var(--text-secondary);">SLA do: ${escapeHtml(t.slaDeadline ? t.slaDeadline.substring(11, 16) : '-')}</span>`}
           </td>
           <td>
-            <div style="font-weight: 500;">${t.assignee || '<span style="color: var(--prio-urgent);">Nieprzypisany</span>'}</div>
-            ${!isMine ? `<button class="btn btn-secondary btn-xs btn-assign-me" data-ticket-id="${t.id}" style="margin-top: 4px;">Przypisz do mnie</button>` : ''}
+            <div style="font-weight: 500;">${escapeHtml(t.assignee) || '<span style="color: var(--prio-urgent);">Nieprzypisany</span>'}</div>
+            ${!isMine ? `<button class="btn btn-secondary btn-xs btn-assign-me" data-ticket-id="${escapeHtml(t.id)}" style="margin-top: 4px;">Przypisz do mnie</button>` : ''}
           </td>
           <td style="max-width: 200px;">
             ${t.nextAction 
-              ? `<div style="font-size: 12px; line-height: 1.3;">${t.nextAction}</div><div style="font-size: 10px; color: var(--text-secondary);">Strona: ${t.responsibleSide}</div>`
+              ? `<div style="font-size: 12px; line-height: 1.3;">${escapeHtml(t.nextAction)}</div><div style="font-size: 10px; color: var(--text-secondary);">Strona: ${escapeHtml(t.responsibleSide)}</div>`
               : '<span class="badge badge-prio-pilny">Brak kolejnego kroku!</span>'}
           </td>
           <td>
             <div style="font-size: 12px; font-weight: 600; color: ${isOverdue ? 'var(--prio-urgent)' : 'var(--text-primary)'};">
-              ${t.nextActionDeadline || '<span style="color: var(--text-muted); font-weight: normal;">Nie określono</span>'}
+              ${escapeHtml(t.nextActionDeadline) || '<span style="color: var(--text-muted); font-weight: normal;">Nie określono</span>'}
             </div>
           </td>
           <td style="text-align: right; white-space: nowrap;">
-            <button class="btn btn-navy btn-xs btn-handle-ticket" data-ticket-id="${t.id}">Obsłuż sprawę</button>
+            <button class="btn btn-navy btn-xs btn-handle-ticket" data-ticket-id="${escapeHtml(t.id)}">Obsłuż sprawę</button>
           </td>
         </tr>
       `;
@@ -6539,6 +6574,8 @@ class TasksView {
 // ==========================================
 // MODUŁ: js/views/ticketsView.js
 // ==========================================
+
+
 /**
  * ELWOZ ECO SmartCare Manager v0.3.0
  * Tickets View (Wszystkie zgłoszenia – Kompaktowa tabela operacyjna)
@@ -6638,7 +6675,7 @@ class TicketsView {
             <div class="input-group">
               <i data-lucide="search" class="input-icon" style="width: 15px; height: 15px;"></i>
               <input type="text" id="filter-search" class="form-control input-with-icon" 
-                     placeholder="ID, nazwisko, adres, opis..." value="${this.filters.search || ''}" />
+                     placeholder="ID, nazwisko, adres, opis..." value="${escapeHtml(this.filters.search || '')}" />
             </div>
           </div>
 
@@ -6684,7 +6721,7 @@ class TicketsView {
             <select class="form-select" id="filter-assignee">
               <option value="all">Wszyscy pracownicy</option>
               <option value="Nieprzypisany">Nieprzypisany</option>
-              ${staffList.map(s => `<option value="${s.name}">${s.name}</option>`).join("")}
+              ${staffList.map(s => `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}</option>`).join("")}
             </select>
           </div>
 
@@ -6736,6 +6773,9 @@ class TicketsView {
       </div>
     `;
 
+    for (const [id, key] of [["priority","priority"],["category","category"],["assignee","assignee"],["deadline","deadlineFilter"],["ai-state","aiState"]]) {
+      this.container.querySelector("#filter-" + id).value = this.filters[key] || "all";
+    }
     this.bindEvents();
     await this.loadTickets();
 
@@ -6787,6 +6827,7 @@ class TicketsView {
         sortField: "timestamp",
         sortOrder: "desc"
       };
+      this.router.navigate("tickets");
       this.render();
     };
 
@@ -6809,7 +6850,9 @@ class TicketsView {
   }
 
   async loadTickets() {
-    const tickets = await this.dataProvider.getTickets(this.filters);
+    const requestId = this.loadRequestId = (this.loadRequestId || 0) + 1;
+    const tickets = await this.dataProvider.getTickets({ ...this.filters });
+    if (requestId !== this.loadRequestId) return;
 
     const countLabel = this.container.querySelector("#tickets-count-label");
     if (countLabel) {
@@ -6822,7 +6865,7 @@ class TicketsView {
       if (this.filters.metricKey) {
         badgesHtml += `
           <span class="badge badge-status-w-realizacji" style="margin-right: 6px;">
-            Filtr wskaźnika: ${this.filters.metricKey}
+            Filtr wskaźnika: ${escapeHtml(this.filters.metricKey)}
             <button id="btn-clear-metric" style="background: none; border: none; cursor: pointer; margin-left: 4px; color: inherit;">&times;</button>
           </span>
         `;
@@ -6830,7 +6873,7 @@ class TicketsView {
       if (this.filters.period === "custom" && this.filters.customRange && this.filters.customRange.from && this.filters.customRange.to) {
         badgesHtml += `
           <span class="badge badge-status-do-weryfikacji">
-            Zakres dat: ${this.filters.customRange.from} do ${this.filters.customRange.to}
+            Zakres dat: ${escapeHtml(this.filters.customRange.from)} do ${escapeHtml(this.filters.customRange.to)}
             <button id="btn-clear-range" style="background: none; border: none; cursor: pointer; margin-left: 4px; color: inherit;">&times;</button>
           </span>
         `;
@@ -6936,69 +6979,69 @@ class TicketsView {
 
     tbody.innerHTML = tickets.map(t => {
       const isUrgent = t.priority === "PILNY";
-      let rowHtml = `<tr class="row-clickable ${isUrgent ? 'row-urgent' : ''}" data-ticket-id="${t.id}">`;
+      let rowHtml = `<tr class="row-clickable ${isUrgent ? 'row-urgent' : ''}" data-ticket-id="${escapeHtml(t.id)}">`;
 
-      if (isVis("id")) rowHtml += `<td class="table-ticket-id">${t.id}</td>`;
-      if (isVis("timestamp")) rowHtml += `<td style="white-space: nowrap; font-size: 12px; color: var(--text-secondary);">${t.timestamp}</td>`;
+      if (isVis("id")) rowHtml += `<td class="table-ticket-id">${escapeHtml(t.id)}</td>`;
+      if (isVis("timestamp")) rowHtml += `<td style="white-space: nowrap; font-size: 12px; color: var(--text-secondary);">${escapeHtml(t.timestamp)}</td>`;
       if (isVis("location")) {
         rowHtml += `
           <td>
-            <div style="font-weight: 600;">${t.city}</div>
-            <div style="font-size: 11px; color: var(--text-secondary);">${t.street} ${t.houseNumber || '(brak nr)'}</div>
+            <div style="font-weight: 600;">${escapeHtml(t.city)}</div>
+            <div style="font-size: 11px; color: var(--text-secondary);">${escapeHtml(t.street)} ${escapeHtml(t.houseNumber || '(brak nr)')}</div>
           </td>
         `;
       }
-      if (isVis("type")) rowHtml += `<td style="font-weight: 500;">${t.type}</td>`;
+      if (isVis("type")) rowHtml += `<td style="font-weight: 500;">${escapeHtml(t.type)}</td>`;
       if (isVis("fraction")) {
         rowHtml += `
           <td>
             <span class="fraction-pill">
-              <span class="fraction-dot fraction-${t.fraction.toLowerCase().split(' ')[0]}"></span>
-              ${t.fraction}
+              <span class="fraction-dot fraction-${escapeHtml(t.fraction.toLowerCase().split(' ')[0])}"></span>
+              ${escapeHtml(t.fraction)}
             </span>
           </td>
         `;
       }
       if (isVis("priority")) {
-        rowHtml += `<td><span class="badge badge-prio-${t.priority.toLowerCase()}">${t.priority}</span></td>`;
+        rowHtml += `<td><span class="badge badge-prio-${escapeHtml(t.priority.toLowerCase())}">${escapeHtml(t.priority)}</span></td>`;
       }
       if (isVis("status")) {
         const statusSlug = t.status.toLowerCase().replace(/\s+/g, '-');
-        rowHtml += `<td><span class="badge badge-status-${statusSlug}">${t.status}</span></td>`;
+        rowHtml += `<td><span class="badge badge-status-${escapeHtml(statusSlug)}">${escapeHtml(t.status)}</span></td>`;
       }
       if (isVis("assignee")) {
-        rowHtml += `<td>${t.assignee || '<span style="color: var(--prio-urgent);">Nieprzypisany</span>'}</td>`;
+        rowHtml += `<td>${escapeHtml(t.assignee) || '<span style="color: var(--prio-urgent);">Nieprzypisany</span>'}</td>`;
       }
       if (isVis("nextAction")) {
         rowHtml += `
-          <td style="max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${t.nextAction || ''}">
-            ${t.nextAction || '<span class="badge badge-prio-pilny">Brak kroku</span>'}
+          <td style="max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(t.nextAction || '')}">
+            ${escapeHtml(t.nextAction) || '<span class="badge badge-prio-pilny">Brak kroku</span>'}
           </td>
         `;
       }
       if (isVis("deadline")) {
-        rowHtml += `<td style="font-size: 12px; white-space: nowrap;">${t.nextActionDeadline || '-'}</td>`;
+        rowHtml += `<td style="font-size: 12px; white-space: nowrap;">${escapeHtml(t.nextActionDeadline || '-')}</td>`;
       }
       if (isVis("aiState")) {
         let aiBadgeClass = "badge-ai-przeanalizowano";
         if (t.aiState === "Wymaga weryfikacji") aiBadgeClass = "badge-ai-weryfikacja";
         if (t.aiState === "Błąd") aiBadgeClass = "badge-ai-blad";
         if (t.aiState === "Brak") aiBadgeClass = "badge-ai-brak";
-        rowHtml += `<td><span class="badge ${aiBadgeClass}">${t.aiState || 'Brak'}</span></td>`;
+        rowHtml += `<td><span class="badge ${aiBadgeClass}">${escapeHtml(t.aiState || 'Brak')}</span></td>`;
       }
 
       // Opcjonalne
       if (isVis("applicant")) {
-        rowHtml += `<td><div style="font-size: 12px; font-weight: 600;">${t.applicantName || '-'}</div><div style="font-size: 11px; color: var(--text-secondary);">${t.applicantPhone || ''}</div></td>`;
+        rowHtml += `<td><div style="font-size: 12px; font-weight: 600;">${escapeHtml(t.applicantName || '-')}</div><div style="font-size: 11px; color: var(--text-secondary);">${escapeHtml(t.applicantPhone || '')}</div></td>`;
       }
       if (isVis("contactRequest")) {
-        rowHtml += `<td><span class="badge ${t.contactRequest === 'TAK' ? 'badge-prio-wysoki' : 'badge-status-progress'}">${t.contactRequest}</span></td>`;
+        rowHtml += `<td><span class="badge ${t.contactRequest === 'TAK' ? 'badge-prio-wysoki' : 'badge-status-progress'}">${escapeHtml(t.contactRequest)}</span></td>`;
       }
       if (isVis("slaDeadline")) {
-        rowHtml += `<td style="font-size: 12px;">${t.slaDeadline || '-'}</td>`;
+        rowHtml += `<td style="font-size: 12px;">${escapeHtml(t.slaDeadline || '-')}</td>`;
       }
       if (isVis("satisfaction")) {
-        rowHtml += `<td>${t.satisfactionScore ? `${t.satisfactionScore} ★` : '-'}</td>`;
+        rowHtml += `<td>${t.satisfactionScore ? `${escapeHtml(t.satisfactionScore)} ★` : '-'}</td>`;
       }
       if (isVis("reviewInvite")) {
         rowHtml += `<td>${t.reviewInviteSent === 'TAK' ? '<span class="badge badge-status-rozwiazane">Wysłano</span>' : 'NIE'}</td>`;
@@ -7006,7 +7049,7 @@ class TicketsView {
 
       rowHtml += `
         <td style="text-align: right; white-space: nowrap;">
-          <button class="btn btn-navy btn-xs btn-open-detail" data-ticket-id="${t.id}">Otwórz</button>
+          <button class="btn btn-navy btn-xs btn-open-detail" data-ticket-id="${escapeHtml(t.id)}">Otwórz</button>
         </td>
       </tr>`;
       return rowHtml;
@@ -7033,10 +7076,10 @@ class TicketsView {
     Promise.resolve({ Modal }).then(({ Modal }) => {
       const colItemsHtml = this.columnDefs.map(c => `
         <label style="display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 13px; cursor: pointer;">
-          <input type="checkbox" class="col-toggle-checkbox" data-col-id="${c.id}" 
+          <input type="checkbox" class="col-toggle-checkbox" data-col-id="${escapeHtml(c.id)}"
                  ${this.visibleColumns.has(c.id) ? 'checked' : ''} 
                  ${c.required ? 'disabled' : ''} style="width: 16px; height: 16px; accent-color: var(--brand-navy);" />
-          <span style="${c.required ? 'font-weight: 600;' : ''}">${c.label} ${c.required ? '(wymagana)' : ''}</span>
+          <span style="${c.required ? 'font-weight: 600;' : ''}">${escapeHtml(c.label)} ${c.required ? '(wymagana)' : ''}</span>
         </label>
       `).join("");
 
@@ -7129,6 +7172,8 @@ class TicketsView {
 // ==========================================
 // MODUŁ: js/views/detailView.js
 // ==========================================
+
+
 /**
  * ELWOZ ECO SmartCare Manager v0.3.0
  * Ticket Detail View (Centrum obsługi pojedynczego zgłoszenia – 3 kolumny)
@@ -7167,7 +7212,7 @@ class DetailView {
       this.container.innerHTML = `
         <div class="empty-state">
           <i data-lucide="alert-octagon" class="empty-state-icon"></i>
-          <div class="empty-state-title">Nie odnaleziono zgłoszenia ${this.ticketId}</div>
+          <div class="empty-state-title">Nie odnaleziono zgłoszenia ${escapeHtml(this.ticketId)}</div>
           <button class="btn btn-navy btn-sm" id="btn-back-tickets">Wróć do listy zgłoszeń</button>
         </div>
       `;
@@ -7208,9 +7253,9 @@ class DetailView {
               <span>Powrót</span>
             </button>
             <div class="detail-ticket-heading">
-              <span>${this.ticket.id}</span>
-              <span class="badge badge-status-${this.ticket.status.toLowerCase().replace(/\s+/g, '-')}">${this.ticket.status}</span>
-              <span class="badge badge-prio-${this.ticket.priority.toLowerCase()}">${this.ticket.priority}</span>
+              <span>${escapeHtml(this.ticket.id)}</span>
+              <span class="badge badge-status-${escapeHtml(this.ticket.status.toLowerCase().replace(/\s+/g, '-'))}">${escapeHtml(this.ticket.status)}</span>
+              <span class="badge badge-prio-${escapeHtml(this.ticket.priority.toLowerCase())}">${escapeHtml(this.ticket.priority)}</span>
             </div>
           </div>
 
@@ -7242,21 +7287,21 @@ class DetailView {
                   <i data-lucide="user" class="info-icon"></i>
                   <div class="info-value-block">
                     <span class="info-label">Imię i nazwisko</span>
-                    <span class="info-value">${this.ticket.applicantName || 'Mieszkaniec'}</span>
+                    <span class="info-value">${escapeHtml(this.ticket.applicantName || 'Mieszkaniec')}</span>
                   </div>
                 </div>
                 <div class="info-row">
                   <i data-lucide="phone" class="info-icon"></i>
                   <div class="info-value-block">
                     <span class="info-label">Telefon</span>
-                    <span class="info-value">${this.ticket.applicantPhone || '<span style="color: var(--text-muted); font-weight: normal;">Brak telefonu</span>'}</span>
+                    <span class="info-value">${escapeHtml(this.ticket.applicantPhone) || '<span style="color: var(--text-muted); font-weight: normal;">Brak telefonu</span>'}</span>
                   </div>
                 </div>
                 <div class="info-row">
                   <i data-lucide="mail" class="info-icon"></i>
                   <div class="info-value-block">
                     <span class="info-label">Adres e-mail</span>
-                    <span class="info-value" style="word-break: break-all;">${this.ticket.applicantEmail || '<span style="color: var(--text-muted); font-weight: normal;">Brak e-mail</span>'}</span>
+                    <span class="info-value" style="word-break: break-all;">${escapeHtml(this.ticket.applicantEmail) || '<span style="color: var(--text-muted); font-weight: normal;">Brak e-mail</span>'}</span>
                   </div>
                 </div>
                 <div class="info-row">
@@ -7274,7 +7319,7 @@ class DetailView {
                   <i data-lucide="map-pin" class="info-icon"></i>
                   <div class="info-value-block">
                     <span class="info-label">Adres zdarzenia</span>
-                    <span class="info-value">${this.ticket.city}, ul. ${this.ticket.street} ${this.ticket.houseNumber || '<span style="color: var(--prio-urgent);">(brak numeru posesji!)</span>'}</span>
+                    <span class="info-value">${escapeHtml(this.ticket.city)}, ul. ${escapeHtml(this.ticket.street)} ${escapeHtml(this.ticket.houseNumber) || '<span style="color: var(--prio-urgent);">(brak numeru posesji!)</span>'}</span>
                   </div>
                 </div>
                 <div class="info-row">
@@ -7282,8 +7327,8 @@ class DetailView {
                   <div class="info-value-block">
                     <span class="info-label">Frakcja odpadów</span>
                     <span class="fraction-pill" style="margin-top: 3px;">
-                      <span class="fraction-dot fraction-${this.ticket.fraction.toLowerCase().split(' ')[0]}"></span>
-                      ${this.ticket.fraction}
+                      <span class="fraction-dot fraction-${escapeHtml(this.ticket.fraction.toLowerCase().split(' ')[0])}"></span>
+                      ${escapeHtml(this.ticket.fraction)}
                     </span>
                   </div>
                 </div>
@@ -7291,7 +7336,7 @@ class DetailView {
                   <i data-lucide="calendar" class="info-icon"></i>
                   <div class="info-value-block">
                     <span class="info-label">Data rejestracji / zdarzenia</span>
-                    <span class="info-value">${this.ticket.timestamp} (zdarzenie: ${this.ticket.incidentDate || '-'})</span>
+                    <span class="info-value">${escapeHtml(this.ticket.timestamp)} (zdarzenie: ${escapeHtml(this.ticket.incidentDate || '-')})</span>
                   </div>
                 </div>
               </div>
@@ -7299,7 +7344,7 @@ class DetailView {
               <div class="info-section">
                 <span class="info-section-title">Oryginalna treść zgłoszenia</span>
                 <div class="ticket-original-description">
-                  ${this.ticket.description || 'Brak treści opisu.'}
+                  ${escapeHtml(this.ticket.description || 'Brak treści opisu.')}
                 </div>
               </div>
 
@@ -7329,27 +7374,27 @@ class DetailView {
                     <i data-lucide="sparkles" style="width: 16px; height: 16px;"></i>
                     <span>Analiza Customer Service Intelligence</span>
                   </div>
-                  <span class="badge ${this.ticket.aiState === 'Błąd' ? 'badge-ai-blad' : 'badge-ai-przeanalizowano'}">${this.ticket.aiState}</span>
+                  <span class="badge ${this.ticket.aiState === 'Błąd' ? 'badge-ai-blad' : 'badge-ai-przeanalizowano'}">${escapeHtml(this.ticket.aiState)}</span>
                 </div>
 
                 <!-- Streszczenie -->
                 <div class="ai-insight-box">
                   <div class="ai-insight-label">Streszczenie problemu:</div>
-                  <div>${this.ticket.aiSummary || 'Brak wygenerowanego streszczenia.'}</div>
+                  <div>${escapeHtml(this.ticket.aiSummary || 'Brak wygenerowanego streszczenia.')}</div>
                 </div>
 
                 <!-- Wykryte braki i sprzeczności -->
                 ${this.ticket.aiMissingInfo && this.ticket.aiMissingInfo !== 'Brak braków' ? `
                   <div class="ai-alert-missing">
                     <i data-lucide="alert-circle" style="width: 16px; height: 16px; flex-shrink: 0;"></i>
-                    <div><strong>Wykryte braki danych:</strong> ${this.ticket.aiMissingInfo}</div>
+                    <div><strong>Wykryte braki danych:</strong> ${escapeHtml(this.ticket.aiMissingInfo)}</div>
                   </div>
                 ` : ''}
 
                 ${this.ticket.contradictions && this.ticket.contradictions !== 'Brak sprzeczności' ? `
                   <div class="ai-alert-missing" style="background-color: #FEF0C7; border-color: #FEDF89; color: #B54708;">
                     <i data-lucide="alert-triangle" style="width: 16px; height: 16px; flex-shrink: 0;"></i>
-                    <div><strong>Wykryte sprzeczności:</strong> ${this.ticket.contradictions}</div>
+                    <div><strong>Wykryte sprzeczności:</strong> ${escapeHtml(this.ticket.contradictions)}</div>
                   </div>
                 ` : ''}
 
@@ -7357,15 +7402,15 @@ class DetailView {
                 <div style="display: grid; grid-template-columns: auto 1fr; gap: 10px; font-size: 12px; align-items: center;">
                   <span style="font-weight: 700; color: var(--text-secondary);">Rekomendowany priorytet:</span>
                   <div>
-                    <span class="badge badge-prio-${(this.ticket.suggestedPriority || 'standardowy').toLowerCase()}">${this.ticket.suggestedPriority || 'STANDARDOWY'}</span>
-                    <span style="color: var(--text-secondary); margin-left: 6px;">${this.ticket.priorityRationale || ''}</span>
+                    <span class="badge badge-prio-${escapeHtml((this.ticket.suggestedPriority || 'standardowy').toLowerCase())}">${escapeHtml(this.ticket.suggestedPriority || 'STANDARDOWY')}</span>
+                    <span style="color: var(--text-secondary); margin-left: 6px;">${escapeHtml(this.ticket.priorityRationale || '')}</span>
                   </div>
                 </div>
 
                 <!-- Rekomendowany kolejny krok -->
                 <div style="font-size: 12px; border-top: 1px dashed #D9EAD3; padding-top: 8px;">
                   <span style="font-weight: 700; color: var(--brand-green-dark);">Rekomendowane działanie dyspozytora:</span>
-                  <div style="margin-top: 2px;">${this.ticket.aiSuggestedAction || this.ticket.aiRecommendedStep || 'Weryfikacja zgłoszenia'}</div>
+                  <div style="margin-top: 2px;">${escapeHtml(this.ticket.aiSuggestedAction || this.ticket.aiRecommendedStep || 'Weryfikacja zgłoszenia')}</div>
                 </div>
               </div>
 
@@ -7405,7 +7450,7 @@ class DetailView {
                   <div class="form-group" style="margin-bottom: 0;">
                     <label class="form-label">Odbiorca (E-mail / Telefon)</label>
                     <input type="text" class="form-control" id="msg-recipient" 
-                           value="${this.ticket.applicantEmail || this.ticket.applicantPhone || ''}" />
+                           value="${escapeHtml(this.ticket.applicantEmail || this.ticket.applicantPhone || '')}" />
                   </div>
 
                   <div class="form-group" style="margin-bottom: 0;">
@@ -7421,7 +7466,7 @@ class DetailView {
                 <div class="form-group" style="margin-bottom: 0;">
                   <label class="form-label">Temat wiadomości</label>
                   <input type="text" class="form-control" id="msg-subject" 
-                         value="Zgłoszenie ${this.ticket.id} – ELWOZ ECO POK Kartuzy" />
+                         value="Zgłoszenie ${escapeHtml(this.ticket.id)} – ELWOZ ECO POK Kartuzy" />
                 </div>
 
                 <div class="form-group" style="margin-bottom: 0;">
@@ -7432,7 +7477,7 @@ class DetailView {
                       <span>✨ Usprawnij styl z AI (CX/PR)</span>
                     </button>
                   </div>
-                  <textarea class="form-control" id="msg-content" rows="6" style="font-family: inherit; font-size: 13px;">${this.ticket.aiDraftReply || ''}</textarea>
+                  <textarea class="form-control" id="msg-content" rows="6" style="font-family: inherit; font-size: 13px;">${escapeHtml(this.ticket.aiDraftReply || '')}</textarea>
                 </div>
 
                 <div class="ai-refine-banner">
@@ -7472,7 +7517,7 @@ class DetailView {
               <div class="sla-timer-card ${isOverdue ? 'overdue' : 'ok'}">
                 <div>
                   <div class="sla-label">Licznik SLA 1. reakcji</div>
-                  <div class="sla-value">${slaDisplay}</div>
+                  <div class="sla-value">${escapeHtml(slaDisplay)}</div>
                 </div>
                 <i data-lucide="${isOverdue ? 'alert-triangle' : 'shield-check'}" 
                    style="width: 22px; height: 22px; color: ${isOverdue ? 'var(--prio-urgent)' : 'var(--brand-green)'};"></i>
@@ -7505,7 +7550,7 @@ class DetailView {
                 <label class="form-label form-label-required">Pracownik odpowiedzialny</label>
                 <select class="form-select" id="detail-assignee">
                   <option value="Nieprzypisany">Nieprzypisany</option>
-                  ${this.staffList.map(s => `<option value="${s.name}" ${this.ticket.assignee === s.name ? 'selected' : ''}>${s.name} (${s.role})</option>`).join("")}
+                  ${this.staffList.map(s => `<option value="${escapeHtml(s.name)}" ${this.ticket.assignee === s.name ? 'selected' : ''}>${escapeHtml(s.name)} (${escapeHtml(s.role)})</option>`).join("")}
                 </select>
               </div>
 
@@ -7513,7 +7558,7 @@ class DetailView {
               <div class="form-group">
                 <label class="form-label form-label-required">Następne działanie (Kolejny krok)</label>
                 <textarea class="form-control" id="detail-next-action" rows="2" 
-                          placeholder="np. Weryfikacja zapisu kamer trasy...">${this.ticket.nextAction || ''}</textarea>
+                          placeholder="np. Weryfikacja zapisu kamer trasy...">${escapeHtml(this.ticket.nextAction || '')}</textarea>
                 ${!this.ticket.nextAction && !isClosed ? `
                   <div class="warning-no-step" style="margin-top: 6px;">
                     <i data-lucide="alert-octagon" style="width: 14px; height: 14px; flex-shrink: 0;"></i>
@@ -7534,7 +7579,7 @@ class DetailView {
                 <div class="form-group">
                   <label class="form-label">Termin działania</label>
                   <input type="datetime-local" class="form-control" id="detail-next-deadline" 
-                         value="${this.ticket.nextActionDeadline ? this.ticket.nextActionDeadline.replace(' ', 'T') : ''}" />
+                         value="${escapeHtml(this.ticket.nextActionDeadline ? this.ticket.nextActionDeadline.replace(' ', 'T') : '')}" />
                 </div>
               </div>
 
@@ -7542,7 +7587,7 @@ class DetailView {
               <div class="form-group" id="resolution-method-group" style="display: ${isClosed ? 'block' : 'none'};">
                 <label class="form-label form-label-required">Rzeczywisty sposób rozwiązania sprawy</label>
                 <textarea class="form-control" id="detail-resolution-method" rows="2" 
-                          placeholder="Opisz konkretne działania wykonane przez firmę...">${this.ticket.resolutionMethod || ''}</textarea>
+                          placeholder="Opisz konkretne działania wykonane przez firmę...">${escapeHtml(this.ticket.resolutionMethod || '')}</textarea>
                 <span class="form-hint">Zgodnie ze standardem CX, nie wolno zamknąć sprawy bez opisu wykonanych działań.</span>
               </div>
 
@@ -7550,7 +7595,7 @@ class DetailView {
               <div class="form-group">
                 <label class="form-label">Notatki wewnętrzne (Poufne)</label>
                 <textarea class="form-control" id="detail-employee-note" rows="3" 
-                          placeholder="Wpisz wewnętrzne ustalenia, nr tachografu, kontakt z dyspozytornią...">${this.ticket.employeeNote || ''}</textarea>
+                          placeholder="Wpisz wewnętrzne ustalenia, nr tachografu, kontakt z dyspozytornią...">${escapeHtml(this.ticket.employeeNote || '')}</textarea>
               </div>
 
               <!-- Przycisk zapisu zmian -->
@@ -7580,10 +7625,10 @@ class DetailView {
     return this.communications.map(c => `
       <div style="background-color: var(--bg-muted); border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 8px; font-size: 11px;">
         <div style="display: flex; justify-content: space-between; font-weight: 600; color: var(--brand-navy);">
-          <span>${c.actionType} (${c.channel})</span>
-          <span style="font-weight: normal; color: var(--text-secondary);">${c.timestamp.substring(11, 16)}</span>
+          <span>${escapeHtml(c.actionType)} (${escapeHtml(c.channel)})</span>
+          <span style="font-weight: normal; color: var(--text-secondary);">${escapeHtml(c.timestamp.substring(11, 16))}</span>
         </div>
-        <div style="color: var(--text-secondary); margin-top: 2px;">Odbiorca: ${c.recipient} • Przez: ${c.author}</div>
+        <div style="color: var(--text-secondary); margin-top: 2px;">Odbiorca: ${escapeHtml(c.recipient)} • Przez: ${escapeHtml(c.author)}</div>
       </div>
     `).join("");
   }
@@ -7797,7 +7842,7 @@ class DetailView {
           content: `
             <div class="form-group">
               <label class="form-label form-label-required">Numer telefonu rozmówcy</label>
-              <input type="text" class="form-control" id="call-phone" value="${this.ticket.applicantPhone || ''}" placeholder="+48..." />
+              <input type="text" class="form-control" id="call-phone" value="${escapeHtml(this.ticket.applicantPhone || '')}" placeholder="+48..." />
             </div>
             <div class="form-group">
               <label class="form-label form-label-required">Wynik rozmowy</label>
@@ -7925,6 +7970,8 @@ class DetailView {
 // ==========================================
 // MODUŁ: js/views/commsView.js
 // ==========================================
+
+
 /**
  * ELWOZ ECO SmartCare Manager v0.3.0
  * Communications View (Komunikacja – Centralny Dziennik Korespondencji)
@@ -7957,7 +8004,7 @@ class CommsView {
             <div class="input-group">
               <i data-lucide="search" class="input-icon" style="width: 15px; height: 15px;"></i>
               <input type="text" id="comms-search" class="form-control input-with-icon" 
-                     placeholder="Szukaj po ID zgłoszenia, odbiorcy, temacie lub treści..." value="${this.searchQuery}" />
+                     placeholder="Szukaj po ID zgłoszenia, odbiorcy, temacie lub treści..." value="${escapeHtml(this.searchQuery)}" />
             </div>
           </div>
 
@@ -8072,31 +8119,31 @@ class CommsView {
 
     tbody.innerHTML = comms.map(c => `
       <tr>
-        <td style="font-size: 12px; white-space: nowrap; color: var(--text-secondary);">${c.timestamp}</td>
+        <td style="font-size: 12px; white-space: nowrap; color: var(--text-secondary);">${escapeHtml(c.timestamp)}</td>
         <td>
-          <a href="#" class="table-ticket-id link-ticket" data-ticket-id="${c.ticketId}">${c.ticketId}</a>
+          <a href="#" class="table-ticket-id link-ticket" data-ticket-id="${escapeHtml(c.ticketId)}">${escapeHtml(c.ticketId)}</a>
         </td>
-        <td style="font-weight: 600; font-size: 12px;">${c.actionType}</td>
+        <td style="font-weight: 600; font-size: 12px;">${escapeHtml(c.actionType)}</td>
         <td>
           <span class="badge ${c.channel === 'E-mail' ? 'badge-status-nowe' : (c.channel === 'Telefon' ? 'badge-prio-wysoki' : 'badge-status-progress')}">
-            ${c.channel}
+            ${escapeHtml(c.channel)}
           </span>
         </td>
-        <td style="font-size: 12px; word-break: break-all;">${c.recipient}</td>
+        <td style="font-size: 12px; word-break: break-all;">${escapeHtml(c.recipient)}</td>
         <td style="font-weight: 500; font-size: 12px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-          ${c.subject || '-'}
+          ${escapeHtml(c.subject || '-')}
         </td>
         <td style="max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text-secondary);">
-          ${c.content}
+          ${escapeHtml(c.content)}
         </td>
-        <td style="font-size: 12px;">${c.author}</td>
+        <td style="font-size: 12px;">${escapeHtml(c.author)}</td>
         <td>
           <span class="badge ${c.status === 'Wysłano' ? 'badge-status-rozwiazane' : (c.status === 'Odnotowano' ? 'badge-ai-przeanalizowano' : 'badge-status-waiting')}">
-            ${c.status}
+            ${escapeHtml(c.status)}
           </span>
         </td>
         <td style="text-align: right; white-space: nowrap;">
-          <button class="btn btn-secondary btn-xs btn-view-full-msg" data-comm-id="${c.id}">Podgląd</button>
+          <button class="btn btn-secondary btn-xs btn-view-full-msg" data-comm-id="${escapeHtml(c.id)}">Podgląd</button>
         </td>
       </tr>
     `).join("");
@@ -8127,27 +8174,27 @@ class CommsView {
           <div style="display: flex; flex-direction: column; gap: 12px; font-size: 13px;">
             <div style="display: grid; grid-template-columns: 100px 1fr; gap: 8px;">
               <span style="font-weight: 600; color: var(--text-secondary);">Zgłoszenie:</span>
-              <span class="table-ticket-id">${c.ticketId}</span>
+              <span class="table-ticket-id">${escapeHtml(c.ticketId)}</span>
 
               <span style="font-weight: 600; color: var(--text-secondary);">Data wysyłki:</span>
-              <span>${c.timestamp}</span>
+              <span>${escapeHtml(c.timestamp)}</span>
 
               <span style="font-weight: 600; color: var(--text-secondary);">Kanał:</span>
-              <span>${c.channel}</span>
+              <span>${escapeHtml(c.channel)}</span>
 
               <span style="font-weight: 600; color: var(--text-secondary);">Odbiorca:</span>
-              <span>${c.recipient}</span>
+              <span>${escapeHtml(c.recipient)}</span>
 
               <span style="font-weight: 600; color: var(--text-secondary);">Pracownik:</span>
-              <span>${c.author}</span>
+              <span>${escapeHtml(c.author)}</span>
 
               <span style="font-weight: 600; color: var(--text-secondary);">Temat:</span>
-              <span style="font-weight: 600;">${c.subject || '-'}</span>
+              <span style="font-weight: 600;">${escapeHtml(c.subject || '-')}</span>
             </div>
 
             <div style="margin-top: 8px;">
               <div style="font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Pełna treść wiadomości:</div>
-              <div style="background-color: var(--bg-muted); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 14px; white-space: pre-wrap; font-size: 13px; line-height: 1.5;">${c.content}</div>
+              <div style="background-color: var(--bg-muted); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 14px; white-space: pre-wrap; font-size: 13px; line-height: 1.5;">${escapeHtml(c.content)}</div>
             </div>
           </div>
         `,
@@ -8165,6 +8212,8 @@ class CommsView {
 // ==========================================
 // MODUŁ: js/views/csatView.js
 // ==========================================
+
+
 /**
  * ELWOZ ECO SmartCare Manager v0.3.0
  * CSAT View (Satysfakcja mieszkańców i reputacja Google)
@@ -8357,7 +8406,7 @@ class CsatView {
 
       return `
         <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px; font-size: 13px;">
-          <div style="width: 70px; font-weight: 600;">${star} ★ (${count})</div>
+          <div style="width: 70px; font-weight: 600;">${star} ★ (${escapeHtml(count)})</div>
           <div style="flex: 1; height: 16px; background-color: var(--bg-muted); border-radius: 4px; overflow: hidden; border: 1px solid var(--border-color);">
             <div style="width: ${pct}%; height: 100%; background-color: ${barColor}; transition: width 0.3s ease;"></div>
           </div>
@@ -8374,15 +8423,15 @@ class CsatView {
       lowListContainer.innerHTML = lowRatedTickets.map(t => `
         <div style="background-color: #FFFFFF; border: 1px solid var(--prio-urgent-border); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 8px;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
-            <a href="#" class="table-ticket-id link-ticket" data-ticket-id="${t.id}">${t.id}</a>
-            <span class="badge badge-prio-pilny">${t.satisfactionScore} ★</span>
+            <a href="#" class="table-ticket-id link-ticket" data-ticket-id="${escapeHtml(t.id)}">${escapeHtml(t.id)}</a>
+            <span class="badge badge-prio-pilny">${escapeHtml(t.satisfactionScore)} ★</span>
           </div>
           <div style="font-size: 12px; color: var(--text-primary); margin: 4px 0; font-style: italic;">
-            "${t.citizenFeedback || 'Brak komentarza tekstowego'}"
+            "${escapeHtml(t.citizenFeedback || 'Brak komentarza tekstowego')}"
           </div>
           <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
-            <span style="font-size: 11px; color: var(--text-secondary);">${t.applicantName} (${t.city})</span>
-            <button class="btn btn-navy btn-xs btn-open-ticket" data-ticket-id="${t.id}">Obsłuż sprawę</button>
+            <span style="font-size: 11px; color: var(--text-secondary);">${escapeHtml(t.applicantName)} (${escapeHtml(t.city)})</span>
+            <button class="btn btn-navy btn-xs btn-open-ticket" data-ticket-id="${escapeHtml(t.id)}">Obsłuż sprawę</button>
           </div>
         </div>
       `).join("");
@@ -8398,25 +8447,25 @@ class CsatView {
 
     tbody.innerHTML = ratedTickets.map(t => `
       <tr>
-        <td class="table-ticket-id">${t.id}</td>
-        <td>${t.city}</td>
-        <td>${t.type}</td>
+        <td class="table-ticket-id">${escapeHtml(t.id)}</td>
+        <td>${escapeHtml(t.city)}</td>
+        <td>${escapeHtml(t.type)}</td>
         <td>
           <span class="badge ${t.satisfactionScore >= 4 ? 'badge-status-rozwiazane' : (t.satisfactionScore === 3 ? 'badge-status-do-weryfikacji' : 'badge-prio-pilny')}">
-            ${t.satisfactionScore} ★
+            ${escapeHtml(t.satisfactionScore)} ★
           </span>
         </td>
         <td style="max-width: 320px; font-size: 12px; color: var(--text-primary);">
-          ${t.citizenFeedback ? `„${t.citizenFeedback}”` : '<span style="color: var(--text-muted); font-style: italic;">(Brak uwag tekstowych)</span>'}
+          ${t.citizenFeedback ? `„${escapeHtml(t.citizenFeedback)}”` : '<span style="color: var(--text-muted); font-style: italic;">(Brak uwag tekstowych)</span>'}
         </td>
         <td>
           ${t.reviewInviteSent === 'TAK' 
             ? '<span class="badge badge-status-rozwiazane">Wysłano zaproszenie</span>' 
             : '<span style="font-size: 11px; color: var(--text-secondary);">Nie wysłano</span>'}
         </td>
-        <td style="font-size: 12px; color: var(--text-secondary);">${t.resolvedDate || '-'}</td>
+        <td style="font-size: 12px; color: var(--text-secondary);">${escapeHtml(t.resolvedDate || '-')}</td>
         <td style="text-align: right;">
-          <button class="btn btn-secondary btn-xs btn-open-ticket" data-ticket-id="${t.id}">Szczegóły</button>
+          <button class="btn btn-secondary btn-xs btn-open-ticket" data-ticket-id="${escapeHtml(t.id)}">Szczegóły</button>
         </td>
       </tr>
     `).join("");
@@ -8434,6 +8483,8 @@ class CsatView {
 // ==========================================
 // MODUŁ: js/views/reportsView.js
 // ==========================================
+
+
 /**
  * ELWOZ ECO SmartCare Manager v0.3.0
  * Reports & Analytics View (Raporty i analityka)
@@ -8561,7 +8612,7 @@ class ReportsView {
 
   async loadReportData() {
     const stats = await this.dataProvider.getStats(this.currentPeriod);
-    const tickets = await this.dataProvider.getTickets();
+    const tickets = await this.dataProvider.getTickets({ period: this.currentPeriod });
     const staffList = await this.dataProvider.getStaff();
 
     // KPI grid
@@ -8569,33 +8620,33 @@ class ReportsView {
     kpiGrid.innerHTML = `
       <div class="kpi-card">
         <div class="kpi-header"><span class="kpi-title">Nowe sprawy</span></div>
-        <div class="kpi-value">${stats.newCount}</div>
+        <div class="kpi-value">${escapeHtml(stats.newCount)}</div>
         <div class="kpi-hint">Wpłynęły w okresie</div>
       </div>
       <div class="kpi-card kpi-success">
         <div class="kpi-header"><span class="kpi-title">Sprawy rozwiązane</span></div>
-        <div class="kpi-value">${stats.resolved}</div>
+        <div class="kpi-value">${escapeHtml(stats.resolved)}</div>
         <div class="kpi-hint">Zakończone pomyślnie</div>
       </div>
       <div class="kpi-card kpi-success">
         <div class="kpi-header"><span class="kpi-title">Odsetek rozwiązań</span></div>
-        <div class="kpi-value">${stats.resolutionRate !== '-' ? stats.resolutionRate + '%' : '-'}</div>
+        <div class="kpi-value">${escapeHtml(stats.resolutionRate !== '-' ? stats.resolutionRate + '%' : '-')}</div>
         <div class="kpi-hint">Wskaźnik finalizacji</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-header"><span class="kpi-title">Śr. czas 1. reakcji</span></div>
-        <div class="kpi-value">${stats.avgFirstResponseFormatted}</div>
+        <div class="kpi-value">${escapeHtml(stats.avgFirstResponseFormatted)}</div>
         <div class="kpi-hint">Odpowiedź do klienta</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-header"><span class="kpi-title">Śr. czas rozwiązania</span></div>
-        <div class="kpi-value">${stats.avgResolutionFormatted}</div>
+        <div class="kpi-value">${escapeHtml(stats.avgResolutionFormatted)}</div>
         <div class="kpi-hint">Czas cyklu sprawy</div>
       </div>
       <div class="kpi-card kpi-success">
         <div class="kpi-header"><span class="kpi-title">Średnia satysfakcja</span></div>
-        <div class="kpi-value">${stats.avgSatisfactionFormatted !== '-' ? stats.avgSatisfactionFormatted + ' ★' : '-'}</div>
-        <div class="kpi-hint">${stats.feedbackCount} ankiet powrotnych</div>
+        <div class="kpi-value">${escapeHtml(stats.avgSatisfactionFormatted !== '-' ? stats.avgSatisfactionFormatted + ' ★' : '-')}</div>
+        <div class="kpi-hint">${escapeHtml(stats.feedbackCount)} ankiet powrotnych</div>
       </div>
     `;
 
@@ -8611,8 +8662,8 @@ class ReportsView {
       return `
         <tr>
           <td>
-            <div style="font-weight: 600;">${s.name}</div>
-            <div style="font-size: 11px; color: var(--text-secondary);">${s.role}</div>
+            <div style="font-weight: 600;">${escapeHtml(s.name)}</div>
+            <div style="font-size: 11px; color: var(--text-secondary);">${escapeHtml(s.role)}</div>
           </td>
           <td style="font-weight: 600;">${assigned.length}</td>
           <td style="color: var(--brand-green); font-weight: 600;">${res.length}</td>
@@ -8635,8 +8686,8 @@ class ReportsView {
 
       return `
         <tr>
-          <td style="font-weight: 600;">${cat}</td>
-          <td>${count}</td>
+          <td style="font-weight: 600;">${escapeHtml(cat)}</td>
+          <td>${escapeHtml(count)}</td>
           <td>
             <div style="display: flex; align-items: center; gap: 8px;">
               <div style="flex: 1; height: 6px; background-color: var(--bg-muted); border-radius: 3px; overflow: hidden;">
@@ -8653,7 +8704,6 @@ class ReportsView {
 
   async exportCsv() {
     const stats = await this.dataProvider.getStats(this.currentPeriod);
-    const tickets = await this.dataProvider.getTickets();
 
     const headers = ["Wskaznik / Kategoria", "Wartosc", "Opis"];
     const rows = [
@@ -8802,19 +8852,19 @@ class DiagnosticsView {
         <div class="card-header">
           <div class="card-title">
             <i data-lucide="info" style="width: 16px; height: 16px;"></i>
-            <span>Metadane i architektura wersji demonstracyjnej v0.3.0</span>
+            <span>Metadane i architektura systemu v0.3.0</span>
           </div>
         </div>
         <div class="card-body" style="font-size: 13px; line-height: 1.6;">
           <div style="display: grid; grid-template-columns: 220px 1fr; gap: 8px; margin-bottom: 12px;">
             <span style="font-weight: 600; color: var(--text-secondary);">Wersja aplikacji:</span>
-            <span>ELWOZ ECO SmartCare Manager v0.3.0-demo (WSB Merito)</span>
+            <span id="diag-meta-version">ELWOZ ECO SmartCare Manager v0.3.0-demo (WSB Merito)</span>
 
             <span style="font-weight: 600; color: var(--text-secondary);">Warstwa dostępu do danych:</span>
-            <span>DemoDataProvider (izolacja interfejsu, adapter gotowy na AppsScriptDataProvider)</span>
+            <span id="diag-meta-backend">DemoDataProvider</span>
 
             <span style="font-weight: 600; color: var(--text-secondary);">Model językowy AI:</span>
-            <span>Gemini 3.6 Flash (Structured Outputs, 10 pól schematu, filtr thought)</span>
+            <span id="diag-meta-model">Gemini 3.6 Flash (symulator)</span>
 
             <span style="font-weight: 600; color: var(--text-secondary);">Format bazy CRM:</span>
             <span>43 kolumny CSI zgodne ze strukturą Google Sheets v0.2.7/v0.2.8</span>
@@ -8822,7 +8872,7 @@ class DiagnosticsView {
             <span style="font-weight: 600; color: var(--text-secondary);">Zabezpieczenie przed wyciekiem:</span>
             <span>Twardy filtr PII (anonimizacja ulic i nazwisk przed modelem AI)</span>
           </div>
-          <div style="padding: 10px; background-color: var(--bg-muted); border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 12px; color: var(--text-secondary);">
+          <div id="diag-mode-note" style="padding: 10px; background-color: var(--bg-muted); border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 12px; color: var(--text-secondary);">
             <strong>Uwaga bezpieczeństwa:</strong> Niniejsza wersja demonstracyjna działa w 100% po stronie przeglądarki klienta i nie wysyła żadnych rzeczywistych wiadomości e-mail ani zapytań do zewnętrznych baz danych.
           </div>
         </div>
@@ -8843,39 +8893,51 @@ class DiagnosticsView {
       runBtn.disabled = true;
       runBtn.innerHTML = `<span>⏳ Uruchamianie testów...</span>`;
 
-      const results = await this.dataProvider.runDiagnosticsTest();
-      this.renderTestResults(results);
-
-      runBtn.disabled = false;
-      runBtn.innerHTML = `
+      try {
+        const results = await this.dataProvider.runDiagnosticsTest();
+        this.renderTestResults(results);
+        const passed = results.tests.every(t => t.status === 'PASSED');
+        Promise.resolve({ Toast }).then(({ Toast }) => {
+          if (passed) Toast.success("Pakiet testów diagnostycznych zakończony pomyślnie.");
+          else Toast.warning("Diagnostyka wykryła problemy. Sprawdź wyniki testów.");
+        });
+      } catch (error) {
+        Promise.resolve({ Toast }).then(({ Toast }) => Toast.error(error.message || "Nie udało się uruchomić diagnostyki."));
+      } finally {
+        runBtn.disabled = false;
+        runBtn.innerHTML = `
         <i data-lucide="play" style="width: 14px; height: 14px;"></i>
         <span>Uruchom test diagnostyczny API</span>
       `;
-      if (window.lucide) window.lucide.createIcons({ root: runBtn });
-
-      Promise.resolve({ Toast }).then(({ Toast }) => {
-        Toast.success("Pakiet testów diagnostycznych zakończony pomyślnie.");
-      });
+        if (window.lucide) window.lucide.createIcons({ root: runBtn });
+      }
     };
 
     const syncBtn = this.container.querySelector("#btn-sync-now");
     syncBtn.onclick = async () => {
       syncBtn.disabled = true;
       syncBtn.innerHTML = `<span>Synchronizacja...</span>`;
-      await new Promise(r => setTimeout(r, 600));
-      await this.loadDiagnostics();
-      syncBtn.disabled = false;
-      syncBtn.innerHTML = `
+      try {
+        await this.loadDiagnostics();
+        Promise.resolve({ Toast }).then(({ Toast }) => Toast.success("Zsynchronizowano stan telemetrii."));
+      } catch (error) {
+        Promise.resolve({ Toast }).then(({ Toast }) => Toast.error(error.message || "Nie udało się odczytać telemetrii."));
+      } finally {
+        syncBtn.disabled = false;
+        syncBtn.innerHTML = `
         <i data-lucide="refresh-cw" style="width: 14px; height: 14px;"></i>
         <span>Wymuś synchronizację</span>
       `;
-      if (window.lucide) window.lucide.createIcons({ root: syncBtn });
-      Promise.resolve({ Toast }).then(({ Toast }) => {
-        Toast.success("Zsynchronizowano stan telemetrii.");
-      });
+        if (window.lucide) window.lucide.createIcons({ root: syncBtn });
+      }
     };
 
     const toggleSimBtn = this.container.querySelector("#btn-toggle-sim-error");
+    if (this.state.mode === 'connected' || typeof this.dataProvider.toggleSimulatedError !== 'function') {
+      toggleSimBtn.disabled = true;
+      toggleSimBtn.title = "Symulacja jest dostępna wyłącznie w trybie demo.";
+      return;
+    }
     toggleSimBtn.onclick = async () => {
       const updated = await this.dataProvider.toggleSimulatedError();
       await this.loadDiagnostics();
@@ -8891,6 +8953,20 @@ class DiagnosticsView {
 
   async loadDiagnostics() {
     const diag = await this.dataProvider.getDiagnostics();
+    const connected = this.state.mode === 'connected';
+    const setText = (selector, text) => {
+      const el = this.container.querySelector(selector);
+      if (el) el.textContent = text;
+    };
+    if (connected) {
+      setText('#hint-db-mode', diag.dataBackend || 'Google Sheets CRM');
+      setText('#hint-ai-model', diag.geminiModel || 'Nie odczytano modelu');
+      setText('#diag-meta-version', diag.appVersion || 'SmartCare Manager');
+      setText('#diag-meta-backend', diag.dataBackend || 'Google Sheets CRM');
+      setText('#diag-meta-model', diag.geminiModel || 'Nie odczytano modelu');
+      setText('#hint-errors-desc', 'Zarejestrowane błędy AI i komunikacji');
+      setText('#diag-mode-note', 'Połączono z rzeczywistym CRM. Diagnostyka odczytuje konfigurację i stan arkusza; nie wykonuje zapytania do Gemini ani wysyłki e-mail.');
+    }
 
     const dbStatus = this.container.querySelector("#val-db-status");
     if (dbStatus) {
@@ -8900,16 +8976,16 @@ class DiagnosticsView {
 
     const aiStatus = this.container.querySelector("#val-ai-status");
     if (aiStatus) {
-      aiStatus.textContent = diag.simulatedErrorMode ? "Błąd symulowany" : "Dostępne";
-      aiStatus.style.color = diag.simulatedErrorMode ? "var(--prio-urgent)" : "var(--brand-green)";
+      aiStatus.textContent = connected ? (diag.geminiApiKeyConfigured ? "Klucz skonfigurowany" : "Brak klucza") : (diag.simulatedErrorMode ? "Błąd symulowany" : "Dostępne");
+      aiStatus.style.color = (connected ? !diag.geminiApiKeyConfigured : diag.simulatedErrorMode) ? "var(--prio-urgent)" : "var(--brand-green)";
     }
 
     const latencyEl = this.container.querySelector("#val-latency");
-    if (latencyEl) latencyEl.textContent = `${diag.latencyMs} ms`;
+    if (latencyEl) latencyEl.textContent = Number.isFinite(diag.latencyMs) ? `${diag.latencyMs} ms` : 'Brak pomiaru';
 
     const errorsEl = this.container.querySelector("#val-errors-count");
     if (errorsEl) {
-      const totalErrors = diag.aiErrors + diag.commErrors + diag.validationIssues;
+      const totalErrors = [diag.aiErrors, diag.commErrors, diag.validationIssues].filter(Number.isFinite).reduce((sum, value) => sum + value, 0);
       errorsEl.textContent = totalErrors;
       errorsEl.style.color = totalErrors > 0 ? "var(--prio-high)" : "var(--brand-green)";
     }
@@ -8917,7 +8993,9 @@ class DiagnosticsView {
     const toggleText = this.container.querySelector("#text-sim-toggle");
     const toggleIcon = this.container.querySelector("#icon-sim-toggle");
     if (toggleText && toggleIcon) {
-      if (diag.simulatedErrorMode) {
+      if (connected) {
+        toggleText.textContent = "Symulacja dostępna w trybie demo";
+      } else if (diag.simulatedErrorMode) {
         toggleText.textContent = "Wyłącz symulację błędu (Przywróć stan OK)";
         toggleIcon.setAttribute("data-lucide", "toggle-right");
         toggleIcon.style.color = "var(--prio-urgent)";
@@ -8930,21 +9008,23 @@ class DiagnosticsView {
   }
 
   renderTestResults(res) {
+    if (!res || !Array.isArray(res.tests)) throw new Error('Nieprawidłowa odpowiedź diagnostyki.');
+    const escape = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[ch]));
     const lastRunEl = this.container.querySelector("#diag-last-run-time");
     if (lastRunEl) lastRunEl.textContent = `Wykonano: ${res.timestamp}`;
 
     const tbody = this.container.querySelector("#diag-test-tbody");
     tbody.innerHTML = res.tests.map(t => `
       <tr>
-        <td style="font-weight: 600;">${t.name}</td>
+        <td style="font-weight: 600;">${escape(t.name)}</td>
         <td>
           <span class="badge ${t.status === 'PASSED' ? 'badge-status-rozwiazane' : 'badge-prio-pilny'}">
             ${t.status === 'PASSED' ? '✓ ZALICZONY' : '✗ BŁĄD'}
           </span>
         </td>
-        <td style="font-family: monospace; font-size: 12px;">${t.latency}</td>
+        <td style="font-family: monospace; font-size: 12px;">${escape(t.latency)}</td>
         <td style="font-size: 12px; color: var(--text-secondary);">
-          ${t.status === 'PASSED' ? 'Parametry w normie operacyjnej' : 'Wykryto symulowaną awarię komponentu'}
+          ${escape(t.details || (t.status === 'PASSED' ? 'Parametry w normie operacyjnej' : 'Wykryto problem komponentu'))}
         </td>
       </tr>
     `).join("");
@@ -8954,6 +9034,8 @@ class DiagnosticsView {
 // ==========================================
 // MODUŁ: js/views/settingsView.js
 // ==========================================
+
+
 /**
  * ELWOZ ECO SmartCare Manager v0.3.0
  * Settings View (Ustawienia systemu i konfiguracja POK)
@@ -9015,7 +9097,7 @@ class SettingsView {
             </div>
             <div class="form-group" id="group-gas-endpoint" style="margin-bottom: 0; display: ${this.state.mode === 'connected' ? 'block' : 'none'};">
               <label class="form-label">Adres URL Web App Google Apps Script (Wariant B)</label>
-              <input type="url" class="form-control" id="set-gas-endpoint" value="${typeof localStorage !== 'undefined' ? (localStorage.getItem('smartcare_gas_endpoint') || '') : ''}" placeholder="https://script.google.com/macros/s/.../exec" />
+              <input type="url" class="form-control" id="set-gas-endpoint" value="${escapeHtml(typeof localStorage !== 'undefined' ? (localStorage.getItem('smartcare_gas_endpoint') || '') : '')}" placeholder="https://script.google.com/macros/s/.../exec" />
               <span class="form-hint">W środowisku Web App (Wariant A) aplikacja korzysta bezpośrednio z google.script.run.</span>
             </div>
           </div>
@@ -9051,9 +9133,9 @@ class SettingsView {
                 <tbody id="settings-staff-tbody">
                   ${this.staffList.map(s => `
                     <tr>
-                      <td style="font-weight: 600;">${s.name}</td>
-                      <td style="font-size: 12px; color: var(--text-secondary);">${s.role}</td>
-                      <td style="font-size: 12px;">${s.email}</td>
+                      <td style="font-weight: 600;">${escapeHtml(s.name)}</td>
+                      <td style="font-size: 12px; color: var(--text-secondary);">${escapeHtml(s.role)}</td>
+                      <td style="font-size: 12px;">${escapeHtml(s.email)}</td>
                       <td style="text-align: right;">
                         <span class="badge badge-ai-przeanalizowano">Aktywny</span>
                       </td>
@@ -9076,33 +9158,33 @@ class SettingsView {
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                 <div class="form-group">
                   <label class="form-label">Nazwa przedsiębiorstwa</label>
-                  <input type="text" class="form-control" id="set-company" value="${this.settings.companyName}" />
+                  <input type="text" class="form-control" id="set-company" value="${escapeHtml(this.settings.companyName)}" />
                 </div>
                 <div class="form-group">
                   <label class="form-label">Oddział / POK</label>
-                  <input type="text" class="form-control" id="set-branch" value="${this.settings.branch}" />
+                  <input type="text" class="form-control" id="set-branch" value="${escapeHtml(this.settings.branch)}" />
                 </div>
               </div>
 
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                 <div class="form-group">
                   <label class="form-label">Oficjalny e-mail POK</label>
-                  <input type="email" class="form-control" id="set-email" value="${this.settings.email}" />
+                  <input type="email" class="form-control" id="set-email" value="${escapeHtml(this.settings.email)}" />
                 </div>
                 <div class="form-group">
                   <label class="form-label">Infolinia / Telefon</label>
-                  <input type="text" class="form-control" id="set-phone" value="${this.settings.phone}" />
+                  <input type="text" class="form-control" id="set-phone" value="${escapeHtml(this.settings.phone)}" />
                 </div>
               </div>
 
               <div class="form-group">
                 <label class="form-label">Godziny pracy dyspozytorni</label>
-                <input type="text" class="form-control" id="set-hours" value="${this.settings.workingHours}" />
+                <input type="text" class="form-control" id="set-hours" value="${escapeHtml(this.settings.workingHours)}" />
               </div>
 
               <div class="form-group" style="margin-bottom: 0;">
                 <label class="form-label">Zweryfikowany link opinii Google</label>
-                <input type="url" class="form-control" id="set-google-url" value="${this.settings.googleReviewUrl}" />
+                <input type="url" class="form-control" id="set-google-url" value="${escapeHtml(this.settings.googleReviewUrl)}" />
                 <span class="form-hint">Docelowy link przekazywany w neutralnych zaproszeniach.</span>
               </div>
             </div>
@@ -9182,7 +9264,7 @@ class SettingsView {
 
               <div class="form-group" style="margin-bottom: 12px;">
                 <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
-                  <input type="checkbox" id="set-allow-employee-keys" ${this.settings.allowEmployeeApiKeys ? 'checked' : ''} />
+                  <input type="checkbox" id="set-allow-employee-keys" ${this.settings.allowEmployeeApiKeys ? 'checked' : ''} ${this.state.mode === 'connected' ? 'disabled' : ''} />
                   <span>Zezwalaj pracownikom na indywidualny klucz API (jeżeli administrator zezwoli)</span>
                 </label>
                 <span class="form-hint" style="margin-left: 22px;">Umożliwia zaawansowanym pracownikom użycie własnego klucza sesyjnego bez ujawniania go w localStorage.</span>
@@ -9271,23 +9353,34 @@ class SettingsView {
     saveBtn.onclick = async () => {
       const allowKeysEl = this.container.querySelector("#set-allow-employee-keys");
       const updatedSettings = {
-        ...this.settings,
+        ...(this.state.mode === 'connected' ? {} : this.settings),
         companyName: this.container.querySelector("#set-company").value.trim(),
         branch: this.container.querySelector("#set-branch").value.trim(),
         email: this.container.querySelector("#set-email").value.trim(),
         phone: this.container.querySelector("#set-phone").value.trim(),
         workingHours: this.container.querySelector("#set-hours").value.trim(),
         googleReviewUrl: this.container.querySelector("#set-google-url").value.trim(),
-        allowEmployeeApiKeys: allowKeysEl ? allowKeysEl.checked : false
+        ...(this.state.mode === 'connected' ? {} : { allowEmployeeApiKeys: allowKeysEl ? allowKeysEl.checked : false })
       };
 
-      await this.dataProvider.updateSettings(updatedSettings);
-      Promise.resolve({ Toast }).then(({ Toast }) => {
-        Toast.success("Zapisano ustawienia systemowe.");
-      });
+      saveBtn.disabled = true;
+      try {
+        await this.dataProvider.updateSettings(updatedSettings);
+        this.settings = await this.dataProvider.getSettings();
+        Promise.resolve({ Toast }).then(({ Toast }) => Toast.success("Zapisano ustawienia systemowe."));
+      } catch (error) {
+        Promise.resolve({ Toast }).then(({ Toast }) => Toast.error(error.message || "Nie zapisano ustawień."));
+      } finally {
+        saveBtn.disabled = false;
+      }
     };
 
     const addStaffBtn = this.container.querySelector("#btn-add-staff");
+    if (this.state.mode === 'connected') {
+      addStaffBtn.disabled = true;
+      addStaffBtn.title = "Lista uprawnionych pracowników jest zarządzana w konfiguracji CRM.";
+      return;
+    }
     addStaffBtn.onclick = () => {
       Promise.resolve({ Modal }).then(({ Modal }) => {
         const modal = new Modal({
@@ -9409,7 +9502,12 @@ class App {
 
   async init() {
     // 2. Inicjalizacja tożsamości użytkownika i zespołu POK Kartuzy
-    await this.resolveUserIdentity();
+    try {
+      await this.resolveUserIdentity();
+    } catch (_) {
+      this.showAccessError();
+      return;
+    }
 
     const topbarContainer = document.getElementById("topbar-container");
     const sidebarContainer = document.getElementById("sidebar-container");
@@ -9435,57 +9533,37 @@ class App {
   }
 
   async resolveUserIdentity() {
-    try {
-      const staffList = await this.dataProvider.getStaff();
-
-      // W trybie CONNECTED sprawdź sesję Google lub zapamiętany PIN
-      if (typeof this.dataProvider.checkAuth === "function") {
-        try {
-          const auth = await this.dataProvider.checkAuth();
-          if (auth && auth.authenticated && auth.user) {
-            this.state.currentUser = auth.user;
-            this.dataProvider.setCurrentUser(auth.user);
-            return;
-          }
-        } catch (_) {}
+    this.state.currentUser = null;
+    if (typeof this.dataProvider.setCurrentUser === "function") this.dataProvider.setCurrentUser(null);
+    if (this.mode === "connected") {
+      // Autoryzacja przed pobraniem listy zespołu lub jakichkolwiek danych CRM.
+      // Pamięć przeglądarki oraz przełącznik profilu nie potwierdzają tożsamości.
+      const auth = await this.dataProvider.checkAuth();
+      if (!auth || auth.authenticated !== true || !auth.user) {
+        throw new Error("Brak dostępu: nie potwierdzono tożsamości Google.");
       }
-
-      // Sprawdź sessionStorage (dla środowiska konsumenckiego @gmail.com)
-      if (typeof sessionStorage !== "undefined") {
-        const sessionUser = sessionStorage.getItem("smartcare_session_user");
-        if (sessionUser) {
-          try {
-            const parsed = JSON.parse(sessionUser);
-            this.state.currentUser = parsed;
-            if (typeof this.dataProvider.setCurrentUser === "function") {
-              this.dataProvider.setCurrentUser(parsed);
-            }
-            return;
-          } catch (_) {}
-        }
-      }
-
-      // Domyślny użytkownik (Michał Latała – Administrator)
-      this.state.currentUser = (staffList && staffList[0]) || {
-        id: "staff-1",
-        name: "Michał Latała",
-        role: "Administrator",
-        email: "wsb.student.tester@gmail.com"
-      };
-
-      if (typeof this.dataProvider.setCurrentUser === "function") {
-        this.dataProvider.setCurrentUser(this.state.currentUser);
-      }
-
-    } catch (e) {
-      console.warn("Błąd inicjalizacji tożsamości:", e);
-      this.state.currentUser = {
-        id: "staff-1",
-        name: "Michał Latała",
-        role: "Administrator",
-        email: "wsb.student.tester@gmail.com"
-      };
+      this.state.currentUser = auth.user;
+      this.dataProvider.setCurrentUser(auth.user);
+      return;
     }
+
+    const staffList = await this.dataProvider.getStaff();
+    this.state.currentUser = (staffList && staffList[0]) || null;
+    if (typeof this.dataProvider.setCurrentUser === "function") this.dataProvider.setCurrentUser(this.state.currentUser);
+  }
+
+  showAccessError() {
+    if (this.pollingTimer) clearInterval(this.pollingTimer);
+    this.state.currentUser = null;
+    if (typeof this.dataProvider.setCurrentUser === "function") this.dataProvider.setCurrentUser(null);
+    const container = document.getElementById("content-container");
+    if (!container) return;
+    container.innerHTML = `
+      <div class="card" role="alert" style="padding: 24px; max-width: 680px; margin: 32px auto;">
+        <h2>Nie można potwierdzić dostępu do SmartCare</h2>
+        <p>Zaloguj się na uprawnione konto Google i otwórz aplikację ponownie. Jeśli problem się powtarza, skontaktuj się z administratorem.</p>
+        <p>Nie udało się potwierdzić tożsamości lub połączenia. Dane CRM nie zostały pobrane.</p>
+      </div>`;
   }
 
   startAutoRefreshPolling(intervalMs = 30000) {
@@ -9549,6 +9627,7 @@ class App {
   }
 
   async handleHashChange() {
+    if (this.mode === "connected" && !this.state.currentUser) return;
     let hash = window.location.hash.substring(1) || "dashboard";
     let route = hash;
     let params = {};

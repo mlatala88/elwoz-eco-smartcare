@@ -108,19 +108,19 @@ export class DiagnosticsView {
         <div class="card-header">
           <div class="card-title">
             <i data-lucide="info" style="width: 16px; height: 16px;"></i>
-            <span>Metadane i architektura wersji demonstracyjnej v0.3.0</span>
+            <span>Metadane i architektura systemu v0.3.0</span>
           </div>
         </div>
         <div class="card-body" style="font-size: 13px; line-height: 1.6;">
           <div style="display: grid; grid-template-columns: 220px 1fr; gap: 8px; margin-bottom: 12px;">
             <span style="font-weight: 600; color: var(--text-secondary);">Wersja aplikacji:</span>
-            <span>ELWOZ ECO SmartCare Manager v0.3.0-demo (WSB Merito)</span>
+            <span id="diag-meta-version">ELWOZ ECO SmartCare Manager v0.3.0-demo (WSB Merito)</span>
 
             <span style="font-weight: 600; color: var(--text-secondary);">Warstwa dostępu do danych:</span>
-            <span>DemoDataProvider (izolacja interfejsu, adapter gotowy na AppsScriptDataProvider)</span>
+            <span id="diag-meta-backend">DemoDataProvider</span>
 
             <span style="font-weight: 600; color: var(--text-secondary);">Model językowy AI:</span>
-            <span>Gemini 3.6 Flash (Structured Outputs, 10 pól schematu, filtr thought)</span>
+            <span id="diag-meta-model">Gemini 3.6 Flash (symulator)</span>
 
             <span style="font-weight: 600; color: var(--text-secondary);">Format bazy CRM:</span>
             <span>43 kolumny CSI zgodne ze strukturą Google Sheets v0.2.7/v0.2.8</span>
@@ -128,7 +128,7 @@ export class DiagnosticsView {
             <span style="font-weight: 600; color: var(--text-secondary);">Zabezpieczenie przed wyciekiem:</span>
             <span>Twardy filtr PII (anonimizacja ulic i nazwisk przed modelem AI)</span>
           </div>
-          <div style="padding: 10px; background-color: var(--bg-muted); border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 12px; color: var(--text-secondary);">
+          <div id="diag-mode-note" style="padding: 10px; background-color: var(--bg-muted); border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 12px; color: var(--text-secondary);">
             <strong>Uwaga bezpieczeństwa:</strong> Niniejsza wersja demonstracyjna działa w 100% po stronie przeglądarki klienta i nie wysyła żadnych rzeczywistych wiadomości e-mail ani zapytań do zewnętrznych baz danych.
           </div>
         </div>
@@ -149,39 +149,51 @@ export class DiagnosticsView {
       runBtn.disabled = true;
       runBtn.innerHTML = `<span>⏳ Uruchamianie testów...</span>`;
 
-      const results = await this.dataProvider.runDiagnosticsTest();
-      this.renderTestResults(results);
-
-      runBtn.disabled = false;
-      runBtn.innerHTML = `
+      try {
+        const results = await this.dataProvider.runDiagnosticsTest();
+        this.renderTestResults(results);
+        const passed = results.tests.every(t => t.status === 'PASSED');
+        import("../components/toast.js").then(({ Toast }) => {
+          if (passed) Toast.success("Pakiet testów diagnostycznych zakończony pomyślnie.");
+          else Toast.warning("Diagnostyka wykryła problemy. Sprawdź wyniki testów.");
+        });
+      } catch (error) {
+        import("../components/toast.js").then(({ Toast }) => Toast.error(error.message || "Nie udało się uruchomić diagnostyki."));
+      } finally {
+        runBtn.disabled = false;
+        runBtn.innerHTML = `
         <i data-lucide="play" style="width: 14px; height: 14px;"></i>
         <span>Uruchom test diagnostyczny API</span>
       `;
-      if (window.lucide) window.lucide.createIcons({ root: runBtn });
-
-      import("../components/toast.js").then(({ Toast }) => {
-        Toast.success("Pakiet testów diagnostycznych zakończony pomyślnie.");
-      });
+        if (window.lucide) window.lucide.createIcons({ root: runBtn });
+      }
     };
 
     const syncBtn = this.container.querySelector("#btn-sync-now");
     syncBtn.onclick = async () => {
       syncBtn.disabled = true;
       syncBtn.innerHTML = `<span>Synchronizacja...</span>`;
-      await new Promise(r => setTimeout(r, 600));
-      await this.loadDiagnostics();
-      syncBtn.disabled = false;
-      syncBtn.innerHTML = `
+      try {
+        await this.loadDiagnostics();
+        import("../components/toast.js").then(({ Toast }) => Toast.success("Zsynchronizowano stan telemetrii."));
+      } catch (error) {
+        import("../components/toast.js").then(({ Toast }) => Toast.error(error.message || "Nie udało się odczytać telemetrii."));
+      } finally {
+        syncBtn.disabled = false;
+        syncBtn.innerHTML = `
         <i data-lucide="refresh-cw" style="width: 14px; height: 14px;"></i>
         <span>Wymuś synchronizację</span>
       `;
-      if (window.lucide) window.lucide.createIcons({ root: syncBtn });
-      import("../components/toast.js").then(({ Toast }) => {
-        Toast.success("Zsynchronizowano stan telemetrii.");
-      });
+        if (window.lucide) window.lucide.createIcons({ root: syncBtn });
+      }
     };
 
     const toggleSimBtn = this.container.querySelector("#btn-toggle-sim-error");
+    if (this.state.mode === 'connected' || typeof this.dataProvider.toggleSimulatedError !== 'function') {
+      toggleSimBtn.disabled = true;
+      toggleSimBtn.title = "Symulacja jest dostępna wyłącznie w trybie demo.";
+      return;
+    }
     toggleSimBtn.onclick = async () => {
       const updated = await this.dataProvider.toggleSimulatedError();
       await this.loadDiagnostics();
@@ -197,6 +209,20 @@ export class DiagnosticsView {
 
   async loadDiagnostics() {
     const diag = await this.dataProvider.getDiagnostics();
+    const connected = this.state.mode === 'connected';
+    const setText = (selector, text) => {
+      const el = this.container.querySelector(selector);
+      if (el) el.textContent = text;
+    };
+    if (connected) {
+      setText('#hint-db-mode', diag.dataBackend || 'Google Sheets CRM');
+      setText('#hint-ai-model', diag.geminiModel || 'Nie odczytano modelu');
+      setText('#diag-meta-version', diag.appVersion || 'SmartCare Manager');
+      setText('#diag-meta-backend', diag.dataBackend || 'Google Sheets CRM');
+      setText('#diag-meta-model', diag.geminiModel || 'Nie odczytano modelu');
+      setText('#hint-errors-desc', 'Zarejestrowane błędy AI i komunikacji');
+      setText('#diag-mode-note', 'Połączono z rzeczywistym CRM. Diagnostyka odczytuje konfigurację i stan arkusza; nie wykonuje zapytania do Gemini ani wysyłki e-mail.');
+    }
 
     const dbStatus = this.container.querySelector("#val-db-status");
     if (dbStatus) {
@@ -206,16 +232,16 @@ export class DiagnosticsView {
 
     const aiStatus = this.container.querySelector("#val-ai-status");
     if (aiStatus) {
-      aiStatus.textContent = diag.simulatedErrorMode ? "Błąd symulowany" : "Dostępne";
-      aiStatus.style.color = diag.simulatedErrorMode ? "var(--prio-urgent)" : "var(--brand-green)";
+      aiStatus.textContent = connected ? (diag.geminiApiKeyConfigured ? "Klucz skonfigurowany" : "Brak klucza") : (diag.simulatedErrorMode ? "Błąd symulowany" : "Dostępne");
+      aiStatus.style.color = (connected ? !diag.geminiApiKeyConfigured : diag.simulatedErrorMode) ? "var(--prio-urgent)" : "var(--brand-green)";
     }
 
     const latencyEl = this.container.querySelector("#val-latency");
-    if (latencyEl) latencyEl.textContent = `${diag.latencyMs} ms`;
+    if (latencyEl) latencyEl.textContent = Number.isFinite(diag.latencyMs) ? `${diag.latencyMs} ms` : 'Brak pomiaru';
 
     const errorsEl = this.container.querySelector("#val-errors-count");
     if (errorsEl) {
-      const totalErrors = diag.aiErrors + diag.commErrors + diag.validationIssues;
+      const totalErrors = [diag.aiErrors, diag.commErrors, diag.validationIssues].filter(Number.isFinite).reduce((sum, value) => sum + value, 0);
       errorsEl.textContent = totalErrors;
       errorsEl.style.color = totalErrors > 0 ? "var(--prio-high)" : "var(--brand-green)";
     }
@@ -223,7 +249,9 @@ export class DiagnosticsView {
     const toggleText = this.container.querySelector("#text-sim-toggle");
     const toggleIcon = this.container.querySelector("#icon-sim-toggle");
     if (toggleText && toggleIcon) {
-      if (diag.simulatedErrorMode) {
+      if (connected) {
+        toggleText.textContent = "Symulacja dostępna w trybie demo";
+      } else if (diag.simulatedErrorMode) {
         toggleText.textContent = "Wyłącz symulację błędu (Przywróć stan OK)";
         toggleIcon.setAttribute("data-lucide", "toggle-right");
         toggleIcon.style.color = "var(--prio-urgent)";
@@ -236,21 +264,23 @@ export class DiagnosticsView {
   }
 
   renderTestResults(res) {
+    if (!res || !Array.isArray(res.tests)) throw new Error('Nieprawidłowa odpowiedź diagnostyki.');
+    const escape = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[ch]));
     const lastRunEl = this.container.querySelector("#diag-last-run-time");
     if (lastRunEl) lastRunEl.textContent = `Wykonano: ${res.timestamp}`;
 
     const tbody = this.container.querySelector("#diag-test-tbody");
     tbody.innerHTML = res.tests.map(t => `
       <tr>
-        <td style="font-weight: 600;">${t.name}</td>
+        <td style="font-weight: 600;">${escape(t.name)}</td>
         <td>
           <span class="badge ${t.status === 'PASSED' ? 'badge-status-rozwiazane' : 'badge-prio-pilny'}">
             ${t.status === 'PASSED' ? '✓ ZALICZONY' : '✗ BŁĄD'}
           </span>
         </td>
-        <td style="font-family: monospace; font-size: 12px;">${t.latency}</td>
+        <td style="font-family: monospace; font-size: 12px;">${escape(t.latency)}</td>
         <td style="font-size: 12px; color: var(--text-secondary);">
-          ${t.status === 'PASSED' ? 'Parametry w normie operacyjnej' : 'Wykryto symulowaną awarię komponentu'}
+          ${escape(t.details || (t.status === 'PASSED' ? 'Parametry w normie operacyjnej' : 'Wykryto problem komponentu'))}
         </td>
       </tr>
     `).join("");

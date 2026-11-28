@@ -1,3 +1,5 @@
+import { escapeHtml } from "../components/escapeHtml.js";
+
 /**
  * ELWOZ ECO SmartCare Manager v0.3.0
  * CSAT View (Satysfakcja mieszkańców i reputacja Google)
@@ -190,7 +192,7 @@ export class CsatView {
 
       return `
         <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px; font-size: 13px;">
-          <div style="width: 70px; font-weight: 600;">${star} ★ (${count})</div>
+          <div style="width: 70px; font-weight: 600;">${star} ★ (${escapeHtml(count)})</div>
           <div style="flex: 1; height: 16px; background-color: var(--bg-muted); border-radius: 4px; overflow: hidden; border: 1px solid var(--border-color);">
             <div style="width: ${pct}%; height: 100%; background-color: ${barColor}; transition: width 0.3s ease;"></div>
           </div>
@@ -207,15 +209,15 @@ export class CsatView {
       lowListContainer.innerHTML = lowRatedTickets.map(t => `
         <div style="background-color: #FFFFFF; border: 1px solid var(--prio-urgent-border); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 8px;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
-            <a href="#" class="table-ticket-id link-ticket" data-ticket-id="${t.id}">${t.id}</a>
-            <span class="badge badge-prio-pilny">${t.satisfactionScore} ★</span>
+            <a href="#" class="table-ticket-id link-ticket" data-ticket-id="${escapeHtml(t.id)}">${escapeHtml(t.id)}</a>
+            <span class="badge badge-prio-pilny">${escapeHtml(t.satisfactionScore)} ★</span>
           </div>
           <div style="font-size: 12px; color: var(--text-primary); margin: 4px 0; font-style: italic;">
-            "${t.citizenFeedback || 'Brak komentarza tekstowego'}"
+            "${escapeHtml(t.citizenFeedback || 'Brak komentarza tekstowego')}"
           </div>
           <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
-            <span style="font-size: 11px; color: var(--text-secondary);">${t.applicantName} (${t.city})</span>
-            <button class="btn btn-navy btn-xs btn-open-ticket" data-ticket-id="${t.id}">Obsłuż sprawę</button>
+            <span style="font-size: 11px; color: var(--text-secondary);">${escapeHtml(t.applicantName)} (${escapeHtml(t.city)})</span>
+            <button class="btn btn-navy btn-xs btn-open-ticket" data-ticket-id="${escapeHtml(t.id)}">Obsłuż sprawę</button>
           </div>
         </div>
       `).join("");
@@ -231,25 +233,25 @@ export class CsatView {
 
     tbody.innerHTML = ratedTickets.map(t => `
       <tr>
-        <td class="table-ticket-id">${t.id}</td>
-        <td>${t.city}</td>
-        <td>${t.type}</td>
+        <td class="table-ticket-id">${escapeHtml(t.id)}</td>
+        <td>${escapeHtml(t.city)}</td>
+        <td>${escapeHtml(t.type)}</td>
         <td>
           <span class="badge ${t.satisfactionScore >= 4 ? 'badge-status-rozwiazane' : (t.satisfactionScore === 3 ? 'badge-status-do-weryfikacji' : 'badge-prio-pilny')}">
-            ${t.satisfactionScore} ★
+            ${escapeHtml(t.satisfactionScore)} ★
           </span>
         </td>
         <td style="max-width: 320px; font-size: 12px; color: var(--text-primary);">
-          ${t.citizenFeedback ? `„${t.citizenFeedback}”` : '<span style="color: var(--text-muted); font-style: italic;">(Brak uwag tekstowych)</span>'}
+          ${t.citizenFeedback ? `„${escapeHtml(t.citizenFeedback)}”` : '<span style="color: var(--text-muted); font-style: italic;">(Brak uwag tekstowych)</span>'}
         </td>
         <td>
           ${t.reviewInviteSent === 'TAK' 
             ? '<span class="badge badge-status-rozwiazane">Wysłano zaproszenie</span>' 
             : '<span style="font-size: 11px; color: var(--text-secondary);">Nie wysłano</span>'}
         </td>
-        <td style="font-size: 12px; color: var(--text-secondary);">${t.resolvedDate || '-'}</td>
+        <td style="font-size: 12px; color: var(--text-secondary);">${escapeHtml(t.resolvedDate || '-')}</td>
         <td style="text-align: right;">
-          <button class="btn btn-secondary btn-xs btn-open-ticket" data-ticket-id="${t.id}">Szczegóły</button>
+          <button class="btn btn-secondary btn-xs btn-open-ticket" data-ticket-id="${escapeHtml(t.id)}">Szczegóły</button>
         </td>
       </tr>
     `).join("");

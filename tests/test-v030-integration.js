@@ -215,6 +215,7 @@ function setupGasEnvironment() {
 
   const context = {
     console: console,
+    Date: Date,
     Logger: { log: () => {} },
     SpreadsheetApp: {
       getActiveSpreadsheet: () => ss,
@@ -255,8 +256,8 @@ function setupGasEnvironment() {
     },
     ScriptApp: {
       getUserTriggers: () => [
-        { getHandlerFunction: () => "handleNewTicketSubmit" },
-        { getHandlerFunction: () => "processAiAnalysisQueue" }
+        { getHandlerFunction: () => "handleNewTicketSubmit_" },
+        { getHandlerFunction: () => "processAiAnalysisQueue_" }
       ]
     },
     MailApp: {
@@ -300,6 +301,7 @@ function setupGasEnvironment() {
   vm.runInContext(aiCode, context);
   vm.runInContext(commCode, context);
   vm.runInContext(webappCode, context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, "../google/access.gs"), "utf8"), context);
 
   return context;
 }
@@ -503,7 +505,9 @@ async function runIntegrationTests() {
   // --- SCENARIUSZ M: Zespół 5 osób i role ---
   console.log("\n--- SCENARIUSZ M: Zespół 5 osób i uprawnienia ról ---");
   const staff = env.apiGetStaff();
-  assert(staff.length === 5, `M.1: Zespół liczy dokładnie 5 uprawnionych członków (znaleziono: ${staff.length})`);
+  assert(staff.length === 1 && staff[0].email === 'wsb.student.tester@gmail.com', 'M.1: Bez mapowania włączono wyłącznie rzeczywiste konto testera');
+  env.PropertiesService.getScriptProperties().setProperty('SMARTCARE_STAFF_EMAILS', JSON.stringify({ 'staff-1': 'wsb.student.tester@gmail.com', 'staff-2': 'barbara.test@gmail.com', 'staff-3': 'diana.test@gmail.com', 'staff-4': 'anna.test@gmail.com', 'staff-5': 'michal.test@gmail.com' }));
+  staff.splice(0, staff.length, ...env.apiGetStaff());
   const names = staff.map(s => s.name);
   assert(names.includes("Michał Latała") && names.includes("Barbara Seroka") && names.includes("Diana Skierka") && names.includes("Anna Fedoruk") && names.includes("Michał Wadyński"), "M.2: Wszyscy 5 członkowie zespołu są obecni w rejestrze");
   const wadynski = staff.find(s => s.name === "Michał Wadyński");
@@ -515,7 +519,7 @@ async function runIntegrationTests() {
   assert(!invalidAuth.success, "N.1: Błędny kod PIN zostaje odrzucony");
 
   const validAuth = env.apiVerifyUser("barbara.seroka@example.com", "1926");
-  assert(validAuth.success && validAuth.user && validAuth.user.name === "Barbara Seroka", "N.2: Prawidłowy PIN 1926 pomyślnie uwierzytelnia Barbarę Serokę");
+  assert(!validAuth.success && env.apiGetCurrentUser().user.name === 'Michał Latała', 'N.2: Dawny PIN nie zmienia potwierdzonej tożsamości Google');
 
   // --- SCENARIUSZ O: Diagnostyka systemu i telemetria silnika CRM ---
   console.log("\n--- SCENARIUSZ O: Diagnostyka systemu i telemetria silnika CRM ---");
@@ -534,7 +538,9 @@ async function runIntegrationTests() {
   }
 }
 
-runIntegrationTests().catch(err => {
+module.exports = { setupGasEnvironment, MockSheet, MockSpreadsheet };
+
+if (require.main === module) runIntegrationTests().catch(err => {
   console.error("Nieoczekiwany błąd testów integracyjnych:", err);
   process.exit(1);
 });

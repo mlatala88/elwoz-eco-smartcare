@@ -46,6 +46,10 @@ export class AppsScriptDataProvider extends DataProviderInterface {
           .withSuccessHandler(result => {
             this.connectionStatus = "online";
             this.lastSyncTime = new Date().toISOString();
+            if (result && result.success === false) {
+              reject(new Error(result.error || "Operacja nie powiodła się."));
+              return;
+            }
             resolve(result);
           })
           .withFailureHandler(error => {
@@ -91,7 +95,9 @@ export class AppsScriptDataProvider extends DataProviderInterface {
 
       this.connectionStatus = "online";
       this.lastSyncTime = new Date().toISOString();
-      return json.data !== undefined ? json.data : json;
+      const result = json.data !== undefined ? json.data : json;
+      if (result && result.success === false) throw new Error(result.error || "Operacja nie powiodła się.");
+      return result;
 
     } catch (err) {
       this.connectionStatus = "offline";

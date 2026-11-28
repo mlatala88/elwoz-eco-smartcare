@@ -4,6 +4,16 @@ Wszystkie istotne zmiany i wydania w projekcie **ELWOZ ECO SmartCare** są rejes
 
 ---
 
+## [0.3.0 — poprawka integracyjna] – 2026-11-28
+
+- Naprawiono domyślne i złożone filtry rzeczywistego API, zgodność KPI/listy, reset oraz kolejność odpowiedzi RPC.
+- Usunięto kolizje definicji API. Naprawiono komunikację, zaproszenia do opinii, raporty, zadania i kontrakt diagnostyki.
+- Zapis ustawień ma listę dozwolonych pól, blokadę oraz odczyt po zapisie. Stały personel connected jest tylko do odczytu.
+- Dostęp opiera się na zweryfikowanej sesji Google i rolach serwera. Wspólny PIN, operator klienta i lokalny profil nie przyznają uprawnień.
+- Zabezpieczono wyświetlanie tekstu z CRM, komunikaty i starsze okna arkusza przed wykonaniem HTML/skryptu.
+- Dodano migrację prywatnych handlerów wyzwalaczy oraz instrukcję aktualizacji istniejącego wdrożenia z zachowaniem URL.
+- Zweryfikowano 257 przypadków offline, przebudowano webapp.html i sprawdzono jego składnię. Bez wdrożenia Google, rzeczywistych wysyłek ani zmian konfiguracji Gemini, formularza, QR, CSS czy danych CRM.
+
 ## [0.3.0] – 2026-11-26
 ### ELWOZ ECO SmartCare Manager v0.3.0 – Integracja aplikacji webowej biura obsługi mieszkańców z działającym silnikiem CRM (Google Sheets & Gemini AI)
 

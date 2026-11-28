@@ -1,144 +1,107 @@
-# ELWOZ ECO SmartCare Manager v0.3.0 – Instrukcja Wdrożenia i Podręcznik Administratora
+# Aktualizacja istniejącego SmartCare Manager v0.3.0
 
-**Wersja:** 0.3.0 (Customer Service Intelligence & Web App CRM Integration)  
-**Data wydania:** 26 listopada 2026 r.  
-**Autorzy projektu:** Uniwersytet WSB Merito w Gdańsku – Zespół Badawczo-Wdrożeniowy:  
-- Michał Latała (Administrator Systemu)
-- Barbara Seroka (Pracownik Obsługi Klienta)
-- Diana Skierka (Pracownik Obsługi Klienta)
-- Anna Fedoruk (Pracownik Obsługi Klienta)
-- Michał Wadyński (Obserwator)
+Stan: 28 listopada 2026. Gałąź: `integration/smartcare-v030`.
 
----
+Ten pakiet naprawia istniejącą aplikację. Nie tworzy nowego formularza, arkusza ani wdrożenia. Zachowuje układ i CSS, adres formularza, kod QR oraz konfigurację Gemini. Zmiany w repozytorium nie aktualizują automatycznie opublikowanej aplikacji Google.
 
-## 1. Wprowadzenie i architektura v0.3.0
+## Co przygotowano
 
-Wydanie **SmartCare Manager v0.3.0** integruje nowoczesną aplikację internetową typu Single Page Application (SPA) z ustabilizowanym silnikiem CRM **ELWOZ ECO SmartCare v0.2.8** opartym na Google Sheets, modelach Google Gemini API oraz automatycznej komunikacji e-mail.
+- Filtry listy zgodne z wartościami wysyłanymi przez interfejs; domyślne „Wszystkie” nie ukrywają danych. KPI i lista używają spójnych reguł. Reset filtrów i ochrona przed nadpisaniem świeższej odpowiedzi RPC działają także w trybie connected.
+- Jeden zestaw definicji API; poprawione kontrakty komunikacji, diagnostyki, ustawień, raportów i zadań.
+- Ustawienia zapisują rzeczywiście sześć pól organizacyjnych z blokadą i odczytem po zapisie. Lista uprawnionych pracowników w connected jest tylko do odczytu.
+- Google potwierdza tożsamość użytkownika przy każdej operacji serwera. Wspólny PIN i profil z pamięci przeglądarki nie przyznają uprawnień. Puste lub nieznane konto dostaje `ACCESS_DENIED`.
+- Tekst mieszkańca, korespondencja i komunikaty błędów są wyświetlane jako tekst, bez wykonywania HTML.
 
-System działa w unikalnej architekturze dwutrybowej (**Dual-Mode Architecture**):
-1. **Tryb CONNECTED (Produkcyjny / Zintegrowany):**
-   - Prywatny panel dyspozytorski pracownika biura obsługi mieszkańców (POK Kartuzy).
-   - Bezpośrednie połączenie z rzeczywistą bazą 11 zgłoszeń w Google Sheets (`ELW-2026-0001` do `ELW-2026-0011`).
-   - Rzeczywiste wywołania Gemini API (analizy zgłoszeń, asystent redakcyjny CX/PR).
-   - Rejestracja korespondencji w zakładce `HISTORIA KOMUNIKACJI` z bezwzględną blokadą wysyłki testowej.
-2. **Tryb DEMO (Demonstracyjny / Szkoleniowy):**
-   - Działa lokalnie lub na GitHub Pages z 30 syntetycznymi zgłoszeniami w `LocalStorage` (`DemoDataProvider`).
-   - Pełna symulacja wskaźników CSI, wykresów i asystenta AI bez połączenia z prywatnym arkuszem Google.
-   - Żadne dane rzeczywistych mieszkańców ani klucze API nie trafiają do publicznego kodu.
+## 1. Przygotowanie aktualizacji
 
----
+Pracuj w tym samym projekcie Apps Script, który obsługuje obecny arkusz CRM i obecny adres `/exec`. Zanotuj identyfikator istniejącego wdrożenia, jego adres, obecną wersję oraz ustawienia wyzwalaczy. Zachowaj kopię dotychczasowych plików projektu. Nie uruchamiaj inicjalizacji `setupSmartCareSystem_`, resetowania danych ani aktualizatora arkuszy: nie są częścią tej poprawki.
 
-## 2. Dostęp zespołowy i role projektowe
+Pakiet zawiera komplet plików Google:
 
-Dostęp do systemu jest ściśle ograniczony do 5 zweryfikowanych członków zespołu projektowego:
+| Plik w pakiecie | Operacja w dotychczasowym projekcie |
+|---|---|
+| `google/setup.gs` | Zastąp całą zawartość dotychczasowego pliku |
+| `google/ai.gs` | Zastąp całą zawartość; nie zmieniaj Script Properties Gemini |
+| `google/communication.gs` | Zastąp całą zawartość |
+| `google/webapp.gs` | Zastąp całą zawartość |
+| `google/access.gs` | Dodaj plik skryptu `access` albo zastąp, jeśli istnieje |
+| `google/webapp.html` | Zastąp szablon HTML `webapp` |
 
-| Imię i nazwisko | Rola operacyjna | Uprawnienia w systemie | Adres e-mail |
-|---|---|---|---|
-| **Michał Latała** | Administrator | Pełny dostęp: zarządzanie zgłoszeniami, wysyłka, konfiguracja, diagnostyka, audyt | `wsb.student.tester@gmail.com` |
-| **Barbara Seroka** | Pracownik obsługi klienta | Obsługa zgłoszeń, zmiana statusów, edycja notatek, wysyłka wiadomości, asystent AI | `barbara.seroka@example.com` |
-| **Diana Skierka** | Pracownik obsługi klienta | Obsługa zgłoszeń, zmiana statusów, edycja notatek, wysyłka wiadomości, asystent AI | `diana.skierka@example.com` |
-| **Anna Fedoruk** | Pracownik obsługi klienta | Obsługa zgłoszeń, zmiana statusów, edycja notatek, wysyłka wiadomości, asystent AI | `anna.fedoruk@example.com` |
-| **Michał Wadyński** | Obserwator | Tryb podglądu (Read-Only): przeglądanie zgłoszeń, dashboardu i raportów bez edycji | `michal.wadynski@example.com` |
+Zastępuj pliki, nie dopisuj drugiej kopii funkcji. Zachowaj obecny manifest i zakresy autoryzacji; pakiet nie zawiera zamiennika `appsscript.json`. Nie kopiuj do edytora katalogów `manager`, `tests` ani `scripts` — są źródłem i testami dla przygotowanego szablonu HTML.
 
----
+## 2. Dostęp Google i powiązanie z istniejącym CRM
 
-## 3. Specyfika autoryzacji na kontach konsumenckich `@gmail.com`
+W Ustawieniach projektu → Właściwości skryptu sprawdź `SMARTCARE_SPREADSHEET_ID`. Musi zawierać identyfikator istniejącego arkusza CRM, fragment jego adresu między `/d/` i `/edit`. To powiązanie jest potrzebne, gdy Web App nie ma aktywnego arkusza.
 
-### Ograniczenie techniczne Google Apps Script:
-Gdy aplikacja Apps Script Web App jest wdrożona z uprawnieniem *Wykonaj jako: Ja (właściciel)* na darmowym koncie konsumenckim `@gmail.com`, Google ze względów bezpieczeństwa i ochrony prywatności **maskuje tożsamość użytkowników zewnętrznych** – wywołanie `Session.getActiveUser().getEmail()` zwraca pusty ciąg (`""`).
+Bez właściwości `SMARTCARE_STAFF_EMAILS` dostęp ma wyłącznie istniejące konto testowe `wsb.student.tester@gmail.com`, przypisane do `staff-1`. Dla zespołu ustaw tę właściwość jako kompletny obiekt JSON: klucz to identyfikator osoby z tabeli, wartość to jej rzeczywiste konto Google. Każde konto musi być unikalne. Podany obiekt zastępuje listę domyślną; zachowaj w nim administratora, który wykonuje aktualizację. Nie dodawaj przykładowych adresów `example.com`.
 
-### Rozwiązanie zaimplementowane w SmartCare Manager v0.3.0:
-1. **Automatyczna detekcja sesji:** Backend sprawdza, czy `Session.getActiveUser().getEmail()` zwraca zweryfikowany adres e-mail (działa w środowisku Google Workspace).
-2. **Autoryzacja kodem PIN zespołu:** W przypadku kont `@gmail.com` pracownik wybiera swoje nazwisko z listy 5 osób i wprowadza wspólny kod PIN zespołu:
-   - Domyślny PIN zespołu: **`1926`** (rok nadania praw miejskich Kartuzom).
-   - Kod PIN może zostać w każdej chwili zmieniony przez Administratora w *Project Settings → Script Properties* pod kluczem `SMARTCARE_PIN`.
-3. **Podpisany token sesji:** Po weryfikacji tożsamość jest bezpiecznie zapamiętywana w `sessionStorage`. Wszystkie operacje (aktualizacja zgłoszenia, wysłanie e-maila, rozmowa telefoniczna) rejestrują rzeczywiste nazwisko pracownika w audycie CRM (`operatorName`).
+| ID | Osoba | Uprawnienia aplikacji |
+|---|---|---|
+| `staff-1` | Michał Latała | Administrator; odczyt, edycja, zamykanie, komunikacja, AI, ustawienia, diagnostyka |
+| `staff-2` | Barbara Seroka | Odczyt, edycja, zamykanie, komunikacja, AI |
+| `staff-3` | Diana Skierka | Odczyt, edycja, zamykanie, komunikacja, AI |
+| `staff-4` | Anna Fedoruk | Odczyt, edycja, zamykanie, komunikacja, AI |
+| `staff-5` | Michał Wadyński | Tylko odczyt |
 
----
+Minimalne poprawne mapowanie istniejącego konta testowego:
 
-## 4. Instrukcja wdrożenia jako Google Apps Script Web App (Wariant A – Rekomendowany)
-
-Ta metoda uruchamia menedżera bezpośrednio w infrastrukturze chmurowej Google bez konieczności utrzymywania zewnętrznych serwerów.
-
-### Krok 1: Otwarcie edytora Apps Script
-1. Otwórz arkusz CRM **ELWOZ ECO SmartCare v0.2.8** w Google Sheets.
-2. Z menu wybierz: **Rozszerzenia → Apps Script**.
-
-### Krok 2: Weryfikacja i aktualizacja plików źródłowych
-Upewnij się, że w projekcie Apps Script znajdują się poniższe pliki z gałęzi `integration/smartcare-v030`:
-- `setup.gs` – Główny silnik CRM, kalkulacja CSI, obsługa formularza i kolejki;
-- `ai.gs` – Integracja z Gemini API, obsługa Structured Outputs, rate limiting 15 RPM;
-- `communication.gs` – Bezpieczna wysyłka e-mail, szablony, serwerowy Pre-Send Guardrail;
-- `webapp.gs` – Backend Web App, kontroler JSON-RPC, obsługa sesji 5 członków zespołu;
-- `webapp.html` – Kompletny, skompilowany szablon aplikacji internetowej SPA (wygenerowany przez `scripts/build-webapp.js`).
-
-### Krok 3: Konfiguracja parametrów Script Properties
-W menu edytora Apps Script wybierz **Ustawienia projektu** (ikona koła zębatego) → **Niestandardowe właściwości** (Script Properties):
-- `GEMINI_API_KEY`: Klucz API z Google AI Studio;
-- `SMARTCARE_PIN`: Kod autoryzacyjny zespołu (`1926`);
-- `APPROVED_TEST_RECIPIENT`: `wsb.student.tester@gmail.com`.
-
-### Krok 4: Utworzenie wdrożenia Web App
-1. W prawym górnym rogu edytora kliknij: **Wdróż → Nowe wdrożenie**.
-2. Kliknij ikonę koła zębatego i wybierz: **Aplikacja internetowa** (Web App).
-3. Wypełnij pola konfiguracji:
-   - **Opis:** `SmartCare Manager v0.3.0 – POK Kartuzy`
-   - **Wykonaj jako:** `Ja (twoj_adres@gmail.com)` *(gwarantuje dostęp do arkusza i klucza API)*
-   - **Kto ma dostęp:** `Każdy` (dla kont konsumenckich) lub `Wszyscy w domenie` (dla Google Workspace).
-4. Kliknij **Wdróż** i zaakceptuj wymagane uprawnienia Google OAuth.
-5. Skopiuj wygenerowany **Adres URL aplikacji internetowej** (np. `https://script.google.com/macros/s/.../exec`).
-
----
-
-## 5. Instrukcja uruchomienia z zewnętrznego hostingu (Wariant B)
-
-Jeżeli menedżer ma być hostowany na osobnym serwerze (np. GitHub Pages, serwer lokalny `localhost:3000`):
-1. Uruchom serwer lokalny:
-   ```powershell
-   node manager/tests/server.js
-   ```
-2. Otwórz w przeglądarce: `http://localhost:3000/manager/`.
-3. Przejdź do zakładki **Ustawienia**:
-   - Przełącz tryb z **DEMO** na **CONNECTED (Rzeczywisty CRM Google Sheets)**.
-   - Wklej wygenerowany adres URL Web App z Kroku 4.
-4. Kliknij **Zapisz ustawienia**. Aplikacja połączy się bezpośrednio z arkuszem CRM przez autoryzowane żądania POST.
-
----
-
-## 6. Procedury bezpieczeństwa i reguły biznesowe
-
-### 1. Bezwzględna ochrona odbiorcy testowego (Whitelist Guard):
-- Wszystkie wiadomości e-mail wysyłane z poziomu menedżera trafiają **wyłącznie** na adres `wsb.student.tester@gmail.com`.
-- Próba wysyłki na jakikolwiek inny adres jest blokowana na poziomie backendu Apps Script błędem `403 Forbidden`.
-- W interfejsie użytkownika widoczny jest stały komunikat informacyjny o bezpiecznym trybie testowym.
-
-### 2. Pre-Send Quality Control Guardrail (CX/PR):
-- Zarówno **temat**, jak i **treść** wiadomości podlegają bezwarunkowej weryfikacji przed wysyłką.
-- Blokowane są wulgaryzmy, inwektywy (w tym 'pacanie', 'spieprzaj dziadu'), agresja, obwinianie mieszkańca oraz ujawnianie wewnętrznych nagan czy zwolnień kierowców.
-
-### 3. Ochrona procedury zamykania zgłoszenia:
-- Zmiana statusu na **Rozwiązane** lub **Zamknięte** bezwzględnie wymaga wpisania rzeczywistego sposobu rozwiązania sprawy (minimum 5 znaków).
-- System blokuje szablony zawierające teksty zastępcze typu `[opis wykonanych działań]` lub `[wpisz...]`.
-- Data rozwiązania sprawy jest ustawiana automatycznie i chroniona przed przypadkowym nadpisaniem.
-
-### 4. Dynamiczne wskaźniki SLA:
-- Sprawy, w których udzielono już pierwszej odpowiedzi, **nie są** oznaczane jako aktywnie naruszające SLA pierwszej reakcji.
-- Wskaźniki przeliczają się dynamicznie w czasie rzeczywistym.
-
----
-
-## 7. Weryfikacja wdrożenia i uruchomienie testów
-
-Projekt zawiera pełny pakiet 157 testów automatycznych:
-```powershell
-# 1. Testy jednostkowe widoków i logiki demonstracyjnej (65 testów)
-node manager/tests/runTests.js
-
-# 2. Testy stabilizacji silnika backendu Apps Script v0.2.8 (48 testów)
-node tests/test-v028-audit.js
-
-# 3. Testy integracyjne menedżera z silnikiem CRM (Scenariusze A-O, 44 testy)
-node tests/test-v030-integration.js
+```json
+{"staff-1":"wsb.student.tester@gmail.com"}
 ```
 
-Wszystkie 157 testów musi zakończyć się statusem **100% PASS**.
+Przed dopisaniem innych osób ustal ich rzeczywiste adresy. Nazwy i role pochodzą z kodu serwera, nie z przesłanego przez przeglądarkę profilu. `SMARTCARE_PIN` nie jest używany. Nie zmieniaj `GEMINI_API_KEY`, właściwości modelu, limitów, formularza ani danych CRM.
+
+Zalecany tryb Web App: **Wykonaj jako użytkownik uzyskujący dostęp do aplikacji**. Wybierz dostęp wymagający konta Google albo właściwą domenę Workspace, zależnie od dostępnych opcji. Użytkownicy potrzebują również odpowiedniego dostępu Google do istniejącego arkusza i zgody na wymagane uprawnienia skryptu. Uprawnienia aplikacji nie zastępują uprawnień pliku Google; edytor arkusza może edytować go poza aplikacją.
+
+W trybie „Wykonaj jako ja” Google może zwracać pusty adres osoby odwiedzającej, szczególnie dla zewnętrznych kont Gmail. Aplikacja wtedy odmawia dostępu; nie omija tej sytuacji PIN-em. Zalogowanie właściciela nie dowodzi jeszcze, że inne konto zobaczy swoją tożsamość. Zasady opisuje [Google Session](https://developers.google.com/apps-script/reference/base/session) i [Google Web Apps](https://developers.google.com/apps-script/guides/web).
+
+## 3. Migracja wyzwalaczy
+
+Część funkcji wewnętrznych ma teraz końcowy `_`, aby nie były dostępne przez `google.script.run`. Trzeba przenieść wyzwalacze, które używały dawnych nazw. Nie uruchamiaj samych handlerów kolejki, analizy ani formularza jako testu — mogą przetwarzać zgłoszenia.
+
+Po zapisaniu wszystkich plików, jako uprawniony administrator i dotychczasowy właściciel wyzwalaczy, uruchom w edytorze wyłącznie `migrateSmartCareTriggers`. Funkcja zakłada nowe wyzwalacze przed usunięciem starych, nie przetwarza zgłoszeń. Wyzwalacze mogą później wykonywać zwykłą pracę automatyczną zgodnie z harmonogramem. Powtórne uruchomienie migracji jest bezpieczne.
+
+| Stary handler | Nowy handler | Tryb |
+|---|---|---|
+| `handleNewTicketSubmit` | `handleNewTicketSubmit_` | Z istniejącego arkusza, po przesłaniu formularza |
+| `scheduledQueueAndReconcile` | `scheduledQueueAndReconcile_` | Czasowy, co 5 minut |
+| `processAiAnalysisQueue` | `processAiAnalysisQueue_` | Ręcznie zachowaj dotychczasowy harmonogram, jeśli ten dodatkowy handler był zainstalowany |
+| `checkOverdueTicketsAndNotify` | `checkOverdueTicketsAndNotify_` | Ręcznie zachowaj dotychczasowy harmonogram, jeśli był zainstalowany |
+
+Migracja zatrzymuje się bez zmian, jeśli wykryje dwa ostatnie stare handlery; najpierw przenieś je ręcznie i ponów migrację. W zakładce Wyzwalacze sprawdź brak duplikatów. Wyzwalacze należące do innych kont trzeba zweryfikować z tych kont — skrypt nie widzi wszystkich cudzych instalacji. Jeśli istnieją inne niestandardowe wyzwalacze, dopasuj ich nazwy do funkcji w aktualnym kodzie i zachowaj parametry.
+
+## 4. Aktualizacja tego samego wdrożenia — bez zmiany adresu
+
+1. W tym samym projekcie wybierz **Wdróż → Zarządzaj wdrożeniami**.
+2. Wybierz istniejące aktywne wdrożenie Web App, zgodne z zapisanym identyfikatorem i adresem `/exec`.
+3. Kliknij ikonę edycji. W polu wersji wybierz **Nowa wersja**. Dodaj opis „v0.3.0 — poprawki integracji i dostępu 2026-11-28”.
+4. Sprawdź opisany wyżej tryb wykonania i ograniczenie dostępu. Zapisz aktualizację wybranego wdrożenia.
+5. Otwórz zapisany dotychczasowy adres `/exec` w nowej karcie. Porównaj go z adresem sprzed aktualizacji. Nie wybieraj „Nowe wdrożenie” i nie zastępuj adresu formularza ani QR.
+
+Google potwierdza, że przypisanie nowej wersji do istniejącego wdrożenia zachowuje URL i deployment ID: [Create and manage deployments](https://developers.google.com/apps-script/concepts/deployments).
+
+## 5. Odbiór po aktualizacji
+
+Weryfikacja w prawdziwym wdrożeniu pozostaje do wykonania przez administratora. Testy lokalne nie potwierdzają ustawień konta Google, uprawnień do arkusza, instalacji wyzwalaczy, limitów Gemini ani doręczenia poczty.
+
+- Jako uprawniony użytkownik: sprawdź profil, listę bez filtrów oraz przejścia z KPI. Dla tego samego okresu i bez zmian danych liczby listy i KPI powinny być zgodne. Nie zakładaj, że obecny CRM nadal zawiera liczbę 12/9/9 z przykładu regresyjnego.
+- Sprawdź wyszukiwanie, priorytet, status, pracownika, AI, terminy oraz reset filtrów; przełącz kilka filtrów szybko.
+- Otwórz istniejące zgłoszenie i historię komunikacji. Kanał E-mail powinien znajdować zapisane wiadomości, a rodzaj działania powinien być widoczny.
+- Sprawdź raport dla krótszego okresu i kolejkę „Tylko moje”.
+- Jako administrator uruchom diagnostykę. Odczytuje arkusz i konfigurację; nie wykonuje zapytania Gemini ani wysyłki. „Klucz skonfigurowany” nie oznacza potwierdzonej dostępności API.
+- Sprawdź konto spoza listy oraz — jeśli skonfigurowany — obserwatora. Nieuprawniony odczyt/zapis musi kończyć się odmową po stronie serwera.
+- Próby rzeczywistego zapisu, wysyłki i analizy AI wykonuj wyłącznie w osobno zaakceptowanym scenariuszu testowym. Odbiorca testowy nadal jest wymuszany po stronie serwera.
+
+Wariant zewnętrznego `fetch` z GitHub Pages nie ma w tym repozytorium kompletnego przepływu OAuth/CORS. Do rzeczywistego CRM używaj istniejącego osadzonego Web App i `google.script.run`; panel lokalny/GitHub Pages pozostaje właściwy do demonstracji.
+
+## 6. Wycofanie i lokalna weryfikacja
+
+Wycofanie wersji Web App: w **Zarządzaj wdrożeniami** przypisz poprzednią zapisaną wersję do tego samego wdrożenia. Wyzwalacze wykonują zapisany kod projektu, niezależnie od wersji Web App. Pełne wycofanie wymaga także przywrócenia zapisanych plików projektu i dawnych handlerów/harmonogramów. Nie usuwaj ani nie odtwarzaj arkusza/formularza. Nie przywracaj szerokiego dostępu przez PIN.
+
+Sprawdzenie pakietu lokalnie, bez połączeń z Google:
+
+```text
+node scripts/test-all.js
+```
+
+Polecenie uruchamia wszystkie zestawy regresji, odbudowuje `google/webapp.html` i sprawdza składnię jego skryptu. Wyniki oraz ograniczenia opisuje [RAPORT-TESTOW.md](RAPORT-TESTOW.md).

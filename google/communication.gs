@@ -58,6 +58,7 @@ function onOpen() {
  * Kompatybilność wsteczna - wywołanie aktualizacji do najnowszej wersji
  */
 function updateDashboardKpiFormulasOnly() {
+  requireSmartCarePermission_("admin");
   if (typeof updateSystemToV028 === "function") {
     updateSystemToV028();
   } else if (typeof updateSystemToV027 === "function") {
@@ -70,7 +71,7 @@ function updateDashboardKpiFormulasOnly() {
 /**
  * Weryfikacja czy adres URL Profilu Firmy Google jest autentycznym linkiem (a nie placeholderem)
  */
-function isVerifiedReviewUrl(url) {
+function isVerifiedReviewUrl_(url) {
   if (!url) return false;
   const trimmed = String(url).trim();
   if (trimmed === "" || trimmed.includes("PLACEHOLDER")) return false;
@@ -80,7 +81,11 @@ function isVerifiedReviewUrl(url) {
 /**
  * Funkcja sanityzacji tekstu zabezpieczająca przed wstrzyknięciem HTML i XSS
  */
-function escapeHtml(str) {
+function serializeForHtmlScript_(value) {
+  return JSON.stringify(value).replace(/</g, "\\u003c").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
+}
+
+function escapeHtml_(str) {
   if (str === null || str === undefined) return "";
   return String(str)
     .replace(/&/g, "&amp;")
@@ -93,8 +98,9 @@ function escapeHtml(str) {
 /**
  * Pobiera ustawienia systemowe z zakładki USTAWIENIA
  */
-function getSmartCareSettings() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+function getSmartCareSettings_() {
+  const ss = getSmartCareSpreadsheet_();
+  if (!ss) throw new Error("Nie można otworzyć arkusza SmartCare.");
   const settingsSheet = ss.getSheetByName("USTAWIENIA");
   
   const defaultSettings = {
@@ -118,7 +124,7 @@ function getSmartCareSettings() {
     }
 
     let reviewUrl = settingsMap["Zweryfikowany link do opinii Google"] || defaultSettings.googleReviewUrl;
-    if (reviewUrl.includes("PLACEHOLDER") || !isVerifiedReviewUrl(reviewUrl)) {
+    if (reviewUrl.includes("PLACEHOLDER") || !isVerifiedReviewUrl_(reviewUrl)) {
       reviewUrl = defaultSettings.googleReviewUrl;
     }
 
@@ -141,7 +147,7 @@ function getSmartCareSettings() {
 /**
  * Pobiera dane zaznaczonego zgłoszenia z zakładki ZGŁOSZENIA (v0.2.7)
  */
-function getSelectedTicketData() {
+function getSelectedTicketData_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getActiveSheet();
   const ui = SpreadsheetApp.getUi();
@@ -157,13 +163,13 @@ function getSelectedTicketData() {
     return null;
   }
 
-  return getTicketDataByRow(sheet, row);
+  return getTicketDataByRow_(sheet, row);
 }
 
 /**
  * Pobiera kompletny obiekt danych zgłoszenia dla wskazanego wiersza
  */
-function getTicketDataByRow(sheet, row) {
+function getTicketDataByRow_(sheet, row) {
   const lastCol = sheet.getLastColumn();
   const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim());
   const values = sheet.getRange(row, 1, 1, lastCol).getValues()[0];
@@ -300,7 +306,8 @@ function getTicketDataByRow(sheet, row) {
  * - Natychmiastowe przyciski operacyjne (Odpowiedź 0s, Telefon, Historia, AI).
  */
 function actionOpenCentralTicketHub() {
-  const ticket = getSelectedTicketData();
+  requireSmartCarePermission_("read");
+  const ticket = getSelectedTicketData_();
   if (!ticket) return;
 
   const priorityColors = {
@@ -363,12 +370,12 @@ function actionOpenCentralTicketHub() {
 <body>
   <div class="header-bar">
     <div class="header-title">
-      <span>🎯 Centrum Obsługi Zgłoszenia: ${escapeHtml(ticket.ticketId)}</span>
-      <span class="pill" style="background:${prioStyle.bg}; color:${prioStyle.text}; border:1px solid ${prioStyle.border};">Priorytet: ${escapeHtml(ticket.priority)}</span>
-      <span class="pill" style="background:${aiStyle.bg}; color:${aiStyle.text};">AI: ${escapeHtml(ticket.aiState)}</span>
+      <span>🎯 Centrum Obsługi Zgłoszenia: ${escapeHtml_(ticket.ticketId)}</span>
+      <span class="pill" style="background:${prioStyle.bg}; color:${prioStyle.text}; border:1px solid ${prioStyle.border};">Priorytet: ${escapeHtml_(ticket.priority)}</span>
+      <span class="pill" style="background:${aiStyle.bg}; color:${aiStyle.text};">AI: ${escapeHtml_(ticket.aiState)}</span>
     </div>
     <div>
-      <span style="font-size:12px; color:#64748b;">Status: <strong>${escapeHtml(ticket.status)}</strong> | SLA: <strong>${escapeHtml(ticket.slaDeadline || "Brak")}</strong></span>
+      <span style="font-size:12px; color:#64748b;">Status: <strong>${escapeHtml_(ticket.status)}</strong> | SLA: <strong>${escapeHtml_(ticket.slaDeadline || "Brak")}</strong></span>
     </div>
   </div>
 
@@ -377,14 +384,14 @@ function actionOpenCentralTicketHub() {
     <div>
       <div class="card" style="margin-bottom: 12px;">
         <h4 class="card-title">👤 Dane zgłoszenia & Mieszkaniec</h4>
-        <div class="field-row"><span class="field-label">Imię i nazwisko:</span><span class="field-val"><strong>${escapeHtml(ticket.residentName)}</strong></span></div>
-        <div class="field-row"><span class="field-label">Lokalizacja:</span><span class="field-val">📍 ${escapeHtml(ticket.location)}</span></div>
-        <div class="field-row"><span class="field-label">Kontakt:</span><span class="field-val">✉️ ${escapeHtml(ticket.residentEmail || "brak e-mail")} | 📞 ${escapeHtml(ticket.residentPhone || "brak tel")}</span></div>
-        <div class="field-row"><span class="field-label">Frakcja / Kategoria:</span><span class="field-val"><strong>${escapeHtml(ticket.wasteFraction || "Nieokreślona")}</strong> (${escapeHtml(ticket.ticketType)})</span></div>
-        <div class="field-row"><span class="field-label">Wpłynęło:</span><span class="field-val">${escapeHtml(ticket.timestamp)} ${ticket.contactRequest ? '<span style="color:#b45309; font-weight:bold;">[Wnioskowano o kontakt]</span>' : ''}</span></div>
+        <div class="field-row"><span class="field-label">Imię i nazwisko:</span><span class="field-val"><strong>${escapeHtml_(ticket.residentName)}</strong></span></div>
+        <div class="field-row"><span class="field-label">Lokalizacja:</span><span class="field-val">📍 ${escapeHtml_(ticket.location)}</span></div>
+        <div class="field-row"><span class="field-label">Kontakt:</span><span class="field-val">✉️ ${escapeHtml_(ticket.residentEmail || "brak e-mail")} | 📞 ${escapeHtml_(ticket.residentPhone || "brak tel")}</span></div>
+        <div class="field-row"><span class="field-label">Frakcja / Kategoria:</span><span class="field-val"><strong>${escapeHtml_(ticket.wasteFraction || "Nieokreślona")}</strong> (${escapeHtml_(ticket.ticketType)})</span></div>
+        <div class="field-row"><span class="field-label">Wpłynęło:</span><span class="field-val">${escapeHtml_(ticket.timestamp)} ${ticket.contactRequest ? '<span style="color:#b45309; font-weight:bold;">[Wnioskowano o kontakt]</span>' : ''}</span></div>
         
         <label style="margin-top:8px;">Oryginalny opis mieszkańca:</label>
-        <div class="desc-box">${escapeHtml(ticket.description)}</div>
+        <div class="desc-box">${escapeHtml_(ticket.description)}</div>
       </div>
 
       <div class="card">
@@ -392,16 +399,16 @@ function actionOpenCentralTicketHub() {
         
         ${ticket.localDataControl ? `
         <div class="warn-box">
-          <strong>Lokalna kontrola danych:</strong> ${escapeHtml(ticket.localDataControl)}
-          ${ticket.contradictions && ticket.contradictions !== "Brak sprzeczności" ? `<br>⚠️ <strong>Wykryta sprzeczność:</strong> ${escapeHtml(ticket.contradictions)}` : ''}
+          <strong>Lokalna kontrola danych:</strong> ${escapeHtml_(ticket.localDataControl)}
+          ${ticket.contradictions && ticket.contradictions !== "Brak sprzeczności" ? `<br>⚠️ <strong>Wykryta sprzeczność:</strong> ${escapeHtml_(ticket.contradictions)}` : ''}
         </div>` : ''}
 
         <div class="ai-box">
-          <div style="margin-bottom:6px;"><strong>Kategoria AI:</strong> ${escapeHtml(ticket.aiCategory || ticket.ticketType)}</div>
-          <div style="margin-bottom:6px;"><strong>Streszczenie AI:</strong> ${escapeHtml(ticket.aiSummary || "Analiza oczekuje na uruchomienie.")}</div>
-          <div style="margin-bottom:6px;"><strong>Sugerowany priorytet:</strong> <span style="font-weight:bold; color:#b91c1c;">${escapeHtml(ticket.aiSuggestedPriority || "STANDARDOWY")}</span> <em>(${escapeHtml(ticket.aiPriorityRationale || "Brak uzasadnienia")})</em></div>
-          <div style="margin-bottom:6px;"><strong>Brakujące informacje:</strong> ${escapeHtml(ticket.aiMissingInfo || "Brak braków")}</div>
-          <div style="margin-bottom:6px;"><strong>Rekomendowane zadanie:</strong> 🎯 ${escapeHtml(ticket.aiRecommendedNextStep || ticket.aiSuggestedAction || "Weryfikacja zgłoszenia")}</div>
+          <div style="margin-bottom:6px;"><strong>Kategoria AI:</strong> ${escapeHtml_(ticket.aiCategory || ticket.ticketType)}</div>
+          <div style="margin-bottom:6px;"><strong>Streszczenie AI:</strong> ${escapeHtml_(ticket.aiSummary || "Analiza oczekuje na uruchomienie.")}</div>
+          <div style="margin-bottom:6px;"><strong>Sugerowany priorytet:</strong> <span style="font-weight:bold; color:#b91c1c;">${escapeHtml_(ticket.aiSuggestedPriority || "STANDARDOWY")}</span> <em>(${escapeHtml_(ticket.aiPriorityRationale || "Brak uzasadnienia")})</em></div>
+          <div style="margin-bottom:6px;"><strong>Brakujące informacje:</strong> ${escapeHtml_(ticket.aiMissingInfo || "Brak braków")}</div>
+          <div style="margin-bottom:6px;"><strong>Rekomendowane zadanie:</strong> 🎯 ${escapeHtml_(ticket.aiRecommendedNextStep || ticket.aiSuggestedAction || "Weryfikacja zgłoszenia")}</div>
           <div><strong>Strona kolejnego kroku:</strong> ${ticket.responsibleSide === "Mieszkaniec" ? '<span style="color:#b45309; font-weight:bold;">Mieszkaniec (oczekujemy na dane)</span>' : '<span style="color:#1e40af; font-weight:bold;">Przedsiębiorstwo (działanie POK/dyspozytora)</span>'}</div>
         </div>
       </div>
@@ -437,7 +444,7 @@ function actionOpenCentralTicketHub() {
 
           <div class="form-group">
             <label for="pNextAction">Następne działanie operacyjne:</label>
-            <input type="text" id="pNextAction" value="${escapeHtml(ticket.nextAction || ticket.aiRecommendedNextStep || '')}" placeholder="np. Weryfikacja zapisu GPS śmieciarki">
+            <input type="text" id="pNextAction" value="${escapeHtml_(ticket.nextAction || ticket.aiRecommendedNextStep || '')}" placeholder="np. Weryfikacja zapisu GPS śmieciarki">
           </div>
 
           <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 8px;">
@@ -450,23 +457,23 @@ function actionOpenCentralTicketHub() {
             </div>
             <div class="form-group">
               <label for="pAgent">Pracownik odpowiedzialny:</label>
-              <input type="text" id="pAgent" value="${escapeHtml(ticket.assignedEmployee || '')}" placeholder="Login pracownika">
+              <input type="text" id="pAgent" value="${escapeHtml_(ticket.assignedEmployee || '')}" placeholder="Login pracownika">
             </div>
           </div>
 
           <div class="form-group">
             <label for="pNextDeadline">Termin wykonania następnego kroku:</label>
-            <input type="text" id="pNextDeadline" value="${escapeHtml(ticket.nextActionDeadline || '')}" placeholder="np. 2026-11-26 12:00">
+            <input type="text" id="pNextDeadline" value="${escapeHtml_(ticket.nextActionDeadline || '')}" placeholder="np. 2026-11-26 12:00">
           </div>
 
           <div class="form-group">
             <label for="pResolution">Sposób rozwiązania sprawy (wymagany przed zamknięciem):</label>
-            <textarea id="pResolution" placeholder="Faktyczne działania podjęte w terenie...">${escapeHtml(ticket.resolutionMethod || '')}</textarea>
+            <textarea id="pResolution" placeholder="Faktyczne działania podjęte w terenie...">${escapeHtml_(ticket.resolutionMethod || '')}</textarea>
           </div>
 
           <div class="form-group">
             <label for="pNote">Wewnętrzna notatka pracownika:</label>
-            <textarea id="pNote" placeholder="Ustalenia dyspozytorni, kontakt telefoniczny...">${escapeHtml(ticket.employeeNote || '')}</textarea>
+            <textarea id="pNote" placeholder="Ustalenia dyspozytorni, kontakt telefoniczny...">${escapeHtml_(ticket.employeeNote || '')}</textarea>
           </div>
         </form>
       </div>
@@ -490,7 +497,7 @@ function actionOpenCentralTicketHub() {
   <script>
     function saveHubChanges() {
       const payload = {
-        ticketId: ${JSON.stringify(ticket.ticketId)},
+        ticketId: ${serializeForHtmlScript_(ticket.ticketId)},
         rowNum: ${ticket.row},
         status: document.getElementById('pStatus').value,
         priority: document.getElementById('pPriority').value,
@@ -548,6 +555,8 @@ function actionOpenCentralTicketHub() {
  * Backend zapisu aktualizacji z Centralnego Panelu Obsługi (v0.2.7)
  */
 function saveTicketPanelUpdates(payload) {
+  requireSmartCarePermission_("write");
+  if (payload && ["Rozwiązane","Zamknięte"].includes(payload.status)) requireSmartCarePermission_("close");
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName("ZGŁOSZENIA");
   if (!sheet) {
@@ -562,14 +571,14 @@ function saveTicketPanelUpdates(payload) {
   const lastCol = sheet.getLastColumn();
   const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim());
 
-  setValByHeader(sheet, row, headers, "Status", payload.status);
-  setValByHeader(sheet, row, headers, "Priorytet", payload.priority);
-  setValByHeader(sheet, row, headers, "Następne działanie", payload.nextAction);
-  setValByHeader(sheet, row, headers, "Strona odpowiedzialna", payload.responsibleSide);
-  setValByHeader(sheet, row, headers, "Pracownik odpowiedzialny", payload.assignedEmployee);
-  setValByHeader(sheet, row, headers, "Termin następnego działania", payload.nextActionDeadline);
-  setValByHeader(sheet, row, headers, "Sposób rozwiązania sprawy", payload.resolutionMethod);
-  setValByHeader(sheet, row, headers, "Notatka pracownika", payload.employeeNote);
+  setValByHeader_(sheet, row, headers, "Status", payload.status);
+  setValByHeader_(sheet, row, headers, "Priorytet", payload.priority);
+  setValByHeader_(sheet, row, headers, "Następne działanie", payload.nextAction);
+  setValByHeader_(sheet, row, headers, "Strona odpowiedzialna", payload.responsibleSide);
+  setValByHeader_(sheet, row, headers, "Pracownik odpowiedzialny", payload.assignedEmployee);
+  setValByHeader_(sheet, row, headers, "Termin następnego działania", payload.nextActionDeadline);
+  setValByHeader_(sheet, row, headers, "Sposób rozwiązania sprawy", payload.resolutionMethod);
+  setValByHeader_(sheet, row, headers, "Notatka pracownika", payload.employeeNote);
 
   // Jeśli status to Rozwiązane i brak daty rozwiązania, ustaw datę bieżącą
   if (payload.status === "Rozwiązane") {
@@ -583,8 +592,8 @@ function saveTicketPanelUpdates(payload) {
   }
 
   SpreadsheetApp.flush();
-  if (typeof refreshDashboardStats === "function") {
-    try { refreshDashboardStats(ss); } catch (_) {}
+  if (typeof refreshDashboardStats_ === "function") {
+    try { refreshDashboardStats_(ss); } catch (_) {}
   }
 
   return { success: true };
@@ -597,6 +606,7 @@ function saveTicketPanelUpdates(payload) {
  * Pozwala przeglądać zgłoszenia według priorytetów, SLA i braków kolejnego kroku.
  */
 function actionOpenQueueBrowser() {
+  requireSmartCarePermission_("read");
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName("ZGŁOSZENIA");
   if (!sheet || sheet.getLastRow() <= 1) {
@@ -608,13 +618,13 @@ function actionOpenQueueBrowser() {
   const tickets = [];
 
   for (let r = 2; r <= lastRow; r++) {
-    const t = getTicketDataByRow(sheet, r);
+    const t = getTicketDataByRow_(sheet, r);
     if (t.ticketId) {
       tickets.push(t);
     }
   }
 
-  const ticketsJson = JSON.stringify(tickets);
+  const ticketsJson = serializeForHtmlScript_(tickets);
 
   const html = `
 <!DOCTYPE html>
@@ -672,6 +682,7 @@ function actionOpenQueueBrowser() {
 
   <script>
     const allTickets = ${ticketsJson};
+    const escapeText = ${escapeHtml_.toString()};
     let currentFilter = 'active';
 
     function setFilter(filter) {
@@ -724,14 +735,14 @@ function actionOpenQueueBrowser() {
         const isOverdue = t.slaOverdue === 'TAK';
 
         html += '<tr>' +
-          '<td><strong>' + (t.ticketId || '') + '</strong></td>' +
-          '<td><span class="pill" style="background:#f1f5f9; color:#334155;">' + (t.status || 'Nowe') + '</span></td>' +
-          '<td><span class="pill" style="' + pStyle + '">' + (t.priority || 'STANDARDOWY') + '</span></td>' +
-          '<td><strong>' + (t.residentName || 'Mieszkaniec') + '</strong><br><small style="color:#64748b;">📍 ' + (t.location || '') + '</small></td>' +
-          '<td>' + (t.nextAction || '<em style="color:#ef4444;">Brak przypisanego kroku</em>') + '</td>' +
+          '<td><strong>' + escapeText(t.ticketId || '') + '</strong></td>' +
+          '<td><span class="pill" style="background:#f1f5f9; color:#334155;">' + escapeText(t.status || 'Nowe') + '</span></td>' +
+          '<td><span class="pill" style="' + pStyle + '">' + escapeText(t.priority || 'STANDARDOWY') + '</span></td>' +
+          '<td><strong>' + escapeText(t.residentName || 'Mieszkaniec') + '</strong><br><small style="color:#64748b;">📍 ' + escapeText(t.location || '') + '</small></td>' +
+          '<td>' + (t.nextAction ? escapeText(t.nextAction) : '<em style="color:#ef4444;">Brak przypisanego kroku</em>') + '</td>' +
           '<td>' + (t.responsibleSide === 'Mieszkaniec' ? '<span style="color:#b45309; font-weight:600;">Mieszkaniec</span>' : 'Firma') + '</td>' +
-          '<td>' + (isOverdue ? '<span style="color:#b91c1c; font-weight:bold;">⚠️ ' + (t.slaDeadline || 'Przekroczone') + '</span>' : (t.slaDeadline || '-')) + '</td>' +
-          '<td><button class="btn-open" onclick="openTicket(' + t.row + ')">Obsłuż</button></td>' +
+          '<td>' + (isOverdue ? '<span style="color:#b91c1c; font-weight:bold;">⚠️ ' + escapeText(t.slaDeadline || 'Przekroczone') + '</span>' : escapeText(t.slaDeadline || '-')) + '</td>' +
+          '<td><button class="btn-open" onclick="openTicket(' + Number(t.row) + ')">Obsłuż</button></td>' +
           '</tr>';
       }
       tbody.innerHTML = html;
@@ -756,6 +767,7 @@ function actionOpenQueueBrowser() {
  * Zaznacza wiersz w arkuszu ZGŁOSZENIA i otwiera Centrum Obsługi Zgłoszenia
  */
 function selectRowAndOpenHub(rowNum) {
+  requireSmartCarePermission_("read");
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName("ZGŁOSZENIA");
   if (sheet) {
@@ -769,6 +781,7 @@ function selectRowAndOpenHub(rowNum) {
  * 3. Akcja: Analizuj zgłoszenie przez AI
  */
 function actionAnalyzeWithAi() {
+  requireSmartCarePermission_("ai");
   if (typeof analyzeSelectedTicket === "function") {
     analyzeSelectedTicket();
   } else {
@@ -782,7 +795,7 @@ function actionAnalyzeWithAi() {
  * - dla zgłoszenia niekompletnego: prośba o doprecyzowanie danych
  * - dla reklamacji kompletnej: potwierdzenie weryfikacji operacyjnej
  */
-function generateTailoredEmergencyConfirmation(ticket, settings) {
+function generateTailoredEmergencyConfirmation_(ticket, settings) {
   const isPraise = /pochwał|podzięk/i.test(ticket.ticketType || "");
   const hasIssues = Boolean(ticket.aiMissingInfo || (ticket.localDataControl && ticket.localDataControl.includes("Wymaga uzupełnienia")));
 
@@ -855,15 +868,16 @@ Tel. ${settings.contactPhone} | ${settings.website}`
  * lecz generujemy bezpieczną odpowiedź dopasowaną do kategorii (Pochwała, Niekompletne, Reklamacja).
  */
 function actionPrepareConfirmation() {
-  const ticket = getSelectedTicketData();
+  requireSmartCarePermission_("comms");
+  const ticket = getSelectedTicketData_();
   if (!ticket) return;
 
   if (!ticket.residentEmail) {
-    promptMissingEmail(ticket);
+    promptMissingEmail_(ticket);
     return;
   }
 
-  const settings = getSmartCareSettings();
+  const settings = getSmartCareSettings_();
   const subject = `Potwierdzenie przyjęcia zgłoszenia ${ticket.ticketId} – ELWOZ ECO SmartCare`;
 
   let body = "";
@@ -872,10 +886,10 @@ function actionPrepareConfirmation() {
   if (!isAiError && ticket.aiDraftResponse && ticket.aiDraftResponse.trim().length > 20) {
     body = ticket.aiDraftResponse.trim();
   } else {
-    body = generateTailoredEmergencyConfirmation(ticket, settings);
+    body = generateTailoredEmergencyConfirmation_(ticket, settings);
   }
 
-  openEmailDialog({
+  openEmailDialog_({
     ticketId: ticket.ticketId,
     actionType: "Potwierdzenie przyjęcia",
     recipient: ticket.residentEmail,
@@ -891,15 +905,16 @@ function actionPrepareConfirmation() {
  * notatka pracownika, następne działanie, strona odpowiedzialna, wynik kontaktu z mieszkańcem.
  */
 function actionPrepareProgressUpdate() {
-  const ticket = getSelectedTicketData();
+  requireSmartCarePermission_("comms");
+  const ticket = getSelectedTicketData_();
   if (!ticket) return;
 
   if (!ticket.residentEmail) {
-    promptMissingEmail(ticket);
+    promptMissingEmail_(ticket);
     return;
   }
 
-  const settings = getSmartCareSettings();
+  const settings = getSmartCareSettings_();
   const subject = `Informacja o statusie sprawy ${ticket.ticketId} – ELWOZ ECO SmartCare`;
 
   const progressDetails = [];
@@ -938,7 +953,7 @@ ${settings.facilityName}
 ul. Mściwoja II 14, 83-300 Kartuzy
 Tel. ${settings.contactPhone} | ${settings.website}`;
 
-  openEmailDialog({
+  openEmailDialog_({
     ticketId: ticket.ticketId,
     actionType: "Informacja o postępach",
     recipient: ticket.residentEmail,
@@ -952,11 +967,12 @@ Tel. ${settings.contactPhone} | ${settings.website}`;
  * 6. Akcja: Przygotuj informację o rozwiązaniu (Szablon C)
  */
 function actionPrepareResolution() {
-  const ticket = getSelectedTicketData();
+  requireSmartCarePermission_("comms");
+  const ticket = getSelectedTicketData_();
   if (!ticket) return;
 
   if (!ticket.residentEmail) {
-    promptMissingEmail(ticket);
+    promptMissingEmail_(ticket);
     return;
   }
 
@@ -970,7 +986,7 @@ function actionPrepareResolution() {
     return;
   }
 
-  const settings = getSmartCareSettings();
+  const settings = getSmartCareSettings_();
   const subject = `Rozwiązanie zgłoszenia ${ticket.ticketId} – ELWOZ ECO SmartCare`;
 
   let body = 
@@ -987,9 +1003,9 @@ Z poważaniem,
 ${settings.senderName}
 Tel. ${settings.contactPhone} | ${settings.website}`;
 
-  const hasVerifiedReviewLink = isVerifiedReviewUrl(settings.googleReviewUrl);
+  const hasVerifiedReviewLink = isVerifiedReviewUrl_(settings.googleReviewUrl);
 
-  openEmailDialog({
+  openEmailDialog_({
     ticketId: ticket.ticketId,
     actionType: "Informacja o rozwiązaniu",
     recipient: ticket.residentEmail,
@@ -1006,16 +1022,17 @@ Tel. ${settings.contactPhone} | ${settings.website}`;
  * 7. Akcja: Przygotuj prośbę o opinię Google (Szablon D)
  */
 function actionPrepareReviewRequest() {
-  const ticket = getSelectedTicketData();
+  requireSmartCarePermission_("comms");
+  const ticket = getSelectedTicketData_();
   if (!ticket) return;
 
   if (!ticket.residentEmail) {
-    promptMissingEmail(ticket);
+    promptMissingEmail_(ticket);
     return;
   }
 
-  const settings = getSmartCareSettings();
-  if (!isVerifiedReviewUrl(settings.googleReviewUrl)) {
+  const settings = getSmartCareSettings_();
+  if (!isVerifiedReviewUrl_(settings.googleReviewUrl)) {
     SpreadsheetApp.getUi().alert(
       "Brak zweryfikowanego linku do opinii Google",
       "Nie można przygotować prośby o opinię, ponieważ w zakładce 'USTAWIENIA' nie wprowadzono autentycznego linku do Profilu Firmy Google.\n\n" +
@@ -1054,7 +1071,7 @@ Z poważaniem,
 ${settings.senderName}
 ${settings.companyName}`;
 
-  openEmailDialog({
+  openEmailDialog_({
     ticketId: ticket.ticketId,
     actionType: "Prośba o opinię",
     recipient: ticket.residentEmail,
@@ -1068,7 +1085,7 @@ ${settings.companyName}`;
 /**
  * Pomocniczy komunikat przy braku adresu e-mail
  */
-function promptMissingEmail(ticket) {
+function promptMissingEmail_(ticket) {
   const ui = SpreadsheetApp.getUi();
   let msg = `Zgłoszenie ${ticket.ticketId} nie posiada wpisanego adresu e-mail mieszkańca.\n\n`;
   if (ticket.residentPhone) {
@@ -1087,13 +1104,14 @@ function promptMissingEmail(ticket) {
  * 8. Akcja: Odnotuj kontakt telefoniczny
  */
 function actionLogPhoneCall() {
-  const ticket = getSelectedTicketData();
+  requireSmartCarePermission_("comms");
+  const ticket = getSelectedTicketData_();
   if (!ticket) return;
 
-  const safeTicketId = escapeHtml(ticket.ticketId);
-  const safeResidentName = escapeHtml(ticket.residentName);
-  const safeResidentPhone = escapeHtml(ticket.residentPhone || "brak numeru");
-  const safeUserEmail = escapeHtml(Session.getActiveUser().getEmail().split("@")[0]);
+  const safeTicketId = escapeHtml_(ticket.ticketId);
+  const safeResidentName = escapeHtml_(ticket.residentName);
+  const safeResidentPhone = escapeHtml_(ticket.residentPhone || "brak numeru");
+  const safeUserEmail = escapeHtml_(Session.getActiveUser().getEmail().split("@")[0]);
 
   const html = `
 <!DOCTYPE html>
@@ -1153,7 +1171,7 @@ function actionLogPhoneCall() {
       google.script.run
         .withSuccessHandler(() => { google.script.host.close(); })
         .withFailureHandler(err => { alert('Błąd zapisu: ' + err); })
-        .processLogPhoneCall(${JSON.stringify(ticket.ticketId)}, ${JSON.stringify(ticket.residentPhone || "")}, result, notes, agent);
+        .processLogPhoneCall(${serializeForHtmlScript_(ticket.ticketId)}, ${serializeForHtmlScript_(ticket.residentPhone || "")}, result, notes, agent);
     }
   </script>
 </body>
@@ -1167,6 +1185,7 @@ function actionLogPhoneCall() {
  * Backend zapisu rozmowy telefonicznej (zapis z obiektem Date dla KPI)
  */
 function processLogPhoneCall(ticketId, phone, result, notes, agent) {
+  agent = requireSmartCarePermission_("comms").name;
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const histSheet = ss.getSheetByName("HISTORIA KOMUNIKACJI");
   const ticketSheet = ss.getSheetByName("ZGŁOSZENIA");
@@ -1222,8 +1241,8 @@ function processLogPhoneCall(ticketId, phone, result, notes, agent) {
   }
 
   SpreadsheetApp.getActiveSpreadsheet().toast(`Zapisano kontakt telefoniczny dla ${ticketId}.`, "SmartCare", 5);
-  if (typeof refreshDashboardStats === "function") {
-    try { refreshDashboardStats(ss); } catch (_) {}
+  if (typeof refreshDashboardStats_ === "function") {
+    try { refreshDashboardStats_(ss); } catch (_) {}
   }
 }
 
@@ -1231,7 +1250,8 @@ function processLogPhoneCall(ticketId, phone, result, notes, agent) {
  * 9. Akcja: Wyświetl historię komunikacji dla zgłoszenia
  */
 function actionViewCommunicationHistory() {
-  const ticket = getSelectedTicketData();
+  requireSmartCarePermission_("read");
+  const ticket = getSelectedTicketData_();
   if (!ticket) return;
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -1247,22 +1267,22 @@ function actionViewCommunicationHistory() {
   for (let i = 1; i < data.length; i++) {
     if (String(data[i][0]).trim() === String(ticket.ticketId).trim()) {
       historyList.push({
-        date: escapeHtml(data[i][1]),
-        action: escapeHtml(data[i][2]),
-        channel: escapeHtml(data[i][3]),
-        recipient: escapeHtml(data[i][4]),
-        subject: escapeHtml(data[i][5]),
-        content: escapeHtml(data[i][6]),
-        agent: escapeHtml(data[i][7]),
-        status: escapeHtml(data[i][8]),
-        error: escapeHtml(data[i][9])
+        date: escapeHtml_(data[i][1]),
+        action: escapeHtml_(data[i][2]),
+        channel: escapeHtml_(data[i][3]),
+        recipient: escapeHtml_(data[i][4]),
+        subject: escapeHtml_(data[i][5]),
+        content: escapeHtml_(data[i][6]),
+        agent: escapeHtml_(data[i][7]),
+        status: escapeHtml_(data[i][8]),
+        error: escapeHtml_(data[i][9])
       });
     }
   }
 
   let htmlRows = "";
   if (historyList.length === 0) {
-    htmlRows = `<tr><td colspan="5" style="text-align: center; color: #94a3b8; padding: 20px;">Brak wpisów w historii dla zgłoszenia ${escapeHtml(ticket.ticketId)}.</td></tr>`;
+    htmlRows = `<tr><td colspan="5" style="text-align: center; color: #94a3b8; padding: 20px;">Brak wpisów w historii dla zgłoszenia ${escapeHtml_(ticket.ticketId)}.</td></tr>`;
   } else {
     for (let h of historyList) {
       const statusStyle = h.status === 'wysłano' ? 'color:#1b5e20; font-weight:600;' : (h.status.indexOf('błąd') !== -1 ? 'color:#b71c1c; font-weight:600;' : 'color:#0d47a1;');
@@ -1291,8 +1311,8 @@ function actionViewCommunicationHistory() {
   </style>
 </head>
 <body>
-  <h3>Historia korespondencji – Zgłoszenie ${escapeHtml(ticket.ticketId)}</h3>
-  <div style="font-size:0.85rem; color:#64748b;">Mieszkaniec: <strong>${escapeHtml(ticket.residentName)}</strong> | Status w CRM: <strong>${escapeHtml(ticket.status)}</strong></div>
+  <h3>Historia korespondencji – Zgłoszenie ${escapeHtml_(ticket.ticketId)}</h3>
+  <div style="font-size:0.85rem; color:#64748b;">Mieszkaniec: <strong>${escapeHtml_(ticket.residentName)}</strong> | Status w CRM: <strong>${escapeHtml_(ticket.status)}</strong></div>
   
   <table>
     <thead>
@@ -1320,13 +1340,13 @@ function actionViewCommunicationHistory() {
 /**
  * Uniwersalne okno dialogowe podglądu, edycji i wysyłki wiadomości e-mail (v0.2.7)
  */
-function openEmailDialog(params) {
-  const safeTicketId = escapeHtml(params.ticketId);
-  const safeActionType = escapeHtml(params.actionType);
-  const safeRecipient = escapeHtml(params.recipient);
-  const safeTargetEmail = escapeHtml(APPROVED_TEST_RECIPIENT);
-  const safeSubject = escapeHtml("[TEST] " + params.subject.replace(/^\[TEST\]\s*/i, ""));
-  const safeBody = escapeHtml(params.body);
+function openEmailDialog_(params) {
+  const safeTicketId = escapeHtml_(params.ticketId);
+  const safeActionType = escapeHtml_(params.actionType);
+  const safeRecipient = escapeHtml_(params.recipient);
+  const safeTargetEmail = escapeHtml_(APPROVED_TEST_RECIPIENT);
+  const safeSubject = escapeHtml_("[TEST] " + params.subject.replace(/^\[TEST\]\s*/i, ""));
+  const safeBody = escapeHtml_(params.body);
 
   const html = `
 <!DOCTYPE html>
@@ -1391,7 +1411,7 @@ function openEmailDialog(params) {
         <input type="checkbox" id="addGoogleReview" ${params.alreadyReviewed ? '' : 'checked'} style="margin-top: 2px;">
         <span>
           <strong>Dołącz zaproszenie do wystawienia neutralnej opinii Google</strong><br>
-          ${params.alreadyReviewed ? '<span style="color:#b45309;">⚠️ Prośba o opinię była już wysłana w dn. ' + escapeHtml(params.alreadyReviewedDate || 'wcześniej') + '. Ponowne zaznaczenie wymaga świadomej decyzji pracownika.</span>' : 'Zgodnie z zasadami etycznymi: brak nagród, brak filtrowania ocen, pełna neutralność.'}
+          ${params.alreadyReviewed ? '<span style="color:#b45309;">⚠️ Prośba o opinię była już wysłana w dn. ' + escapeHtml_(params.alreadyReviewedDate || 'wcześniej') + '. Ponowne zaznaczenie wymaga świadomej decyzji pracownika.</span>' : 'Zgodnie z zasadami etycznymi: brak nagród, brak filtrowania ocen, pełna neutralność.'}
         </span>
       </label>
     </div>` : `
@@ -1449,9 +1469,9 @@ function openEmailDialog(params) {
           document.getElementById('btnSubmit').innerText = 'Zatwierdź i wyślij';
         })
         .processSendEmail({
-          ticketId: ${JSON.stringify(params.ticketId)},
-          actionType: ${JSON.stringify(params.actionType)},
-          originalRecipient: ${JSON.stringify(params.recipient)},
+          ticketId: ${serializeForHtmlScript_(params.ticketId)},
+          actionType: ${serializeForHtmlScript_(params.actionType)},
+          originalRecipient: ${serializeForHtmlScript_(params.recipient)},
           subject: subject,
           body: body,
           addedReviewRequest: addReview
@@ -1537,7 +1557,7 @@ function openEmailDialog(params) {
             alert('Błąd AI: ' + safeErr);
           }
         })
-        .polishMessageWithAi(${JSON.stringify(params.ticketId)}, currentText);
+        .polishMessageWithAi(${serializeForHtmlScript_(params.ticketId)}, currentText);
     }
   </script>
 </body>
@@ -1556,7 +1576,7 @@ function openEmailDialog(params) {
  * @param {string} body Treść wiadomości
  * @returns {{ isValid: boolean, reason?: string }}
  */
-function validateMessageContentQuality(subject, body) {
+function validateMessageContentQuality_(subject, body) {
   const fullText = `${subject || ""} ${body || ""}`.toLowerCase();
 
   // 1. Wykrywanie wulgaryzmów i przekleństw w języku polskim
@@ -1624,6 +1644,7 @@ function validateMessageContentQuality(subject, body) {
  * Backend wysyłki poczty z BEZWARUNKOWĄ blokadą serwerową, LockService oraz zabezpieczeniem przed duplikatami (v0.2.7)
  */
 function processSendEmail(payload) {
+  const operator = requireSmartCarePermission_("comms");
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(15000);
@@ -1635,13 +1656,14 @@ function processSendEmail(payload) {
   }
 
   try {
-    const settings = getSmartCareSettings();
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const settings = getSmartCareSettings_();
+    const ss = getSmartCareSpreadsheet_();
+    if (!ss) throw new Error("Nie można otworzyć arkusza SmartCare.");
     const histSheet = ss.getSheetByName("HISTORIA KOMUNIKACJI");
     const ticketSheet = ss.getSheetByName("ZGŁOSZENIA");
     const now = new Date();
     const nowStr = Utilities.formatDate(now, "Europe/Warsaw", "yyyy-MM-dd HH:mm");
-    const agent = Session.getActiveUser().getEmail().split('@')[0] || "Pracownik";
+    const agent = operator.name;
 
     // 1. BEZWARUNKOWA BLOKADA SERWEROWA ODBIORCY:
     const targetEmail = APPROVED_TEST_RECIPIENT;
@@ -1656,7 +1678,7 @@ function processSendEmail(payload) {
     }
 
     // 2. SERWEROWA KONTROLA JAKOŚCI TREŚCI I BLOKADA OBRAŹLIWYCH SFORMUŁOWAŃ (v0.2.8):
-    const qualityCheck = validateMessageContentQuality(payload.subject, payload.body);
+    const qualityCheck = validateMessageContentQuality_(payload.subject, payload.body);
     if (!qualityCheck.isValid) {
       const blockMsg = `SERWEROWA BLOKADA JAKOŚCI TREŚCI: Wiadomość narusza standardy Customer Experience i PR (${qualityCheck.reason}). Wiadomość NIE została wysłana. Skoryguj treść przed ponowną próbą.`;
       Logger.log(`[Content Quality Guard] ${blockMsg} dla zgłoszenia ${payload.ticketId}.`);
@@ -1667,7 +1689,7 @@ function processSendEmail(payload) {
     }
 
     // 3. WERYFIKACJA LINKU DO OPINII GOOGLE:
-    const hasVerifiedReviewLink = isVerifiedReviewUrl(settings.googleReviewUrl);
+    const hasVerifiedReviewLink = isVerifiedReviewUrl_(settings.googleReviewUrl);
     if (payload.actionType === "Prośba o opinię" && !hasVerifiedReviewLink) {
       return {
         success: false,
@@ -1828,10 +1850,10 @@ function processSendEmail(payload) {
     }
 
     if (sendStatus === "wysłano") {
-      if (typeof refreshDashboardStats === "function") {
-        try { refreshDashboardStats(ss); } catch (_) {}
+      if (typeof refreshDashboardStats_ === "function") {
+        try { refreshDashboardStats_(ss); } catch (_) {}
       }
-      SpreadsheetApp.getActiveSpreadsheet().toast(`Wysłano: ${payload.actionType} na ${targetEmail}`, "SmartCare Sukces", 5);
+      try { ss.toast(`Wysłano: ${payload.actionType} na ${targetEmail}`, "SmartCare Sukces", 5); } catch (_) {}
       return {
         success: true,
         status: "wysłano",
@@ -1851,7 +1873,7 @@ function processSendEmail(payload) {
 /**
  * Automatyczna kontrola przeterminowanych spraw (SLA) i powiadamianie (v0.2.7)
  */
-function checkOverdueTicketsAndNotify() {
+function checkOverdueTicketsAndNotify_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const ticketSheet = ss.getSheetByName("ZGŁOSZENIA");
   if (!ticketSheet || ticketSheet.getLastRow() <= 1) return;
@@ -1889,8 +1911,8 @@ function checkOverdueTicketsAndNotify() {
 
   if (overdueList.length > 0) {
     Logger.log(`Wykryto ${overdueList.length} przeterminowanych spraw SLA: ${overdueList.join(", ")}`);
-    if (typeof refreshDashboardStats === "function") {
-      try { refreshDashboardStats(ss); } catch (_) {}
+    if (typeof refreshDashboardStats_ === "function") {
+      try { refreshDashboardStats_(ss); } catch (_) {}
     }
   }
 }
@@ -1899,6 +1921,7 @@ function checkOverdueTicketsAndNotify() {
  * Personalizacja wiadomości z użyciem zweryfikowanego modelu Gemini Flash (v0.2.7)
  */
 function polishMessageWithAi(ticketId, templateText) {
+  requireSmartCarePermission_("ai");
   let lastError = null;
   for (let attempt = 0; attempt <= 1; attempt++) {
     try {
@@ -1906,7 +1929,7 @@ function polishMessageWithAi(ticketId, templateText) {
         Logger.log(`Ponawianie stylizacji wiadomości przez Gemini API (próba 2/2)...`);
         Utilities.sleep(1000);
       }
-      return polishMessageWithAiDirect(ticketId, templateText);
+      return polishMessageWithAiDirect_(ticketId, templateText);
     } catch (err) {
       lastError = err;
       const errMsg = err.message || String(err);
@@ -1922,22 +1945,22 @@ function polishMessageWithAi(ticketId, templateText) {
 /**
  * Bezpośrednie wywołanie Gemini API do stylizacji wiadomości (v0.2.7)
  */
-function polishMessageWithAiDirect(ticketId, templateText) {
+function polishMessageWithAiDirect_(ticketId, templateText) {
   const scriptProperties = PropertiesService.getScriptProperties();
   const apiKey = scriptProperties.getProperty("GEMINI_API_KEY");
   if (!apiKey) {
     throw new Error("Brak klucza Gemini API w Script Properties. Użyj gotowego szablonu.");
   }
 
-  const targetModel = (typeof getVerifiedGeminiModel === "function")
-    ? getVerifiedGeminiModel(apiKey)
+  const targetModel = (typeof getVerifiedGeminiModel_ === "function")
+    ? getVerifiedGeminiModel_(apiKey)
     : ((typeof SMARTCARE_AI_CONFIG !== "undefined" && SMARTCARE_AI_CONFIG.defaultModel) ? SMARTCARE_AI_CONFIG.defaultModel : "gemini-3.6-flash");
 
-  const thinkingConfig = (typeof getThinkingConfigForModel === "function")
-    ? getThinkingConfigForModel(targetModel)
+  const thinkingConfig = (typeof getThinkingConfigForModel_ === "function")
+    ? getThinkingConfigForModel_(targetModel)
     : (String(targetModel).includes("2.5") ? { thinkingBudget: 0 } : { thinkingLevel: "MINIMAL" });
 
-  const cleanTemplate = anonymizeText(templateText);
+  const cleanTemplate = anonymizeText_(templateText);
 
   const systemPrompt = 
     "Jesteś profesjonalnym asystentem redakcyjnym oraz ekspertem ds. komunikacji Customer Experience (CX) i PR w firmie komunalnej ELWOZ ECO w Kartuzach.\n" +
@@ -1994,8 +2017,8 @@ function polishMessageWithAiDirect(ticketId, templateText) {
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(targetModel)}:generateContent?key=${apiKey}`;
   
   // Wspólna kontrola limitu zapytań Gemini (v0.2.8)
-  if (typeof enforceGeminiRateLimit === "function") {
-    enforceGeminiRateLimit(targetModel);
+  if (typeof enforceGeminiRateLimit_ === "function") {
+    enforceGeminiRateLimit_(targetModel);
   }
 
   let response;
@@ -2014,8 +2037,8 @@ function polishMessageWithAiDirect(ticketId, templateText) {
     else if (typeof response.getHeaders === "function") headers = response.getHeaders() || {};
   } catch (_) {}
 
-  const quotaInfo = (typeof parseGeminiQuotaError === "function")
-    ? parseGeminiQuotaError(responseCode, responseText, headers)
+  const quotaInfo = (typeof parseGeminiQuotaError_ === "function")
+    ? parseGeminiQuotaError_(responseCode, responseText, headers)
     : {
         isQuota: responseCode === 429 || (responseText && responseText.includes("RESOURCE_EXHAUSTED")),
         limitType: "RPM",
@@ -2091,7 +2114,7 @@ function polishMessageWithAiDirect(ticketId, templateText) {
 /**
  * Twarda funkcja anonimizacji tekstu przed przekazaniem do AI
  */
-function anonymizeText(text) {
+function anonymizeText_(text) {
   if (!text) return "";
   return String(text)
     .replace(/kartuzy@elwozeco\.pl/gi, "___POK_EMAIL___")
@@ -2109,6 +2132,7 @@ function anonymizeText(text) {
  * Konfigurator klucza API dostępny z menu SmartCare
  */
 function configureGeminiApiKeyFromComm() {
+  requireSmartCarePermission_("admin");
   if (typeof configureGeminiApiKey === "function") {
     configureGeminiApiKey();
   } else {
@@ -2137,12 +2161,13 @@ function configureGeminiApiKeyFromComm() {
  * Akcja menu: Uruchomienie przetwarzania kolejki AI (v0.2.8)
  */
 function actionProcessAiQueue() {
+  requireSmartCarePermission_("ai");
   const ui = SpreadsheetApp.getUi();
-  if (typeof processAiAnalysisQueue !== "function") {
-    ui.alert("Błąd", "Funkcja processAiAnalysisQueue nie jest dostępna w module ai.gs.", ui.ButtonSet.OK);
+  if (typeof processAiAnalysisQueue_ !== "function") {
+    ui.alert("Błąd", "Funkcja processAiAnalysisQueue_ nie jest dostępna w module ai.gs.", ui.ButtonSet.OK);
     return;
   }
-  const res = processAiAnalysisQueue(5);
+  const res = processAiAnalysisQueue_(5);
   const msg = `Przetworzono z kolejki AI: ${res.processedCount} zgłoszeń.\n` +
     `• Zakończone sukcesem: ${res.successCount}\n` +
     `• Błędy / ponowienia: ${res.errorCount}` +
@@ -2154,15 +2179,16 @@ function actionProcessAiQueue() {
  * Akcja menu: Wykrycie i uzupełnienie brakujących zgłoszeń formularza (v0.2.8)
  */
 function actionReconcileTickets() {
+  requireSmartCarePermission_("admin");
   const ui = SpreadsheetApp.getUi();
-  if (typeof reconcileUnprocessedFormResponses !== "function") {
-    ui.alert("Błąd", "Funkcja reconcileUnprocessedFormResponses nie jest dostępna w setup.gs.", ui.ButtonSet.OK);
+  if (typeof reconcileUnprocessedFormResponses_ !== "function") {
+    ui.alert("Błąd", "Funkcja reconcileUnprocessedFormResponses_ nie jest dostępna w setup.gs.", ui.ButtonSet.OK);
     return;
   }
-  const res = reconcileUnprocessedFormResponses();
+  const res = reconcileUnprocessedFormResponses_();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (typeof refreshDashboardStats === "function") {
-    try { refreshDashboardStats(ss); } catch (_) {}
+  if (typeof refreshDashboardStats_ === "function") {
+    try { refreshDashboardStats_(ss); } catch (_) {}
   }
 
   if (res.reconciledCount > 0) {
@@ -2182,13 +2208,14 @@ function actionReconcileTickets() {
  * Akcja menu: Weryfikacja integralności Dashboardu i CRM (v0.2.8)
  */
 function actionValidateSystem() {
+  requireSmartCarePermission_("diagnostics");
   const ui = SpreadsheetApp.getUi();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (typeof validateDashboardIntegrity !== "function") {
-    ui.alert("Błąd", "Funkcja validateDashboardIntegrity nie jest dostępna w setup.gs.", ui.ButtonSet.OK);
+  if (typeof validateDashboardIntegrity_ !== "function") {
+    ui.alert("Błąd", "Funkcja validateDashboardIntegrity_ nie jest dostępna w setup.gs.", ui.ButtonSet.OK);
     return;
   }
-  const validation = validateDashboardIntegrity(ss);
+  const validation = validateDashboardIntegrity_(ss);
   if (validation.isValid) {
     ui.alert(
       "Kontrola spójności systemu (v0.2.8)",

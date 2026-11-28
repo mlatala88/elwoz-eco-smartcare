@@ -33,6 +33,7 @@ for (const file of cssFiles) {
 
 // 2. Kolejność zależności modułów JavaScript
 const jsFiles = [
+  'js/components/escapeHtml.js',
   'js/data/initialDataset.js',
   'js/data/cxGuardrail.js',
   'js/data/dataProvider.js',

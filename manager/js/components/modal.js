@@ -25,7 +25,7 @@ export class Modal {
     this.element.innerHTML = `
       <div class="modal-dialog ${sizeClass}" role="dialog" aria-modal="true">
         <div class="modal-header">
-          <h3 class="modal-title">${this.title}</h3>
+          <h3 class="modal-title"></h3>
           <button class="modal-close-btn" aria-label="Zamknij okno">
             <i data-lucide="x" style="width: 18px; height: 18px;"></i>
           </button>
@@ -37,6 +37,7 @@ export class Modal {
       </div>
     `;
 
+    this.element.querySelector(".modal-title").textContent = String(this.title);
     if (typeof this.content !== "string" && this.content instanceof HTMLElement) {
       this.element.querySelector(".modal-body").appendChild(this.content);
     }
@@ -77,15 +78,18 @@ export class Modal {
     const modal = new Modal({
       title,
       size: "sm",
-      content: `<p style="font-size: 14px; line-height: 1.5; color: var(--text-primary);">${message}</p>`,
+      content: `<p class="modal-confirm-message" style="font-size: 14px; line-height: 1.5; color: var(--text-primary);"></p>`,
       footer: `
-        <button class="btn btn-secondary btn-sm" id="modal-cancel-btn">${cancelText}</button>
-        <button class="btn ${isDanger ? 'btn-danger' : 'btn-primary'} btn-sm" id="modal-confirm-btn">${confirmText}</button>
+        <button class="btn btn-secondary btn-sm" id="modal-cancel-btn"></button>
+        <button class="btn ${isDanger ? 'btn-danger' : 'btn-primary'} btn-sm" id="modal-confirm-btn"></button>
       `
     });
 
     const confirmBtn = modal.element.querySelector("#modal-confirm-btn");
     const cancelBtn = modal.element.querySelector("#modal-cancel-btn");
+    modal.element.querySelector(".modal-confirm-message").textContent = String(message ?? "");
+    confirmBtn.textContent = String(confirmText);
+    cancelBtn.textContent = String(cancelText);
 
     confirmBtn.onclick = () => {
       modal.close();

@@ -29,12 +29,13 @@ class ToastService {
 
     toast.innerHTML = `
       <i data-lucide="${iconName}" style="width: 18px; height: 18px; flex-shrink: 0;"></i>
-      <span style="flex: 1; line-height: 1.4;">${message}</span>
+      <span class="toast-message" style="flex: 1; line-height: 1.4;"></span>
       <button style="background: transparent; border: none; cursor: pointer; color: #94A3B8; padding: 2px;" aria-label="Zamknij">
         <i data-lucide="x" style="width: 14px; height: 14px;"></i>
       </button>
     `;
 
+    toast.querySelector(".toast-message").textContent = String(message ?? "");
     const closeBtn = toast.querySelector("button");
     closeBtn.onclick = () => {
       toast.remove();

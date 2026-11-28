@@ -1,3 +1,5 @@
+import { escapeHtml } from "../components/escapeHtml.js";
+
 /**
  * ELWOZ ECO SmartCare Manager v0.3.0
  * Reports & Analytics View (Raporty i analityka)
@@ -125,7 +127,7 @@ export class ReportsView {
 
   async loadReportData() {
     const stats = await this.dataProvider.getStats(this.currentPeriod);
-    const tickets = await this.dataProvider.getTickets();
+    const tickets = await this.dataProvider.getTickets({ period: this.currentPeriod });
     const staffList = await this.dataProvider.getStaff();
 
     // KPI grid
@@ -133,33 +135,33 @@ export class ReportsView {
     kpiGrid.innerHTML = `
       <div class="kpi-card">
         <div class="kpi-header"><span class="kpi-title">Nowe sprawy</span></div>
-        <div class="kpi-value">${stats.newCount}</div>
+        <div class="kpi-value">${escapeHtml(stats.newCount)}</div>
         <div class="kpi-hint">Wpłynęły w okresie</div>
       </div>
       <div class="kpi-card kpi-success">
         <div class="kpi-header"><span class="kpi-title">Sprawy rozwiązane</span></div>
-        <div class="kpi-value">${stats.resolved}</div>
+        <div class="kpi-value">${escapeHtml(stats.resolved)}</div>
         <div class="kpi-hint">Zakończone pomyślnie</div>
       </div>
       <div class="kpi-card kpi-success">
         <div class="kpi-header"><span class="kpi-title">Odsetek rozwiązań</span></div>
-        <div class="kpi-value">${stats.resolutionRate !== '-' ? stats.resolutionRate + '%' : '-'}</div>
+        <div class="kpi-value">${escapeHtml(stats.resolutionRate !== '-' ? stats.resolutionRate + '%' : '-')}</div>
         <div class="kpi-hint">Wskaźnik finalizacji</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-header"><span class="kpi-title">Śr. czas 1. reakcji</span></div>
-        <div class="kpi-value">${stats.avgFirstResponseFormatted}</div>
+        <div class="kpi-value">${escapeHtml(stats.avgFirstResponseFormatted)}</div>
         <div class="kpi-hint">Odpowiedź do klienta</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-header"><span class="kpi-title">Śr. czas rozwiązania</span></div>
-        <div class="kpi-value">${stats.avgResolutionFormatted}</div>
+        <div class="kpi-value">${escapeHtml(stats.avgResolutionFormatted)}</div>
         <div class="kpi-hint">Czas cyklu sprawy</div>
       </div>
       <div class="kpi-card kpi-success">
         <div class="kpi-header"><span class="kpi-title">Średnia satysfakcja</span></div>
-        <div class="kpi-value">${stats.avgSatisfactionFormatted !== '-' ? stats.avgSatisfactionFormatted + ' ★' : '-'}</div>
-        <div class="kpi-hint">${stats.feedbackCount} ankiet powrotnych</div>
+        <div class="kpi-value">${escapeHtml(stats.avgSatisfactionFormatted !== '-' ? stats.avgSatisfactionFormatted + ' ★' : '-')}</div>
+        <div class="kpi-hint">${escapeHtml(stats.feedbackCount)} ankiet powrotnych</div>
       </div>
     `;
 
@@ -175,8 +177,8 @@ export class ReportsView {
       return `
         <tr>
           <td>
-            <div style="font-weight: 600;">${s.name}</div>
-            <div style="font-size: 11px; color: var(--text-secondary);">${s.role}</div>
+            <div style="font-weight: 600;">${escapeHtml(s.name)}</div>
+            <div style="font-size: 11px; color: var(--text-secondary);">${escapeHtml(s.role)}</div>
           </td>
           <td style="font-weight: 600;">${assigned.length}</td>
           <td style="color: var(--brand-green); font-weight: 600;">${res.length}</td>
@@ -199,8 +201,8 @@ export class ReportsView {
 
       return `
         <tr>
-          <td style="font-weight: 600;">${cat}</td>
-          <td>${count}</td>
+          <td style="font-weight: 600;">${escapeHtml(cat)}</td>
+          <td>${escapeHtml(count)}</td>
           <td>
             <div style="display: flex; align-items: center; gap: 8px;">
               <div style="flex: 1; height: 6px; background-color: var(--bg-muted); border-radius: 3px; overflow: hidden;">
@@ -217,7 +219,6 @@ export class ReportsView {
 
   async exportCsv() {
     const stats = await this.dataProvider.getStats(this.currentPeriod);
-    const tickets = await this.dataProvider.getTickets();
 
     const headers = ["Wskaznik / Kategoria", "Wartosc", "Opis"];
     const rows = [

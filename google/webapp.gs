@@ -59,7 +59,7 @@ const SMARTCARE_TEAM_MEMBERS = [
 ];
 
 // Domyślny PIN autoryzacyjny dla kont konsumenckich @gmail.com
-const SMARTCARE_DEFAULT_TEAM_PIN = "1926";
+// Shared PIN authentication was removed; only verified Google identity is trusted.
 
 // ============================================================================
 // 2. ENTRYPOINTS APPS SCRIPT WEB APP (doGet / doPost)
@@ -69,6 +69,7 @@ const SMARTCARE_DEFAULT_TEAM_PIN = "1926";
  * Główny punkt wejścia do aplikacji Web App w Apps Script
  */
 function doGet(e) {
+  requireSmartCarePermission_("read");
   // Obsługa prostego testu ping / diagnostyki przez GET
   if (e && e.parameter && e.parameter.action === "ping") {
     return ContentService.createTextOutput(JSON.stringify({
@@ -84,8 +85,7 @@ function doGet(e) {
     const template = HtmlService.createTemplateFromFile("webapp");
     return template.evaluate()
       .setTitle("ELWOZ ECO SmartCare Manager v0.3.0")
-      .addMetaTag("viewport", "width=device-width, initial-scale=1.0")
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+      .addMetaTag("viewport", "width=device-width, initial-scale=1.0");
   } catch (err) {
     // Fallback gdyby plik webapp.html nie był jeszcze załadowany
     const fallbackHtml = `
@@ -112,8 +112,7 @@ function doGet(e) {
       </html>
     `;
     return HtmlService.createHtmlOutput(fallbackHtml)
-      .setTitle("ELWOZ ECO SmartCare Manager v0.3.0")
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+      .setTitle("ELWOZ ECO SmartCare Manager v0.3.0");
   }
 }
 
@@ -207,76 +206,23 @@ function doPost(e) {
  * Zwraca listę uprawnionych pracowników POK Kartuzy
  */
 function apiGetStaff() {
-  return SMARTCARE_TEAM_MEMBERS;
+  requireSmartCarePermission_("read");
+  return getSmartCareStaff_();
 }
 
-/**
- * Pobiera aktualnie zalogowanego użytkownika z uwzględnieniem specyfiki @gmail.com
- */
 function apiGetCurrentUser() {
-  let activeEmail = "";
-  try {
-    activeEmail = Session.getActiveUser().getEmail();
-  } catch (_) {}
-
-  if (activeEmail) {
-    const member = SMARTCARE_TEAM_MEMBERS.find(m => m.email.toLowerCase() === activeEmail.toLowerCase());
-    if (member) {
-      return {
-        authenticated: true,
-        source: "google_session",
-        user: member
-      };
-    }
-  }
-
-  // W przypadku kont konsumenckich @gmail.com Web App może maskować e-mail użytkownika
-  return {
-    authenticated: false,
-    source: "consumer_gmail_mode",
-    emailMasked: true,
-    availableStaff: SMARTCARE_TEAM_MEMBERS
-  };
+  try { return { authenticated:true, source:"google_session", user:requireSmartCarePermission_("read") }; }
+  catch (_) { return { authenticated:false, source:"google_session", error:"Brak potwierdzonego dostępu Google." }; }
 }
 
-/**
- * Weryfikacja PIN członka zespołu dla bezpiecznej autoryzacji w środowisku @gmail.com
- */
 function apiVerifyUser(email, pin) {
-  if (!email || !pin) {
-    return { success: false, error: "Wymagany adres e-mail i PIN." };
-  }
-
-  const member = SMARTCARE_TEAM_MEMBERS.find(m => m.email.toLowerCase() === email.toLowerCase());
-  if (!member) {
-    return { success: false, error: "Nie odnaleziono pracownika o podanym adresie e-mail." };
-  }
-
-  const configuredPin = PropertiesService.getScriptProperties().getProperty("SMARTCARE_PIN") || SMARTCARE_DEFAULT_TEAM_PIN;
-  if (String(pin).trim() !== configuredPin.trim()) {
-    return { success: false, error: "Nieprawidłowy kod PIN pracownika." };
-  }
-
-  return {
-    success: true,
-    user: member,
-    token: Utilities.base64Encode(JSON.stringify({
-      email: member.email,
-      name: member.name,
-      role: member.role,
-      issuedAt: Date.now()
-    }))
-  };
+  return {success:false, error:"Wspólny PIN jest wyłączony. Zaloguj się uprawnionym kontem Google."};
 }
-
-// ============================================================================
-// 4. NORMALIZACJA DANYCH ZGŁOSZEŃ (Sheets <-> CRM Manager Interface)
-// ============================================================================
 
 /**
  * Mapuje pojedynczy wiersz arkusza ZGŁOSZENIA na ujednolicony obiekt zgłoszenia
  */
-function normalizeTicketRow(headers, rowValues) {
+function normalizeTicketRow_(headers, rowValues) {
   const getVal = (colNames) => {
     if (!Array.isArray(colNames)) colNames = [colNames];
     for (let name of colNames) {
@@ -309,7 +255,7 @@ function normalizeTicketRow(headers, rowValues) {
   // Zgłoszenie z udzieloną odpowiedzią lub zamknięte NIE MOŻE być oznaczone jako zalegające z 1. reakcją!
   let isOverdueFirstResponse = false;
   if (!hasFirstContact && !isClosed && slaDeadline) {
-    const slaParsed = (typeof parseDateValue === "function") ? parseDateValue(slaDeadline) : new Date(slaDeadline).getTime();
+    const slaParsed = (typeof parseDateValue_ === "function") ? parseDateValue_(slaDeadline) : new Date(slaDeadline).getTime();
     if (slaParsed && slaParsed < Date.now()) {
       isOverdueFirstResponse = true;
     }
@@ -317,7 +263,7 @@ function normalizeTicketRow(headers, rowValues) {
 
   let isOverdueNextAction = false;
   if (!isClosed && nextActionDeadline) {
-    const actParsed = (typeof parseDateValue === "function") ? parseDateValue(nextActionDeadline) : new Date(nextActionDeadline).getTime();
+    const actParsed = (typeof parseDateValue_ === "function") ? parseDateValue_(nextActionDeadline) : new Date(nextActionDeadline).getTime();
     if (actParsed && actParsed < Date.now()) {
       isOverdueNextAction = true;
     }
@@ -344,7 +290,7 @@ function normalizeTicketRow(headers, rowValues) {
     priority: priority,
     suggestedPriority: getVal("Sugerowany priorytet AI"),
     priorityRationale: getVal("Uzasadnienie priorytetu AI"),
-    aiState: getVal("Stan analizy AI") || "Oczekuje",
+    aiState: getVal("Stan analizy AI") === "Gotowa" ? "Przeanalizowano" : (getVal("Stan analizy AI") || "Oczekuje"),
     aiErrorDetails: getVal("Szczegóły błędu AI"),
     localValidation: getVal("Lokalna kontrola danych"),
     contradictions: getVal("Wykryte sprzeczności AI"),
@@ -394,101 +340,77 @@ function normalizeTicketRow(headers, rowValues) {
 /**
  * Pobiera listę zgłoszeń z opcjonalnymi filtrami
  */
+function isTicketDueToday_(ticket, today) {
+  return ticket.status !== "Rozwiązane" && ticket.status !== "Zamknięte" &&
+    Boolean(ticket.nextActionDeadline && ticket.nextActionDeadline.startsWith(today));
+}
+
 function apiGetTickets(filters = {}) {
-  const ss = (typeof getSmartCareSpreadsheet === "function" ? getSmartCareSpreadsheet() : null) || SpreadsheetApp.getActiveSpreadsheet();
-  if (!ss) return [];
+  requireSmartCarePermission_("read");
+  filters = filters || {};
+  const activeFilter = value => value != null && !["", "all", "wszystkie", "wszyscy"].includes(String(value).trim().toLowerCase());
+  const ss = getSmartCareSpreadsheet_();
+  if (!ss) throw new Error("Brak połączenia z arkuszem CRM.");
   const sheet = ss.getSheetByName(SMARTCARE_SETUP_CONFIG.sheetTabs.tickets);
-  if (!sheet || sheet.getLastRow() <= 1) return [];
-
-  const lastRow = sheet.getLastRow();
-  const lastCol = sheet.getLastColumn();
-  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim());
-  const data = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
-
-  let tickets = [];
-  for (let r = 0; r < data.length; r++) {
-    const row = data[r];
-    const ticket = normalizeTicketRow(headers, row);
-    if (!ticket.id) continue;
-
-    // Filtry podstawowe
-    if (filters.status && filters.status !== "Wszystkie" && ticket.status !== filters.status) continue;
-    if (filters.priority && filters.priority !== "Wszystkie" && ticket.priority !== filters.priority) continue;
-    if (filters.aiState && filters.aiState !== "Wszystkie" && ticket.aiState !== filters.aiState) continue;
-    if (filters.category && filters.category !== "Wszystkie" && ticket.type !== filters.category) continue;
-    if (filters.assignee && filters.assignee !== "Wszyscy" && ticket.assignee !== filters.assignee) continue;
-
-    // Wyszukiwarka tekstowa
-    if (filters.search) {
-      const q = String(filters.search).toLowerCase().trim();
-      const matches = ticket.id.toLowerCase().includes(q) ||
-        ticket.applicantName.toLowerCase().includes(q) ||
-        ticket.street.toLowerCase().includes(q) ||
-        ticket.city.toLowerCase().includes(q) ||
-        ticket.description.toLowerCase().includes(q) ||
-        ticket.applicantPhone.toLowerCase().includes(q);
-      if (!matches) continue;
+  if (!sheet) throw new Error("Brak zakładki ZGŁOSZENIA.");
+  const today = Utilities.formatDate(new Date(), "Europe/Warsaw", "yyyy-MM-dd");
+  let from = "", to = "";
+  const period = filters.period || "all";
+  if (period === "custom") {
+    let range = filters.customRange;
+    try { if (typeof range === "string") range = JSON.parse(range); } catch (_) { throw new Error("Nieprawidłowy zakres dat."); }
+    const validDate = value => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0,10) === value;
+    if (!range || !validDate(range.from) || !validDate(range.to) || range.from > range.to) throw new Error("Nieprawidłowy zakres dat.");
+    from = range.from; to = range.to + " 23:59:59.999";
+  } else if (period === "today") {
+    from = today; to = today + " 23:59:59.999";
+  } else if (period === "7days" || period === "30days") {
+    from = Utilities.formatDate(new Date(Date.now() - (period === "7days" ? 7 : 30) * 86400000), "Europe/Warsaw", "yyyy-MM-dd HH:mm");
+    to = Utilities.formatDate(new Date(), "Europe/Warsaw", "yyyy-MM-dd HH:mm") + ":59.999";
+  } else if (activeFilter(period)) throw new Error("Nieznany okres filtrowania.");
+  if (sheet.getLastRow() <= 1) return [];
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+  const data = sheet.getRange(2, 1, sheet.getLastRow()-1, headers.length).getValues();
+  const tickets = data.map(row => normalizeTicketRow_(headers,row)).filter(ticket => {
+    if (!ticket.id) return false;
+    const closed = ticket.status === "Rozwiązane" || ticket.status === "Zamknięte";
+    for (const [key,field] of [["status","status"],["priority","priority"],["category","type"],["aiState","aiState"]]) {
+      let wanted = filters[key];
+      if (key === "aiState" && wanted === "Gotowa") wanted = "Przeanalizowano";
+      if (activeFilter(wanted) && ticket[field] !== wanted) return false;
     }
-
-    // Filtry metryk dashboardu (metricKey)
-    if (filters.metricKey) {
-      const k = filters.metricKey;
-      const isClosed = ticket.status === "Rozwiązane" || ticket.status === "Zamknięte";
-      if (k === "new" && ticket.status !== "Nowe") continue;
-      if (k === "no_response" && (isClosed || ticket.hasFirstContact)) continue;
-      if (k === "urgent" && (isClosed || ticket.priority !== "PILNY")) continue;
-      if (k === "overdue" && (isClosed || ticket.slaOverdue !== "TAK")) continue;
-      if (k === "no_step" && (isClosed || (ticket.nextAction && ticket.nextAction.trim() !== ""))) continue;
-      if (k === "awaiting_citizen" && (isClosed || ticket.responsibleSide !== "Mieszkaniec")) continue;
-      if (k === "awaiting_company" && (isClosed || ticket.responsibleSide !== "Przedsiębiorstwo")) continue;
-      if (k === "resolved" && !isClosed) continue;
-      if (k === "rated" && (!ticket.satisfactionScore || ticket.satisfactionScore <= 0)) continue;
-      if (k === "review_invites" && ticket.reviewInviteSent !== "TAK") continue;
+    if (activeFilter(filters.assignee)) {
+      if (filters.assignee === "Nieprzypisany" ? Boolean(ticket.assignee && ticket.assignee !== "Nieprzypisany") : ticket.assignee !== filters.assignee) return false;
     }
-
-    // Filtrowanie po terminie (deadlineFilter)
-    if (filters.deadlineFilter) {
-      const isClosed = ticket.status === "Rozwiązane" || ticket.status === "Zamknięte";
-      if (filters.deadlineFilter === "overdue" && (isClosed || ticket.slaOverdue !== "TAK")) continue;
-      if (filters.deadlineFilter === "today") {
-        const todayStr = Utilities.formatDate(new Date(), "Europe/Warsaw", "yyyy-MM-dd");
-        const actMatch = ticket.nextActionDeadline && ticket.nextActionDeadline.startsWith(todayStr);
-        const slaMatch = ticket.slaDeadline && ticket.slaDeadline.startsWith(todayStr);
-        if (isClosed || (!actMatch && !slaMatch)) continue;
-      }
-    }
-
-    // Filtrowanie po dacie / okresie
-    if (filters.period && filters.period !== "all" && ticket.timestamp) {
-      const ticketDate = (typeof parseDateValue === "function") ? parseDateValue(ticket.timestamp) : new Date(ticket.timestamp).getTime();
-      const now = Date.now();
-      if (filters.period === "today") {
-        const todayStr = Utilities.formatDate(new Date(), "Europe/Warsaw", "yyyy-MM-dd");
-        if (!ticket.timestamp.startsWith(todayStr)) continue;
-      } else if (filters.period === "7days" && ticketDate < now - 7 * 86400000) {
-        continue;
-      } else if (filters.period === "30days" && ticketDate < now - 30 * 86400000) {
-        continue;
-      } else if (filters.period === "custom" && filters.customRange) {
-        const cRange = typeof filters.customRange === "string" ? JSON.parse(filters.customRange) : filters.customRange;
-        if (cRange && cRange.from && cRange.to) {
-          const fromTime = new Date(cRange.from).getTime();
-          const toTime = new Date(cRange.to + "T23:59:59").getTime();
-          if (ticketDate < fromTime || ticketDate > toTime) continue;
-        }
-      }
-    }
-
-    tickets.push(ticket);
-  }
-
-  // Domyślne sortowanie od najnowszych
-  tickets.sort((a, b) => {
-    const aTime = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-    const bTime = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-    return bTime - aTime;
+    const q = String(filters.search || "").trim().toLowerCase();
+    if (q && ![ticket.id,ticket.applicantName,ticket.applicantPhone,ticket.applicantEmail,ticket.city,ticket.street,ticket.houseNumber,ticket.description,ticket.nextAction,ticket.employeeNote].some(value => String(value || "").toLowerCase().includes(q))) return false;
+    const noStep = !closed && !ticket.nextAction.trim();
+    const overdue = !closed && ticket.slaOverdue === "TAK";
+    const dueToday = isTicketDueToday_(ticket,today);
+    const metrics = {
+      all:true, new:ticket.status === "Nowe", no_response:!closed && !ticket.hasFirstContact,
+      urgent:!closed && ticket.priority === "PILNY", overdue, today:dueToday, no_step:noStep,
+      awaiting_citizen:!closed && ticket.responsibleSide === "Mieszkaniec",
+      awaiting_company:!closed && ticket.responsibleSide === "Przedsiębiorstwo",
+      resolved:closed, rated:ticket.satisfactionScore > 0,
+      low_rated:ticket.satisfactionScore > 0 && ticket.satisfactionScore <= 2,
+      review_invites:ticket.reviewInviteSent === "TAK"
+    };
+    if (activeFilter(filters.metricKey) && !metrics[filters.metricKey]) return false;
+    const deadlines = {overdue, today:dueToday, no_step:noStep};
+    if (activeFilter(filters.deadlineFilter) && !deadlines[filters.deadlineFilter]) return false;
+    if (from && (!ticket.timestamp || ticket.timestamp < from || ticket.timestamp > to)) return false;
+    return true;
   });
-
+  const sortable = ["id","timestamp","city","type","priority","status","assignee","nextActionDeadline","aiState"];
+  const field = sortable.includes(filters.sortField) ? filters.sortField : "timestamp";
+  const direction = filters.sortOrder === "asc" ? 1 : -1;
+  const priorities = {NISKI:1,STANDARDOWY:2,WYSOKI:3,PILNY:4};
+  tickets.sort((a,b) => {
+    const av = field === "priority" ? priorities[a.priority] || 0 : String(a[field] || "");
+    const bv = field === "priority" ? priorities[b.priority] || 0 : String(b[field] || "");
+    return direction * (typeof av === "number" ? av-bv : av.localeCompare(bv,"pl",{numeric:true}));
+  });
   return tickets;
 }
 
@@ -496,9 +418,10 @@ function apiGetTickets(filters = {}) {
  * Pobiera pojedyncze zgłoszenie na podstawie ID
  */
 function apiGetTicketById(ticketId) {
+  requireSmartCarePermission_("read");
   if (!ticketId) throw new Error("Brak parametru ticketId.");
 
-  const ss = (typeof getSmartCareSpreadsheet === "function" ? getSmartCareSpreadsheet() : null) || SpreadsheetApp.getActiveSpreadsheet();
+  const ss = (typeof getSmartCareSpreadsheet_ === "function" ? getSmartCareSpreadsheet_() : null) || SpreadsheetApp.getActiveSpreadsheet();
   if (!ss) throw new Error("Brak arkusza kalkulacyjnego.");
   const sheet = ss.getSheetByName(SMARTCARE_SETUP_CONFIG.sheetTabs.tickets);
   if (!sheet) throw new Error("Brak zakładki ZGŁOSZENIA.");
@@ -509,11 +432,12 @@ function apiGetTicketById(ticketId) {
   const idCol = headers.indexOf("ID Zgłoszenia") + 1;
   if (idCol <= 0) throw new Error("Brak kolumny ID Zgłoszenia.");
 
+  if (lastRow <= 1) throw new Error("Nie odnaleziono zgłoszenia.");
   const ids = sheet.getRange(2, idCol, lastRow - 1, 1).getValues();
   for (let i = 0; i < ids.length; i++) {
     if (String(ids[i][0]).trim() === String(ticketId).trim()) {
       const rowValues = sheet.getRange(i + 2, 1, 1, lastCol).getValues()[0];
-      return normalizeTicketRow(headers, rowValues);
+      return normalizeTicketRow_(headers, rowValues);
     }
   }
 
@@ -524,9 +448,10 @@ function apiGetTicketById(ticketId) {
  * Tworzy nowe zgłoszenie z poziomu aplikacji Web App
  */
 function apiCreateTicket(ticketData, operator = null) {
+  operator = requireSmartCarePermission_("write");
   if (!ticketData) throw new Error("Brak danych zgłoszenia.");
 
-  const ss = (typeof getSmartCareSpreadsheet === "function" ? getSmartCareSpreadsheet() : null) || SpreadsheetApp.getActiveSpreadsheet();
+  const ss = (typeof getSmartCareSpreadsheet_ === "function" ? getSmartCareSpreadsheet_() : null) || SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SMARTCARE_SETUP_CONFIG.sheetTabs.tickets);
   if (!sheet) throw new Error("Brak zakładki ZGŁOSZENIA.");
 
@@ -557,8 +482,8 @@ function apiCreateTicket(ticketData, operator = null) {
     const now = new Date();
     const priority = ticketData.priority || "STANDARDOWY";
     const slaMinutes = SMARTCARE_SETUP_CONFIG.slaMinutes[priority] || 240;
-    const slaDeadline = (typeof calculateBusinessHoursDeadline === "function")
-      ? calculateBusinessHoursDeadline(now, slaMinutes)
+    const slaDeadline = (typeof calculateBusinessHoursDeadline_ === "function")
+      ? calculateBusinessHoursDeadline_(now, slaMinutes)
       : new Date(now.getTime() + slaMinutes * 60000);
 
     const newRow = new Array(headers.length).fill("");
@@ -602,15 +527,15 @@ function apiCreateTicket(ticketData, operator = null) {
     SpreadsheetApp.flush();
 
     // Asynchroniczne wywołanie analizy AI
-    if (typeof triggerAutoAiAnalysisForTicket === "function") {
+    if (typeof triggerAutoAiAnalysisForTicket_ === "function") {
       try {
-        triggerAutoAiAnalysisForTicket(sheet, targetRow, headers, newId);
+        triggerAutoAiAnalysisForTicket_(sheet, targetRow, headers, newId);
       } catch (aiErr) {
-        Logger.log(`[WebApp] triggerAutoAiAnalysisForTicket ostrzeżenie: ${aiErr}`);
+        Logger.log(`[WebApp] triggerAutoAiAnalysisForTicket_ ostrzeżenie: ${aiErr}`);
       }
     }
 
-    try { refreshDashboardStats(ss); } catch (_) {}
+    try { refreshDashboardStats_(ss); } catch (_) {}
 
     return apiGetTicketById(newId);
 
@@ -623,9 +548,11 @@ function apiCreateTicket(ticketData, operator = null) {
  * Aktualizacja zgłoszenia z rygorystyczną kontrolą reguł biznesowych
  */
 function apiUpdateTicket(ticketId, updates = {}, operator = null) {
+  operator = requireSmartCarePermission_("write");
+  if (updates && ["Rozwiązane","Zamknięte"].includes(updates.status)) requireSmartCarePermission_("close");
   if (!ticketId) throw new Error("Brak parametru ticketId.");
 
-  const ss = (typeof getSmartCareSpreadsheet === "function" ? getSmartCareSpreadsheet() : null) || SpreadsheetApp.getActiveSpreadsheet();
+  const ss = (typeof getSmartCareSpreadsheet_ === "function" ? getSmartCareSpreadsheet_() : null) || SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SMARTCARE_SETUP_CONFIG.sheetTabs.tickets);
   if (!sheet) throw new Error("Brak zakładki ZGŁOSZENIA.");
 
@@ -729,19 +656,19 @@ function apiUpdateTicket(ticketId, updates = {}, operator = null) {
       const slaCol = headers.indexOf("Termin SLA 1. reakcji") + 1;
       if (slaCol > 0) {
         const timeVal = timeCol > 0 ? sheet.getRange(row, timeCol).getValue() : null;
-        const createdParsed = (typeof parseDateValue === "function") ? parseDateValue(timeVal) : new Date(timeVal).getTime();
+        const createdParsed = (typeof parseDateValue_ === "function") ? parseDateValue_(timeVal) : new Date(timeVal).getTime();
         const createdDate = createdParsed ? new Date(createdParsed) : new Date();
         const pUpper = String(updates.priority).toUpperCase().trim();
         const slaMinutes = SMARTCARE_SETUP_CONFIG.slaMinutes[pUpper] || 240;
-        const newSla = (typeof calculateBusinessHoursDeadline === "function")
-          ? calculateBusinessHoursDeadline(createdDate, slaMinutes)
+        const newSla = (typeof calculateBusinessHoursDeadline_ === "function")
+          ? calculateBusinessHoursDeadline_(createdDate, slaMinutes)
           : new Date(createdDate.getTime() + slaMinutes * 60000);
         sheet.getRange(row, slaCol).setValue(newSla).setNumberFormat("yyyy-MM-dd HH:mm");
       }
     }
 
     SpreadsheetApp.flush();
-    try { refreshDashboardStats(ss); } catch (_) {}
+    try { refreshDashboardStats_(ss); } catch (_) {}
 
     return apiGetTicketById(ticketId);
 
@@ -754,7 +681,8 @@ function apiUpdateTicket(ticketId, updates = {}, operator = null) {
  * Pobiera historię komunikacji dla zgłoszenia lub całą
  */
 function apiGetCommunications(ticketId = null) {
-  const ss = (typeof getSmartCareSpreadsheet === "function" ? getSmartCareSpreadsheet() : null) || SpreadsheetApp.getActiveSpreadsheet();
+  requireSmartCarePermission_("read");
+  const ss = (typeof getSmartCareSpreadsheet_ === "function" ? getSmartCareSpreadsheet_() : null) || SpreadsheetApp.getActiveSpreadsheet();
   if (!ss) return [];
   const histSheet = ss.getSheetByName(SMARTCARE_SETUP_CONFIG.sheetTabs.communicationHistory);
   if (!histSheet || histSheet.getLastRow() <= 1) return [];
@@ -779,13 +707,14 @@ function apiGetCommunications(ticketId = null) {
       date: dateVal,
       timestamp: dateVal,
       type: String(row[2] || ""),
-      channel: String(row[3] || "E-mail"),
+      actionType: String(row[2] || ""),
+      channel: /^e-mail$/i.test(String(row[3] || "E-mail")) ? "E-mail" : (/^telefon$/i.test(String(row[3] || "")) ? "Telefon" : String(row[3] || "")),
       recipient: String(row[4] || ""),
       subject: String(row[5] || ""),
       content: String(row[6] || ""),
       author: String(row[7] || "Pracownik"),
       sender: String(row[7] || "Pracownik"),
-      status: String(row[8] || "Wysłano"),
+      status: /^wysłano$/i.test(String(row[8] || "")) ? "Wysłano" : (/^odnotowano/i.test(String(row[8] || "")) ? "Odnotowano" : String(row[8] || "")),
       note: String(row[9] || "")
     });
   }
@@ -797,17 +726,24 @@ function apiGetCommunications(ticketId = null) {
  * Rejestruje kontakt oraz wysyła wiadomość z bezwzględną ochroną testowego odbiorcy
  */
 function apiAddCommunication(commData, operator = null) {
+  operator = requireSmartCarePermission_("comms");
   if (!commData) throw new Error("Brak danych komunikacji.");
   if (!commData.ticketId) throw new Error("Brak numeru zgłoszenia (ticketId).");
+  if (!apiGetTicketById(commData.ticketId)) throw new Error("Nie znaleziono zgłoszenia.");
+  commData = Object.assign({}, commData);
+  if (commData.actionType === "Zaproszenie do opinii Google") commData.actionType = "Prośba o opinię";
 
   const author = (operator && operator.name) ? operator.name : (commData.author || "Pracownik");
   const channel = commData.channel || "E-mail";
   const subject = (commData.subject || "").trim();
   const content = (commData.content || "").trim();
+  if (!["E-mail", "Telefon", "Notatka wewnętrzna"].includes(channel)) throw new Error("Nieobsługiwany kanał komunikacji.");
+  if (!content) throw new Error("Treść komunikacji nie może być pusta.");
+  if (channel === "E-mail" && typeof processSendEmail !== "function") throw new Error("Funkcja wysyłki nie jest dostępna.");
 
   // 1. Serwerowa kontrola jakości CX/PR dla tematu i treści
-  if (typeof validateMessageContentQuality === "function") {
-    const qCheck = validateMessageContentQuality(subject, content);
+  if (typeof validateMessageContentQuality_ === "function") {
+    const qCheck = validateMessageContentQuality_(subject, content);
     if (!qCheck.isValid) {
       throw new Error(`SERWEROWA BLOKADA CX/PR: Wiadomość narusza standardy komunikacji (${qCheck.reason}). Wiadomość NIE została wysłana.`);
     }
@@ -851,9 +787,10 @@ function apiAddCommunication(commData, operator = null) {
   }
 
   // 4. Dla innych kanałów (np. Telefon) zarejestruj wpis w historii
-  const ss = (typeof getSmartCareSpreadsheet === "function" ? getSmartCareSpreadsheet() : null) || SpreadsheetApp.getActiveSpreadsheet();
+  const ss = (typeof getSmartCareSpreadsheet_ === "function" ? getSmartCareSpreadsheet_() : null) || SpreadsheetApp.getActiveSpreadsheet();
   const histSheet = ss.getSheetByName(SMARTCARE_SETUP_CONFIG.sheetTabs.communicationHistory);
   const now = new Date();
+  if (!histSheet) throw new Error("Brak arkusza historii komunikacji. Nie zapisano kontaktu.");
   const nowStr = Utilities.formatDate(now, "Europe/Warsaw", "yyyy-MM-dd HH:mm");
 
   if (histSheet) {
@@ -873,7 +810,7 @@ function apiAddCommunication(commData, operator = null) {
 
   // Aktualizacja pierwszego kontaktu w ZGŁOSZENIACH
   const ticketSheet = ss.getSheetByName(SMARTCARE_SETUP_CONFIG.sheetTabs.tickets);
-  if (ticketSheet) {
+  if (ticketSheet && channel === "Telefon") {
     const headers = ticketSheet.getRange(1, 1, 1, ticketSheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
     const idCol = headers.indexOf("ID Zgłoszenia") + 1;
     const firstCol = headers.indexOf("Data pierwszego kontaktu") + 1;
@@ -910,6 +847,7 @@ function apiAddCommunication(commData, operator = null) {
  * Oblicza w czasie rzeczywistym wszystkie 16 wskaźników CSI dla dashboardu
  */
 function apiGetCsiStats(period = "all", customRange = null) {
+  requireSmartCarePermission_("read");
   const allTickets = apiGetTickets({ period: period, customRange: customRange });
   const now = Date.now();
   const todayStr = Utilities.formatDate(new Date(), "Europe/Warsaw", "yyyy-MM-dd");
@@ -919,7 +857,7 @@ function apiGetCsiStats(period = "all", customRange = null) {
   const noFirstResponse = allTickets.filter(t => t.status !== "Rozwiązane" && t.status !== "Zamknięte" && !t.hasFirstContact).length;
   const urgent = allTickets.filter(t => t.priority === "PILNY" && t.status !== "Rozwiązane" && t.status !== "Zamknięte").length;
   const overdue = allTickets.filter(t => t.status !== "Rozwiązane" && t.status !== "Zamknięte" && t.slaOverdue === "TAK").length;
-  const dueToday = allTickets.filter(t => t.nextActionDeadline && t.nextActionDeadline.startsWith(todayStr)).length;
+  const dueToday = allTickets.filter(t => isTicketDueToday_(t, todayStr)).length;
   const noNextStep = allTickets.filter(t => t.status !== "Rozwiązane" && t.status !== "Zamknięte" && (!t.nextAction || t.nextAction.trim() === "")).length;
   const awaitingCitizen = allTickets.filter(t => t.responsibleSide === "Mieszkaniec" && t.status !== "Rozwiązane" && t.status !== "Zamknięte").length;
   const awaitingCompany = allTickets.filter(t => t.responsibleSide === "Przedsiębiorstwo" && t.status !== "Rozwiązane" && t.status !== "Zamknięte").length;
@@ -1047,21 +985,31 @@ function apiGetCsiStats(period = "all", customRange = null) {
  * Zwraca status diagnostyczny silnika CRM i kolejki AI
  */
 function apiGetDiagnostics() {
-  const ss = (typeof getSmartCareSpreadsheet === "function" ? getSmartCareSpreadsheet() : null) || SpreadsheetApp.getActiveSpreadsheet();
+  requireSmartCarePermission_("diagnostics");
+  const started = Date.now();
+  const ss = (typeof getSmartCareSpreadsheet_ === "function" ? getSmartCareSpreadsheet_() : null) || SpreadsheetApp.getActiveSpreadsheet();
   const ticketSheet = ss ? ss.getSheetByName(SMARTCARE_SETUP_CONFIG.sheetTabs.tickets) : null;
-  const metrics = (ticketSheet && typeof calculateDashboardMetrics === "function")
-    ? calculateDashboardMetrics(ticketSheet)
+  const metrics = (ticketSheet && typeof calculateDashboardMetrics_ === "function")
+    ? calculateDashboardMetrics_(ticketSheet)
     : { totalRegisteredTickets: 0, pendingAiCount: 0, failedAiCount: 0, successfulAiCount: 0, unregisteredResponsesCount: 0 };
 
-  const triggers = ss ? ScriptApp.getUserTriggers(ss) : [];
-  const hasSubmit = triggers.some(t => t.getHandlerFunction() === "handleNewTicketSubmit");
-  const hasQueue = triggers.some(t => t.getHandlerFunction() === "processAiAnalysisQueue");
+  const triggers = ScriptApp.getProjectTriggers ? ScriptApp.getProjectTriggers() : (ss ? ScriptApp.getUserTriggers(ss) : []);
+  const hasSubmit = triggers.some(t => t.getHandlerFunction() === "handleNewTicketSubmit_");
+  const hasQueue = triggers.some(t => ["scheduledQueueAndReconcile_", "processAiAnalysisQueue_"].includes(t.getHandlerFunction()));
   const apiKeyConfigured = Boolean(PropertiesService.getScriptProperties().getProperty("GEMINI_API_KEY"));
+  const history = ss ? ss.getSheetByName(SMARTCARE_SETUP_CONFIG.sheetTabs.communicationHistory) : null;
+  const commErrors = history ? history.getDataRange().getValues().slice(1).filter(row => /błąd|error/i.test(String(row[8] || ""))).length : null;
 
   return {
     appVersion: "v0.3.0 (Connected CRM Mode)",
     environment: "Google Apps Script Web App",
     dataBackend: "Google Sheets CRM Engine",
+    sheetsConnection: ticketSheet ? "OK" : "Brak arkusza",
+    latencyMs: Date.now() - started,
+    aiErrors: Number(metrics.failedAiCount || 0),
+    commErrors: commErrors,
+    validationIssues: null,
+    simulatedErrorMode: false,
     spreadsheetId: ss ? ss.getId() : "Brak",
     locale: ss && ss.getSpreadsheetLocale ? ss.getSpreadsheetLocale() : "pl_PL",
     totalTickets: metrics.totalRegisteredTickets,
@@ -1082,14 +1030,24 @@ function apiGetDiagnostics() {
  * Uruchamia test diagnostyczny połączenia i modeli
  */
 function apiRunDiagnosticsTest() {
+  requireSmartCarePermission_("diagnostics");
   const start = Date.now();
   const diag = apiGetDiagnostics();
   const latencyMs = Date.now() - start;
+  const tests = [
+    { name: "Odczyt arkusza CRM", passed: diag.sheetsConnection === "OK", details: diag.sheetsConnection },
+    { name: "Wyzwalacz rejestracji zgłoszeń", passed: diag.submitTriggerInstalled, details: "Sprawdzenie instalacji wyzwalacza formularza" },
+    { name: "Wyzwalacz kolejki AI", passed: diag.queueTriggerInstalled, details: "Sprawdzenie instalacji wyzwalacza kolejki" },
+    { name: "Konfiguracja klucza Gemini", passed: diag.geminiApiKeyConfigured, details: "Sprawdzono obecność klucza. Nie wykonano zapytania do Gemini." }
+  ].map(item => ({ name: item.name, status: item.passed ? "PASSED" : "FAILED", latency: latencyMs + " ms", details: item.details }));
 
   return {
     success: true,
     latencyMs: latencyMs,
-    diagnostics: diag
+    diagnostics: diag,
+    timestamp: new Date().toISOString(),
+    allPassed: tests.every(item => item.status === "PASSED"),
+    tests: tests
   };
 }
 
@@ -1097,29 +1055,33 @@ function apiRunDiagnosticsTest() {
  * Wywołuje doszlifowanie wiadomości pracownika przez asystenta AI Gemini
  */
 function apiPolishMessageWithAi(rawMessage, context = {}) {
+  requireSmartCarePermission_("ai");
   const ticketId = context.ticketId || (context.ticket ? context.ticket.id : null);
-  if (typeof polishMessageWithAiDirect === "function") {
-    return polishMessageWithAiDirect(ticketId, rawMessage);
+  if (typeof polishMessageWithAiDirect_ === "function") {
+    return polishMessageWithAiDirect_(ticketId, rawMessage);
   }
-  throw new Error("Funkcja polishMessageWithAiDirect nie jest dostępna w silniku Google Apps Script.");
+  throw new Error("Funkcja polishMessageWithAiDirect_ nie jest dostępna w silniku Google Apps Script.");
 }
 
 /**
  * Pobiera konfigurację z zakładki USTAWIENIA
  */
 function apiGetSettings() {
-  if (typeof getSmartCareSettings === "function") {
-    return getSmartCareSettings();
-  }
+  requireSmartCarePermission_("read");
+  const ss = getSmartCareSpreadsheet_() || SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss && ss.getSheetByName(SMARTCARE_SETUP_CONFIG.sheetTabs.settings);
+  if (!sheet) throw new Error("Brak arkusza USTAWIENIA.");
+  const values = {};
+  sheet.getDataRange().getValues().slice(2).forEach(row => { values[String(row[0]).trim()] = String(row[1] == null ? "" : row[1]); });
   return {
-    companyName: "ELWOZ ECO Sp. z o.o.",
-    branch: "Punkt Obsługi Klienta Kartuzy",
-    email: "kartuzy@example.com",
-    phone: "58 681 22 99",
-    address: "ul. Gdańska 30, 83-300 Kartuzy",
-    workingHours: "Pn-Pt 07:00 - 15:00",
-    googleReviewUrl: "https://search.google.com/local/writereview?placeid=ChIJ13yCwGSa_UYRqkDdyWL8wdA",
-    testEmail: "wsb.student.tester@gmail.com"
+    companyName: values["Nazwa przedsiębiorstwa"] || "",
+    branch: values["Nazwa placówki"] || "",
+    email: values["Adres e-mail do kontaktu"] || "",
+    phone: values["Numer telefonu"] || "",
+    address: values["Adres placówki"] || "",
+    workingHours: values["Godziny pracy POK"] || "",
+    googleReviewUrl: values["Zweryfikowany link do opinii Google"] || "",
+    testEmail: APPROVED_TEST_RECIPIENT
   };
 }
 
@@ -1127,11 +1089,32 @@ function apiGetSettings() {
  * Aktualizuje wybrane ustawienia w zakładce USTAWIENIA
  */
 function apiUpdateSettings(settings) {
-  // Ochrona kluczowych parametrów
-  if (settings && settings.googleReviewUrl && typeof isVerifiedReviewUrl === "function") {
-    if (!isVerifiedReviewUrl(settings.googleReviewUrl)) {
-      throw new Error("Podany adres URL opinii Google nie jest zweryfikowanym linkiem do Profilu Google Firmy.");
-    }
+  requireSmartCarePermission_("admin");
+  const fields = { companyName: "Nazwa przedsiębiorstwa", branch: "Nazwa placówki", email: "Adres e-mail do kontaktu", phone: "Numer telefonu", workingHours: "Godziny pracy POK", googleReviewUrl: "Zweryfikowany link do opinii Google" };
+  if (!settings || typeof settings !== "object" || Array.isArray(settings) || !Object.keys(settings).length) throw new Error("Brak ustawień do zapisania.");
+  const updates = Object.keys(settings).map(key => {
+    if (!Object.prototype.hasOwnProperty.call(fields, key)) throw new Error("Nieobsługiwane ustawienie: " + key);
+    if (typeof settings[key] !== "string") throw new Error("Ustawienie musi być tekstem: " + key);
+    const value = settings[key].trim();
+    if (/^=/.test(value)) throw new Error("Formuły nie są dozwolone w ustawieniach tekstowych.");
+    if (key === "googleReviewUrl" && !isVerifiedReviewUrl_(value)) throw new Error("Podany adres URL opinii Google nie jest zweryfikowanym linkiem do Profilu Google Firmy.");
+    return { label: fields[key], value: value };
+  });
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const ss = getSmartCareSpreadsheet_() || SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss && ss.getSheetByName(SMARTCARE_SETUP_CONFIG.sheetTabs.settings);
+    if (!sheet) throw new Error("Brak arkusza USTAWIENIA.");
+    const rows = sheet.getDataRange().getValues();
+    updates.forEach(update => {
+      update.row = rows.findIndex((row, index) => index >= 2 && String(row[0]).trim() === update.label) + 1;
+      if (!update.row) throw new Error("Brak ustawienia w arkuszu: " + update.label);
+    });
+    updates.forEach(update => sheet.getRange(update.row, 2).setValue(update.value));
+    SpreadsheetApp.flush();
+    return apiGetSettings();
+  } finally {
+    lock.releaseLock();
   }
-  return { success: true, message: "Ustawienia zapisane." };
 }

@@ -1,3 +1,5 @@
+import { escapeHtml } from "../components/escapeHtml.js";
+
 /**
  * ELWOZ ECO SmartCare Manager v0.3.0
  * Communications View (Komunikacja – Centralny Dziennik Korespondencji)
@@ -30,7 +32,7 @@ export class CommsView {
             <div class="input-group">
               <i data-lucide="search" class="input-icon" style="width: 15px; height: 15px;"></i>
               <input type="text" id="comms-search" class="form-control input-with-icon" 
-                     placeholder="Szukaj po ID zgłoszenia, odbiorcy, temacie lub treści..." value="${this.searchQuery}" />
+                     placeholder="Szukaj po ID zgłoszenia, odbiorcy, temacie lub treści..." value="${escapeHtml(this.searchQuery)}" />
             </div>
           </div>
 
@@ -145,31 +147,31 @@ export class CommsView {
 
     tbody.innerHTML = comms.map(c => `
       <tr>
-        <td style="font-size: 12px; white-space: nowrap; color: var(--text-secondary);">${c.timestamp}</td>
+        <td style="font-size: 12px; white-space: nowrap; color: var(--text-secondary);">${escapeHtml(c.timestamp)}</td>
         <td>
-          <a href="#" class="table-ticket-id link-ticket" data-ticket-id="${c.ticketId}">${c.ticketId}</a>
+          <a href="#" class="table-ticket-id link-ticket" data-ticket-id="${escapeHtml(c.ticketId)}">${escapeHtml(c.ticketId)}</a>
         </td>
-        <td style="font-weight: 600; font-size: 12px;">${c.actionType}</td>
+        <td style="font-weight: 600; font-size: 12px;">${escapeHtml(c.actionType)}</td>
         <td>
           <span class="badge ${c.channel === 'E-mail' ? 'badge-status-nowe' : (c.channel === 'Telefon' ? 'badge-prio-wysoki' : 'badge-status-progress')}">
-            ${c.channel}
+            ${escapeHtml(c.channel)}
           </span>
         </td>
-        <td style="font-size: 12px; word-break: break-all;">${c.recipient}</td>
+        <td style="font-size: 12px; word-break: break-all;">${escapeHtml(c.recipient)}</td>
         <td style="font-weight: 500; font-size: 12px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-          ${c.subject || '-'}
+          ${escapeHtml(c.subject || '-')}
         </td>
         <td style="max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text-secondary);">
-          ${c.content}
+          ${escapeHtml(c.content)}
         </td>
-        <td style="font-size: 12px;">${c.author}</td>
+        <td style="font-size: 12px;">${escapeHtml(c.author)}</td>
         <td>
           <span class="badge ${c.status === 'Wysłano' ? 'badge-status-rozwiazane' : (c.status === 'Odnotowano' ? 'badge-ai-przeanalizowano' : 'badge-status-waiting')}">
-            ${c.status}
+            ${escapeHtml(c.status)}
           </span>
         </td>
         <td style="text-align: right; white-space: nowrap;">
-          <button class="btn btn-secondary btn-xs btn-view-full-msg" data-comm-id="${c.id}">Podgląd</button>
+          <button class="btn btn-secondary btn-xs btn-view-full-msg" data-comm-id="${escapeHtml(c.id)}">Podgląd</button>
         </td>
       </tr>
     `).join("");
@@ -200,27 +202,27 @@ export class CommsView {
           <div style="display: flex; flex-direction: column; gap: 12px; font-size: 13px;">
             <div style="display: grid; grid-template-columns: 100px 1fr; gap: 8px;">
               <span style="font-weight: 600; color: var(--text-secondary);">Zgłoszenie:</span>
-              <span class="table-ticket-id">${c.ticketId}</span>
+              <span class="table-ticket-id">${escapeHtml(c.ticketId)}</span>
 
               <span style="font-weight: 600; color: var(--text-secondary);">Data wysyłki:</span>
-              <span>${c.timestamp}</span>
+              <span>${escapeHtml(c.timestamp)}</span>
 
               <span style="font-weight: 600; color: var(--text-secondary);">Kanał:</span>
-              <span>${c.channel}</span>
+              <span>${escapeHtml(c.channel)}</span>
 
               <span style="font-weight: 600; color: var(--text-secondary);">Odbiorca:</span>
-              <span>${c.recipient}</span>
+              <span>${escapeHtml(c.recipient)}</span>
 
               <span style="font-weight: 600; color: var(--text-secondary);">Pracownik:</span>
-              <span>${c.author}</span>
+              <span>${escapeHtml(c.author)}</span>
 
               <span style="font-weight: 600; color: var(--text-secondary);">Temat:</span>
-              <span style="font-weight: 600;">${c.subject || '-'}</span>
+              <span style="font-weight: 600;">${escapeHtml(c.subject || '-')}</span>
             </div>
 
             <div style="margin-top: 8px;">
               <div style="font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Pełna treść wiadomości:</div>
-              <div style="background-color: var(--bg-muted); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 14px; white-space: pre-wrap; font-size: 13px; line-height: 1.5;">${c.content}</div>
+              <div style="background-color: var(--bg-muted); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 14px; white-space: pre-wrap; font-size: 13px; line-height: 1.5;">${escapeHtml(c.content)}</div>
             </div>
           </div>
         `,

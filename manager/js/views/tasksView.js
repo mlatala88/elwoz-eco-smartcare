@@ -1,3 +1,5 @@
+import { escapeHtml } from "../components/escapeHtml.js";
+
 /**
  * ELWOZ ECO SmartCare Manager v0.3.0
  * Tasks View (Moje zadania – Operacyjna Kolejka CRM)
@@ -20,12 +22,12 @@ export class TasksView {
       <div class="view-header">
         <div class="view-title-group">
           <h1 class="view-title">Moje zadania – Kolejka operacyjna</h1>
-          <div class="view-description">Bieżący rejestr spraw wg pilności i terminów wykonania • Aktywny pracownik: <strong>${currentUserName}</strong></div>
+          <div class="view-description">Bieżący rejestr spraw wg pilności i terminów wykonania • Aktywny pracownik: <strong>${escapeHtml(currentUserName)}</strong></div>
         </div>
         <div class="view-actions">
           <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; cursor: pointer; user-select: none;">
             <input type="checkbox" id="toggle-only-mine" ${this.filterOnlyMine ? 'checked' : ''} style="width: 16px; height: 16px; accent-color: var(--brand-navy);" />
-            <span>Tylko moje zadania (${currentUserName})</span>
+            <span>Tylko moje zadania (${escapeHtml(currentUserName)})</span>
           </label>
         </div>
       </div>
@@ -135,10 +137,10 @@ export class TasksView {
 
     // Wyklucz sprawy zakończone (Rozwiązane i Zamknięte)
     const isClosed = s => s === "Rozwiązane" || s === "Zamknięte";
-    const openTickets = tickets.filter(t => !isClosed(t.status));
+    const openTickets = tickets.filter(t => !isClosed(t.status) && (!this.filterOnlyMine || t.assignee === currentUserName));
 
     const now = new Date();
-    const todayStr = now.toISOString().split("T")[0];
+    const todayStr = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Warsaw", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
 
     // Dynamiczny sprawdzian SLA bez opierania się na historycznej fladze
     // Zgłoszenie z udzieloną odpowiedzią NIE JEST oznaczane jako zalegające z 1. reakcją
@@ -233,43 +235,43 @@ export class TasksView {
       const isMine = t.assignee === currentUserName;
 
       return `
-        <tr class="row-clickable ${t.priority === 'PILNY' ? 'row-urgent' : ''}" data-ticket-id="${t.id}">
-          <td class="table-ticket-id">${t.id}</td>
+        <tr class="row-clickable ${t.priority === 'PILNY' ? 'row-urgent' : ''}" data-ticket-id="${escapeHtml(t.id)}">
+          <td class="table-ticket-id">${escapeHtml(t.id)}</td>
           <td>
-            <div style="font-weight: 600;">${t.city}</div>
-            <div style="font-size: 11px; color: var(--text-secondary);">${t.street} ${t.houseNumber || '(brak posesji)'}</div>
+            <div style="font-weight: 600;">${escapeHtml(t.city)}</div>
+            <div style="font-size: 11px; color: var(--text-secondary);">${escapeHtml(t.street)} ${escapeHtml(t.houseNumber || '(brak posesji)')}</div>
           </td>
           <td>
-            <div>${t.type}</div>
+            <div>${escapeHtml(t.type)}</div>
             <span class="fraction-pill" style="margin-top: 2px;">
-              <span class="fraction-dot fraction-${t.fraction.toLowerCase().split(' ')[0]}"></span>
-              ${t.fraction}
+              <span class="fraction-dot fraction-${escapeHtml(t.fraction.toLowerCase().split(' ')[0])}"></span>
+              ${escapeHtml(t.fraction)}
             </span>
           </td>
           <td>
-            <span class="badge badge-prio-${t.priority.toLowerCase()}">${t.priority}</span>
+            <span class="badge badge-prio-${escapeHtml(t.priority.toLowerCase())}">${escapeHtml(t.priority)}</span>
           </td>
           <td>
             ${isOverdue 
               ? '<span class="badge badge-prio-pilny">⚠️ Przekroczone!</span>' 
-              : `<span style="font-size: 11px; color: var(--text-secondary);">SLA do: ${t.slaDeadline ? t.slaDeadline.substring(11, 16) : '-'}</span>`}
+              : `<span style="font-size: 11px; color: var(--text-secondary);">SLA do: ${escapeHtml(t.slaDeadline ? t.slaDeadline.substring(11, 16) : '-')}</span>`}
           </td>
           <td>
-            <div style="font-weight: 500;">${t.assignee || '<span style="color: var(--prio-urgent);">Nieprzypisany</span>'}</div>
-            ${!isMine ? `<button class="btn btn-secondary btn-xs btn-assign-me" data-ticket-id="${t.id}" style="margin-top: 4px;">Przypisz do mnie</button>` : ''}
+            <div style="font-weight: 500;">${escapeHtml(t.assignee) || '<span style="color: var(--prio-urgent);">Nieprzypisany</span>'}</div>
+            ${!isMine ? `<button class="btn btn-secondary btn-xs btn-assign-me" data-ticket-id="${escapeHtml(t.id)}" style="margin-top: 4px;">Przypisz do mnie</button>` : ''}
           </td>
           <td style="max-width: 200px;">
             ${t.nextAction 
-              ? `<div style="font-size: 12px; line-height: 1.3;">${t.nextAction}</div><div style="font-size: 10px; color: var(--text-secondary);">Strona: ${t.responsibleSide}</div>`
+              ? `<div style="font-size: 12px; line-height: 1.3;">${escapeHtml(t.nextAction)}</div><div style="font-size: 10px; color: var(--text-secondary);">Strona: ${escapeHtml(t.responsibleSide)}</div>`
               : '<span class="badge badge-prio-pilny">Brak kolejnego kroku!</span>'}
           </td>
           <td>
             <div style="font-size: 12px; font-weight: 600; color: ${isOverdue ? 'var(--prio-urgent)' : 'var(--text-primary)'};">
-              ${t.nextActionDeadline || '<span style="color: var(--text-muted); font-weight: normal;">Nie określono</span>'}
+              ${escapeHtml(t.nextActionDeadline) || '<span style="color: var(--text-muted); font-weight: normal;">Nie określono</span>'}
             </div>
           </td>
           <td style="text-align: right; white-space: nowrap;">
-            <button class="btn btn-navy btn-xs btn-handle-ticket" data-ticket-id="${t.id}">Obsłuż sprawę</button>
+            <button class="btn btn-navy btn-xs btn-handle-ticket" data-ticket-id="${escapeHtml(t.id)}">Obsłuż sprawę</button>
           </td>
         </tr>
       `;

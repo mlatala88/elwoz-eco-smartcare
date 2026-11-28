@@ -8,7 +8,7 @@
  * 
  * ZAKRES FUNKCJONALNY v0.2.7:
  * 1. Automatyczna nieblokująca analiza nowych zgłoszeń (Human-in-the-Loop) zaraz po wysłaniu formularza.
- * 2. Lokalna kontrola danych (preValidateTicketData):
+ * 2. Lokalna kontrola danych (preValidateTicketData_):
  *    - zależna od kategorii kontrola kompletności adresu (np. brak numeru posesji przy braku odbioru vs brak wymogu przy pochwale),
  *    - walidacja poprawności danych kontaktowych (e-mail, telefon),
  *    - wykrywanie pozorowanych odpowiedzi ("nie wiem", "brak", "-", "xyz"),
@@ -40,7 +40,7 @@ const SMARTCARE_AI_CONFIG = {
  * @param {Array<string>} possibleNames Lista synonimów/nazw kolumny
  * @returns {number} Indeks kolumny (0-based) lub -1 jeśli nie znaleziono
  */
-function findHeaderIndex(headers, possibleNames) {
+function findHeaderIndex_(headers, possibleNames) {
   if (!headers || !headers.length || !possibleNames || !possibleNames.length) return -1;
   const cleanHeaders = headers.map(h => String(h || "").trim().toLowerCase());
   
@@ -81,7 +81,7 @@ function findHeaderIndex(headers, possibleNames) {
  * @param {*} val Wartość wprowadzona przez mieszkańca
  * @returns {boolean}
  */
-function isHouseNumberPresent(val) {
+function isHouseNumberPresent_(val) {
   if (val === null || val === undefined) return false;
   const s = String(val).trim().toLowerCase();
   if (!s || s === "-" || s === "." || s === "?" || s === "brak" || s === "nie wiem" || s === "nie dotyczy" || s === "n/d" || s === "b/d" || s === "none" || s === "null") {
@@ -154,7 +154,7 @@ const SMARTCARE_ANALYSIS_SCHEMA = {
 /**
  * Maskowanie klucza API w celach bezpieczeństwa logów
  */
-function maskApiKey(text) {
+function maskApiKey_(text) {
   if (!text) return "";
   return String(text).replace(/key=[a-zA-Z0-9_-]+/g, "key=[UKRYTY]");
 }
@@ -162,7 +162,7 @@ function maskApiKey(text) {
 /**
  * Zwraca konfigurację parametrów rozumowania (thinkingConfig) dopasowaną do modelu
  */
-function getThinkingConfigForModel(modelName) {
+function getThinkingConfigForModel_(modelName) {
   const name = String(modelName || "").toLowerCase();
   if (name.includes("2.5")) {
     return { thinkingBudget: 0 };
@@ -173,7 +173,7 @@ function getThinkingConfigForModel(modelName) {
 /**
  * Dynamicznie weryfikuje dostępność modeli dla klucza API i obsługę generateContent oraz tekstu.
  */
-function getVerifiedGeminiModel(apiKey) {
+function getVerifiedGeminiModel_(apiKey) {
   let cache = null;
   try {
     if (typeof CacheService !== "undefined" && CacheService && CacheService.getScriptCache) {
@@ -218,7 +218,7 @@ function getVerifiedGeminiModel(apiKey) {
       }
     }
   } catch (err) {
-    Logger.log("Weryfikacja modeli przez API nie powiodła się: " + maskApiKey(err.toString()));
+    Logger.log("Weryfikacja modeli przez API nie powiodła się: " + maskApiKey_(err.toString()));
   }
 
   return SMARTCARE_AI_CONFIG.defaultModel;
@@ -228,6 +228,7 @@ function getVerifiedGeminiModel(apiKey) {
  * Konfigurator klucza API zapisywanego bezpiecznie w ScriptProperties
  */
 function configureGeminiApiKey() {
+  requireSmartCarePermission_("admin");
   const ui = SpreadsheetApp.getUi();
   const scriptProperties = PropertiesService.getScriptProperties();
   const currentKey = scriptProperties.getProperty("GEMINI_API_KEY");
@@ -262,9 +263,9 @@ function configureGeminiApiKey() {
 /**
  * Pomocniczy parser dat dla modułu AI
  */
-function parseDateValueAi(val) {
-  if (typeof parseDateValue === "function") {
-    const res = parseDateValue(val);
+function parseDateValueAi_(val) {
+  if (typeof parseDateValue_ === "function") {
+    const res = parseDateValue_(val);
     if (res) return res;
   }
   if (!val) return null;
@@ -284,7 +285,7 @@ function parseDateValueAi(val) {
   return null;
 }
 
-function preValidateTicketData(ticketData) {
+function preValidateTicketData_(ticketData) {
   const issues = [];
   const warnings = [];
   let contradiction = "";
@@ -321,7 +322,7 @@ function preValidateTicketData(ticketData) {
       addressIssue = "brak miejscowości";
     }
 
-    const hasHouse = isHouseNumberPresent(houseNumber);
+    const hasHouse = isHouseNumberPresent_(houseNumber);
     const isPlaceholderStreet = /^(brak|nie wiem|niewiadoma|nieznana|brak ulicy|-|\.|\?)$/i.test(street);
     const hasStreet = Boolean(street && !isPlaceholderStreet);
 
@@ -364,7 +365,7 @@ function preValidateTicketData(ticketData) {
 
   // 3. Weryfikacja daty problemu (v0.2.8: blokada przyszłych dat i kontrola zgłoszeń historycznych)
   if (problemDateStr) {
-    const probTime = parseDateValueAi(problemDateStr);
+    const probTime = parseDateValueAi_(problemDateStr);
     if (probTime && !isNaN(probTime)) {
       const probDateObj = new Date(probTime);
       const nowTime = (new Date()).getTime();
@@ -461,7 +462,7 @@ function preValidateTicketData(ticketData) {
  * Atomowa rezerwacja zgłoszenia do analizy AI we wszystkich ścieżkach (v0.2.8)
  * Blokuje równoległe uruchomienie analizy tej samej sprawy przez formularz, kolejkę i pracownika.
  */
-function tryAcquireTicketAiLock(ticketId) {
+function tryAcquireTicketAiLock_(ticketId) {
   if (!ticketId) return false;
   const lock = LockService.getScriptLock();
   try {
@@ -486,18 +487,18 @@ function tryAcquireTicketAiLock(ticketId) {
 /**
  * Zwalnia atomową rezerwację zgłoszenia do analizy AI (v0.2.8)
  */
-function releaseTicketAiLock(ticketId) {
+function releaseTicketAiLock_(ticketId) {
   if (!ticketId) return;
   try {
     PropertiesService.getScriptProperties().deleteProperty("AI_IN_PROGRESS_" + ticketId);
   } catch (_) {}
 }
 
-function triggerAutoAiAnalysisForTicket(sheet, rowNum, headers, ticketIdParam, forceRerun = false, hasLock = false) {
+function triggerAutoAiAnalysisForTicket_(sheet, rowNum, headers, ticketIdParam, forceRerun = false, hasLock = false) {
   if (!sheet || rowNum <= 1) return;
 
   const ss = sheet.getParent();
-  const getCol = (names) => findHeaderIndex(headers, Array.isArray(names) ? names : [names]) + 1;
+  const getCol = (names) => findHeaderIndex_(headers, Array.isArray(names) ? names : [names]) + 1;
   const getVal = (names) => {
     const c = getCol(names);
     return c > 0 ? String(sheet.getRange(rowNum, c).getValue() || "").trim() : "";
@@ -510,7 +511,7 @@ function triggerAutoAiAnalysisForTicket(sheet, rowNum, headers, ticketIdParam, f
   // Atomowa rezerwacja per-ticket we wszystkich ścieżkach (v0.2.8)
   let localLockAcquired = false;
   if (!hasLock) {
-    if (typeof tryAcquireTicketAiLock === "function" && !tryAcquireTicketAiLock(ticketId)) {
+    if (typeof tryAcquireTicketAiLock_ === "function" && !tryAcquireTicketAiLock_(ticketId)) {
       Logger.log(`[Concurrency Guard] Zgłoszenie ${ticketId} jest już przetwarzane przez inny wątek/proces - pomijam.`);
       return;
     }
@@ -561,7 +562,7 @@ function triggerAutoAiAnalysisForTicket(sheet, rowNum, headers, ticketIdParam, f
   };
 
   // 1. Lokalna pre-walidacja danych
-  const validation = preValidateTicketData(ticketData);
+  const validation = preValidateTicketData_(ticketData);
   const localControlCol = getCol(["Lokalna kontrola danych", "Pre-walidacja"]);
   if (localControlCol > 0) {
     sheet.getRange(rowNum, localControlCol).setValue(validation.summary);
@@ -598,13 +599,13 @@ function triggerAutoAiAnalysisForTicket(sheet, rowNum, headers, ticketIdParam, f
       ? "KOMPLETNY - adres jest w pełni zweryfikowany w bazie CRM (nie pytaj o adres!)"
       : ("NIEKOMPLETNY: " + (validation.addressIssue || "brak numeru posesji"));
 
-    const aiResult = callGeminiApiWithRetry(apiKey, {
+    const aiResult = callGeminiApiWithRetry_(apiKey, {
       ticketId: ticketData.ticketId,
       ticketType: ticketData.ticketType,
       wasteFraction: ticketData.wasteFraction,
       city: ticketData.city,
       addressCompletenessStatus: addressStatus,
-      verifiedDescription: anonymizeSensitiveInfo(ticketData.description, ticketData),
+      verifiedDescription: anonymizeSensitiveInfo_(ticketData.description, ticketData),
       preValidationSummary: validation.summary,
       issuesList: validation.issues.join(", "),
       contradiction: validation.contradiction
@@ -614,21 +615,21 @@ function triggerAutoAiAnalysisForTicket(sheet, rowNum, headers, ticketIdParam, f
       throw new Error("Model Gemini zwrócił pusty wynik.");
     }
 
-    const structCheck = validateAiAnalysisResult(aiResult);
+    const structCheck = validateAiAnalysisResult_(aiResult);
     if (!structCheck.valid) {
       throw new Error(structCheck.error);
     }
 
     // 4. Zapis autentycznych wyników AI do CRM
-    setValByHeader(sheet, rowNum, headers, "Kategoria AI", aiResult.kategoria.trim());
-    setValByHeader(sheet, rowNum, headers, "Streszczenie AI", aiResult.streszczenie.trim());
-    setValByHeader(sheet, rowNum, headers, "Sugerowany priorytet AI", aiResult.sugerowanyPriorytet.trim());
-    setValByHeader(sheet, rowNum, headers, "Uzasadnienie priorytetu AI", aiResult.uzasadnieniePriorytetu.trim());
-    setValByHeader(sheet, rowNum, headers, "Brakujące informacje AI", aiResult.brakujaceInformacje.trim());
-    setValByHeader(sheet, rowNum, headers, "Wykryte sprzeczności AI", aiResult.wykryteSprzecznosci.trim());
-    setValByHeader(sheet, rowNum, headers, "Sugerowane działanie AI", aiResult.sugerowaneDzialanie.trim());
-    setValByHeader(sheet, rowNum, headers, "Rekomendowany kolejny krok AI", aiResult.rekomendowanyKrok.trim());
-    setValByHeader(sheet, rowNum, headers, "Proponowana odpowiedź AI", aiResult.proponowanaOdpowiedz.trim());
+    setValByHeader_(sheet, rowNum, headers, "Kategoria AI", aiResult.kategoria.trim());
+    setValByHeader_(sheet, rowNum, headers, "Streszczenie AI", aiResult.streszczenie.trim());
+    setValByHeader_(sheet, rowNum, headers, "Sugerowany priorytet AI", aiResult.sugerowanyPriorytet.trim());
+    setValByHeader_(sheet, rowNum, headers, "Uzasadnienie priorytetu AI", aiResult.uzasadnieniePriorytetu.trim());
+    setValByHeader_(sheet, rowNum, headers, "Brakujące informacje AI", aiResult.brakujaceInformacje.trim());
+    setValByHeader_(sheet, rowNum, headers, "Wykryte sprzeczności AI", aiResult.wykryteSprzecznosci.trim());
+    setValByHeader_(sheet, rowNum, headers, "Sugerowane działanie AI", aiResult.sugerowaneDzialanie.trim());
+    setValByHeader_(sheet, rowNum, headers, "Rekomendowany kolejny krok AI", aiResult.rekomendowanyKrok.trim());
+    setValByHeader_(sheet, rowNum, headers, "Proponowana odpowiedź AI", aiResult.proponowanaOdpowiedz.trim());
 
     // 5. Priorytet i SLA (v0.2.8: Rozróżnienie domyślnego, sugerowanego i zatwierdzonego priorytetu)
     const currentPriority = getVal(["Priorytet"]);
@@ -640,10 +641,10 @@ function triggerAutoAiAnalysisForTicket(sheet, rowNum, headers, ticketIdParam, f
     } else {
       if (validation.urgencyDetected || aiResult.sugerowanyPriorytet === "PILNY") {
         targetPriority = "PILNY";
-        setValByHeader(sheet, rowNum, headers, "Priorytet", "PILNY");
+        setValByHeader_(sheet, rowNum, headers, "Priorytet", "PILNY");
       } else if (!currentPriority) {
         targetPriority = aiResult.sugerowanyPriorytet || "STANDARDOWY";
-        setValByHeader(sheet, rowNum, headers, "Priorytet", targetPriority);
+        setValByHeader_(sheet, rowNum, headers, "Priorytet", targetPriority);
       }
     }
 
@@ -651,15 +652,15 @@ function triggerAutoAiAnalysisForTicket(sheet, rowNum, headers, ticketIdParam, f
     const slaDeadlineCol = getCol(["Termin SLA 1. reakcji", "Termin SLA"]);
     if (slaDeadlineCol > 0 && targetPriority) {
       const timeVal = getVal(["Sygnatura czasowa", "Timestamp", "Data"]);
-      const createdParsed = parseDateValueAi(timeVal);
+      const createdParsed = parseDateValueAi_(timeVal);
       const createdDate = createdParsed ? new Date(createdParsed) : new Date();
       let slaMinutes = 240;
       if (targetPriority === "PILNY") slaMinutes = 15;
       else if (targetPriority === "WYSOKI") slaMinutes = 60;
       else if (targetPriority === "NISKI") slaMinutes = 1440;
 
-      const newSla = typeof calculateBusinessHoursDeadline === "function"
-        ? calculateBusinessHoursDeadline(createdDate, slaMinutes)
+      const newSla = typeof calculateBusinessHoursDeadline_ === "function"
+        ? calculateBusinessHoursDeadline_(createdDate, slaMinutes)
         : new Date(createdDate.getTime() + slaMinutes * 60 * 1000);
       sheet.getRange(rowNum, slaDeadlineCol).setValue(newSla).setNumberFormat("yyyy-MM-dd HH:mm");
     }
@@ -667,15 +668,15 @@ function triggerAutoAiAnalysisForTicket(sheet, rowNum, headers, ticketIdParam, f
     // 6. Zarządzanie kolejnym krokiem i stroną odpowiedzialną
     const currentNextStep = getVal(["Następne działanie", "Kolejny krok"]);
     if (!currentNextStep && aiResult.rekomendowanyKrok) {
-      setValByHeader(sheet, rowNum, headers, "Następne działanie", aiResult.rekomendowanyKrok.trim());
+      setValByHeader_(sheet, rowNum, headers, "Następne działanie", aiResult.rekomendowanyKrok.trim());
     }
 
     const currentSide = getVal(["Strona odpowiedzialna"]);
     if (!currentSide || currentSide === "Przedsiębiorstwo") {
       if (validation.requiresResidentInput || aiResult.rekomendowanaStronaKroku === "Mieszkaniec") {
-        setValByHeader(sheet, rowNum, headers, "Strona odpowiedzialna", "Mieszkaniec");
+        setValByHeader_(sheet, rowNum, headers, "Strona odpowiedzialna", "Mieszkaniec");
       } else if (aiResult.rekomendowanaStronaKroku) {
-        setValByHeader(sheet, rowNum, headers, "Strona odpowiedzialna", aiResult.rekomendowanaStronaKroku);
+        setValByHeader_(sheet, rowNum, headers, "Strona odpowiedzialna", aiResult.rekomendowanaStronaKroku);
       }
     }
 
@@ -695,7 +696,7 @@ function triggerAutoAiAnalysisForTicket(sheet, rowNum, headers, ticketIdParam, f
     Logger.log(`Automatyczna analiza AI dla ${ticketId} zakończona sukcesem (Stan: ${finalState}).`);
   } catch (err) {
     const rawMsg = err.message || err.toString();
-    const safeErr = maskApiKey(rawMsg).replace(/^Error:\s*/, "");
+    const safeErr = maskApiKey_(rawMsg).replace(/^Error:\s*/, "");
     Logger.log(`Błąd analizy AI dla ${ticketId}: ${safeErr}`);
 
     const isQuotaOrRateLimit = safeErr.includes("429") ||
@@ -711,7 +712,7 @@ function triggerAutoAiAnalysisForTicket(sheet, rowNum, headers, ticketIdParam, f
       if (aiErrorCol > 0) {
         sheet.getRange(rowNum, aiErrorCol).setValue(`Odroczono (limit API / cooldown): ${safeErr}`);
       }
-      // Rzucamy wyjątek dalej, aby processAiAnalysisQueue wiedział o 429 i przerwał bieżącą partię
+      // Rzucamy wyjątek dalej, aby processAiAnalysisQueue_ wiedział o 429 i przerwał bieżącą partię
       throw err;
     } else {
       if (aiStateCol > 0) {
@@ -722,34 +723,34 @@ function triggerAutoAiAnalysisForTicket(sheet, rowNum, headers, ticketIdParam, f
       }
     }
   } finally {
-    if (localLockAcquired && typeof releaseTicketAiLock === "function") {
-      releaseTicketAiLock(ticketId);
+    if (localLockAcquired && typeof releaseTicketAiLock_ === "function") {
+      releaseTicketAiLock_(ticketId);
     }
   }
 }
 
-function applyFallbackAiAnalysis(sheet, rowNum, headers, ticketData, validation, reason) {
+function applyFallbackAiAnalysis_(sheet, rowNum, headers, ticketData, validation, reason) {
   const isUrgent = validation.urgencyDetected || validation.recurrenceDetected;
   const fallbackPriority = isUrgent ? (validation.urgencyDetected ? "PILNY" : "WYSOKI") : "STANDARDOWY";
   const missingText = validation.issues.length > 0 ? validation.issues.join("; ") : "Brak braków";
   const contradictionText = validation.contradiction || "Brak sprzeczności";
 
-  setValByHeader(sheet, rowNum, headers, "Kategoria AI", ticketData.ticketType || "Zgłoszenie komunalne");
-  setValByHeader(sheet, rowNum, headers, "Streszczenie AI", `Zgłoszenie: ${ticketData.ticketType || "ogólne"}, rejon: ${ticketData.city || "Kartuzy"}. Oczekuje na weryfikację dyspozytora.`);
-  setValByHeader(sheet, rowNum, headers, "Sugerowany priorytet AI", fallbackPriority);
-  setValByHeader(sheet, rowNum, headers, "Uzasadnienie priorytetu AI", isUrgent ? "Wykryto słowa kluczowe eskalacji w lokalnej analizie danych." : "Standardowe zgłoszenie operacyjne.");
-  setValByHeader(sheet, rowNum, headers, "Brakujące informacje AI", missingText);
-  setValByHeader(sheet, rowNum, headers, "Wykryte sprzeczności AI", contradictionText);
-  setValByHeader(sheet, rowNum, headers, "Sugerowane działanie AI", "Weryfikacja zgłoszenia w systemie GPS lub kontakt z mieszkańcem");
-  setValByHeader(sheet, rowNum, headers, "Rekomendowany kolejny krok AI", validation.requiresResidentInput ? "Kontakt z mieszkańcem o doprecyzowanie adresu" : "Weryfikacja trasy śmieciarki");
-  setValByHeader(sheet, rowNum, headers, "Proponowana odpowiedź AI", generateFallbackDraftResponse(ticketData, validation));
+  setValByHeader_(sheet, rowNum, headers, "Kategoria AI", ticketData.ticketType || "Zgłoszenie komunalne");
+  setValByHeader_(sheet, rowNum, headers, "Streszczenie AI", `Zgłoszenie: ${ticketData.ticketType || "ogólne"}, rejon: ${ticketData.city || "Kartuzy"}. Oczekuje na weryfikację dyspozytora.`);
+  setValByHeader_(sheet, rowNum, headers, "Sugerowany priorytet AI", fallbackPriority);
+  setValByHeader_(sheet, rowNum, headers, "Uzasadnienie priorytetu AI", isUrgent ? "Wykryto słowa kluczowe eskalacji w lokalnej analizie danych." : "Standardowe zgłoszenie operacyjne.");
+  setValByHeader_(sheet, rowNum, headers, "Brakujące informacje AI", missingText);
+  setValByHeader_(sheet, rowNum, headers, "Wykryte sprzeczności AI", contradictionText);
+  setValByHeader_(sheet, rowNum, headers, "Sugerowane działanie AI", "Weryfikacja zgłoszenia w systemie GPS lub kontakt z mieszkańcem");
+  setValByHeader_(sheet, rowNum, headers, "Rekomendowany kolejny krok AI", validation.requiresResidentInput ? "Kontakt z mieszkańcem o doprecyzowanie adresu" : "Weryfikacja trasy śmieciarki");
+  setValByHeader_(sheet, rowNum, headers, "Proponowana odpowiedź AI", generateFallbackDraftResponse_(ticketData, validation));
 }
 
 /**
  * Generuje bezpieczną treść roboczą pierwszej odpowiedzi bez korzystania z zewnętrznego API (v0.2.8)
  * Dopasowana do kategorii: Pochwała (podziękowanie, brak GPS), Niekompletne (prośba o dane), Kompletne (weryfikacja operacyjna)
  */
-function generateFallbackDraftResponse(ticketData, validation) {
+function generateFallbackDraftResponse_(ticketData, validation) {
   const name = ticketData.residentName || "Mieszkańcu";
   const id = ticketData.ticketId || "Zgłoszenie";
   const type = String(ticketData.ticketType || "").trim();
@@ -794,6 +795,7 @@ function generateFallbackDraftResponse(ticketData, validation) {
  * Główna funkcja uruchamiająca procedurę analizy AI dla zaznaczonego zgłoszenia z interfejsu (Human-in-the-Loop)
  */
 function analyzeSelectedTicket() {
+  requireSmartCarePermission_("ai");
   const sheet = SpreadsheetApp.getActiveSheet();
   const ui = SpreadsheetApp.getUi();
 
@@ -830,7 +832,7 @@ function analyzeSelectedTicket() {
   const rowValues = sheet.getRange(row, 1, 1, lastCol).getValues()[0];
 
   const getVal = (possibleNames) => {
-    const idx = findHeaderIndex(headers, Array.isArray(possibleNames) ? possibleNames : [possibleNames]);
+    const idx = findHeaderIndex_(headers, Array.isArray(possibleNames) ? possibleNames : [possibleNames]);
     return (idx !== -1 && rowValues[idx] !== null && rowValues[idx] !== undefined) ? String(rowValues[idx]).trim() : "";
   };
 
@@ -864,10 +866,10 @@ function analyzeSelectedTicket() {
     return;
   }
 
-  const anonymizedDesc = anonymizeSensitiveInfo(rawDescription);
-  const activeModel = getVerifiedGeminiModel(apiKey);
+  const anonymizedDesc = anonymizeSensitiveInfo_(rawDescription);
+  const activeModel = getVerifiedGeminiModel_(apiKey);
 
-  const validation = preValidateTicketData({
+  const validation = preValidateTicketData_({
     ticketId: ticketId,
     ticketType: ticketType,
     wasteFraction: wasteFraction,
@@ -881,17 +883,17 @@ function analyzeSelectedTicket() {
     description: rawDescription
   });
 
-  const safeCity = escapeHtml(city);
-  const safeType = escapeHtml(ticketType || "Zgłoszenie komunalne");
-  const safeFraction = escapeHtml(wasteFraction || "Nieokreślona");
-  const safeOrigDesc = escapeHtml(rawDescription);
-  const safeAnonymizedDesc = escapeHtml(anonymizedDesc);
-  const safeTicketId = escapeHtml(ticketId);
-  const safeModel = escapeHtml(activeModel);
+  const safeCity = escapeHtml_(city);
+  const safeType = escapeHtml_(ticketType || "Zgłoszenie komunalne");
+  const safeFraction = escapeHtml_(wasteFraction || "Nieokreślona");
+  const safeOrigDesc = escapeHtml_(rawDescription);
+  const safeAnonymizedDesc = escapeHtml_(anonymizedDesc);
+  const safeTicketId = escapeHtml_(ticketId);
+  const safeModel = escapeHtml_(activeModel);
 
   const addressBadge = validation.isAddressComplete
     ? '<span style="color:#166534; font-weight:bold;">Adres kompletny w CRM (bez ulicy w prompcie AI)</span>'
-    : '<span style="color:#991b1b; font-weight:bold;">Adres niekompletny (' + escapeHtml(validation.addressIssue) + ')</span>';
+    : '<span style="color:#991b1b; font-weight:bold;">Adres niekompletny (' + escapeHtml_(validation.addressIssue) + ')</span>';
 
   const htmlContent = `
 <!DOCTYPE html>
@@ -932,7 +934,7 @@ function analyzeSelectedTicket() {
 
   ${validation.summary !== "Dane kompletne i spójne" ? `
   <div class="warn-box">
-    <strong>Ustalenia pre-walidacji:</strong> ${escapeHtml(validation.summary)}
+    <strong>Ustalenia pre-walidacji:</strong> ${escapeHtml_(validation.summary)}
   </div>` : ''}
 
   <p style="margin: 6px 0 10px 0; font-size: 12px; color: #475569;">
@@ -969,7 +971,7 @@ function analyzeSelectedTicket() {
           document.getElementById("btnSend").disabled = false;
           document.getElementById("spinner").style.display = "none";
         })
-        .processAiTicketAnalysis("${safeTicketId}", text);
+        .processAiTicketAnalysis(${serializeForHtmlScript_(ticketId)}, text);
     }
   </script>
 </body>
@@ -980,8 +982,9 @@ function analyzeSelectedTicket() {
 }
 
 function processAiTicketAnalysis(ticketId, verifiedText) {
+  requireSmartCarePermission_("ai");
   // Blokowanie ręcznej analizy AI – próba atomowej rezerwacji sprawy
-  if (typeof tryAcquireTicketAiLock === "function" && !tryAcquireTicketAiLock(ticketId)) {
+  if (typeof tryAcquireTicketAiLock_ === "function" && !tryAcquireTicketAiLock_(ticketId)) {
     return {
       success: false,
       error: `Zgłoszenie ${ticketId} jest już w trakcie analizy AI (blokada współbieżności). Odczekaj chwilę.`
@@ -990,20 +993,20 @@ function processAiTicketAnalysis(ticketId, verifiedText) {
 
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("ZGŁOSZENIA");
   if (!sheet) {
-    if (typeof releaseTicketAiLock === "function") releaseTicketAiLock(ticketId);
+    if (typeof releaseTicketAiLock_ === "function") releaseTicketAiLock_(ticketId);
     return { success: false, error: "Brak zakładki ZGŁOSZENIA w arkuszu." };
   }
 
   const scriptProperties = PropertiesService.getScriptProperties();
   const apiKey = scriptProperties.getProperty("GEMINI_API_KEY");
   if (!apiKey) {
-    if (typeof releaseTicketAiLock === "function") releaseTicketAiLock(ticketId);
+    if (typeof releaseTicketAiLock_ === "function") releaseTicketAiLock_(ticketId);
     return { success: false, error: "Brak skonfigurowanego klucza Gemini API w Script Properties." };
   }
 
   const data = sheet.getDataRange().getValues();
   const headers = data[0].map(h => String(h).trim());
-  const idIdx = findHeaderIndex(headers, ["ID Zgłoszenia", "Numer zgłoszenia", "ID"]);
+  const idIdx = findHeaderIndex_(headers, ["ID Zgłoszenia", "Numer zgłoszenia", "ID"]);
 
   let rowNum = -1;
   let ticketData = null;
@@ -1012,7 +1015,7 @@ function processAiTicketAnalysis(ticketId, verifiedText) {
     if (String(data[r][idIdx]).trim() === String(ticketId).trim()) {
       rowNum = r + 1;
       const getVal = (names) => {
-        const i = findHeaderIndex(headers, Array.isArray(names) ? names : [names]);
+        const i = findHeaderIndex_(headers, Array.isArray(names) ? names : [names]);
         return i !== -1 ? String(data[r][i] || "").trim() : "";
       };
       ticketData = {
@@ -1034,19 +1037,19 @@ function processAiTicketAnalysis(ticketId, verifiedText) {
   }
 
   if (rowNum === -1 || !ticketData) {
-    if (typeof releaseTicketAiLock === "function") releaseTicketAiLock(ticketId);
+    if (typeof releaseTicketAiLock_ === "function") releaseTicketAiLock_(ticketId);
     return { success: false, error: `Nie znaleziono zgłoszenia o ID ${ticketId} w arkuszu.` };
   }
 
   try {
-    const validation = preValidateTicketData(ticketData);
-    setValByHeader(sheet, rowNum, headers, "Lokalna kontrola danych", validation.summary);
+    const validation = preValidateTicketData_(ticketData);
+    setValByHeader_(sheet, rowNum, headers, "Lokalna kontrola danych", validation.summary);
 
     const addressStatus = validation.isAddressComplete
       ? "KOMPLETNY - adres jest w pełni zweryfikowany w bazie CRM (nie pytaj o adres!)"
       : ("NIEKOMPLETNY: " + (validation.addressIssue || "brak numeru posesji"));
 
-    const aiAnalysis = callGeminiApiWithRetry(apiKey, {
+    const aiAnalysis = callGeminiApiWithRetry_(apiKey, {
       ticketId: ticketData.ticketId,
       ticketType: ticketData.ticketType,
       wasteFraction: ticketData.wasteFraction,
@@ -1062,71 +1065,71 @@ function processAiTicketAnalysis(ticketId, verifiedText) {
       return { success: false, error: "Model zwrócił pustą odpowiedź." };
     }
 
-    const validationRes = validateAiAnalysisResult(aiAnalysis);
+    const validationRes = validateAiAnalysisResult_(aiAnalysis);
     if (!validationRes.valid) {
       return { success: false, error: validationRes.error };
     }
 
     // Zapis do arkusza CRM
-    setValByHeader(sheet, rowNum, headers, "Kategoria AI", aiAnalysis.kategoria.trim());
-    setValByHeader(sheet, rowNum, headers, "Streszczenie AI", aiAnalysis.streszczenie.trim());
-    setValByHeader(sheet, rowNum, headers, "Sugerowany priorytet AI", aiAnalysis.sugerowanyPriorytet.trim());
-    setValByHeader(sheet, rowNum, headers, "Uzasadnienie priorytetu AI", aiAnalysis.uzasadnieniePriorytetu.trim());
-    setValByHeader(sheet, rowNum, headers, "Brakujące informacje AI", aiAnalysis.brakujaceInformacje.trim());
-    setValByHeader(sheet, rowNum, headers, "Wykryte sprzeczności AI", aiAnalysis.wykryteSprzecznosci.trim());
-    setValByHeader(sheet, rowNum, headers, "Sugerowane działanie AI", aiAnalysis.sugerowaneDzialanie.trim());
-    setValByHeader(sheet, rowNum, headers, "Rekomendowany kolejny krok AI", aiAnalysis.rekomendowanyKrok.trim());
-    setValByHeader(sheet, rowNum, headers, "Proponowana odpowiedź AI", aiAnalysis.proponowanaOdpowiedz.trim());
+    setValByHeader_(sheet, rowNum, headers, "Kategoria AI", aiAnalysis.kategoria.trim());
+    setValByHeader_(sheet, rowNum, headers, "Streszczenie AI", aiAnalysis.streszczenie.trim());
+    setValByHeader_(sheet, rowNum, headers, "Sugerowany priorytet AI", aiAnalysis.sugerowanyPriorytet.trim());
+    setValByHeader_(sheet, rowNum, headers, "Uzasadnienie priorytetu AI", aiAnalysis.uzasadnieniePriorytetu.trim());
+    setValByHeader_(sheet, rowNum, headers, "Brakujące informacje AI", aiAnalysis.brakujaceInformacje.trim());
+    setValByHeader_(sheet, rowNum, headers, "Wykryte sprzeczności AI", aiAnalysis.wykryteSprzecznosci.trim());
+    setValByHeader_(sheet, rowNum, headers, "Sugerowane działanie AI", aiAnalysis.sugerowaneDzialanie.trim());
+    setValByHeader_(sheet, rowNum, headers, "Rekomendowany kolejny krok AI", aiAnalysis.rekomendowanyKrok.trim());
+    setValByHeader_(sheet, rowNum, headers, "Proponowana odpowiedź AI", aiAnalysis.proponowanaOdpowiedz.trim());
 
     // Aktualizacja priorytetu tylko jeśli dotychczas nie był zmieniony przez pracownika
-    const currentPriority = data[rowNum - 1][findHeaderIndex(headers, ["Priorytet"])];
+    const currentPriority = data[rowNum - 1][findHeaderIndex_(headers, ["Priorytet"])];
     if (!currentPriority || currentPriority === "STANDARDOWY") {
       if (aiAnalysis.sugerowanyPriorytet) {
-        setValByHeader(sheet, rowNum, headers, "Priorytet", aiAnalysis.sugerowanyPriorytet);
+        setValByHeader_(sheet, rowNum, headers, "Priorytet", aiAnalysis.sugerowanyPriorytet);
       }
     }
 
     // Aktualizacja następnego działania jeśli puste
-    const nextIdx = findHeaderIndex(headers, ["Następne działanie", "Kolejny krok"]);
+    const nextIdx = findHeaderIndex_(headers, ["Następne działanie", "Kolejny krok"]);
     const currentNext = nextIdx !== -1 ? data[rowNum - 1][nextIdx] : "";
     if (!currentNext && aiAnalysis.rekomendowanyKrok) {
-      setValByHeader(sheet, rowNum, headers, "Następne działanie", aiAnalysis.rekomendowanyKrok);
+      setValByHeader_(sheet, rowNum, headers, "Następne działanie", aiAnalysis.rekomendowanyKrok);
     }
 
     // Aktualizacja strony odpowiedzialnej
-    const sideIdx = findHeaderIndex(headers, ["Strona odpowiedzialna"]);
+    const sideIdx = findHeaderIndex_(headers, ["Strona odpowiedzialna"]);
     const currentSide = sideIdx !== -1 ? data[rowNum - 1][sideIdx] : "";
     if (!currentSide || currentSide === "Przedsiębiorstwo") {
       if (validation.requiresResidentInput || aiAnalysis.rekomendowanaStronaKroku === "Mieszkaniec") {
-        setValByHeader(sheet, rowNum, headers, "Strona odpowiedzialna", "Mieszkaniec");
+        setValByHeader_(sheet, rowNum, headers, "Strona odpowiedzialna", "Mieszkaniec");
       } else if (aiAnalysis.rekomendowanaStronaKroku) {
-        setValByHeader(sheet, rowNum, headers, "Strona odpowiedzialna", aiAnalysis.rekomendowanaStronaKroku);
+        setValByHeader_(sheet, rowNum, headers, "Strona odpowiedzialna", aiAnalysis.rekomendowanaStronaKroku);
       }
     }
 
     const finalState = (validation.issues.length > 0 || aiAnalysis.wykryteSprzecznosci !== "Brak sprzeczności")
       ? "Wymaga weryfikacji"
       : "Gotowa";
-    setValByHeader(sheet, rowNum, headers, "Stan analizy AI", finalState);
-    setValByHeader(sheet, rowNum, headers, "Szczegóły błędu AI", "");
+    setValByHeader_(sheet, rowNum, headers, "Stan analizy AI", finalState);
+    setValByHeader_(sheet, rowNum, headers, "Szczegóły błędu AI", "");
 
     SpreadsheetApp.flush();
-    if (typeof refreshDashboardStats === "function") {
-      try { refreshDashboardStats(sheet.getParent()); } catch (_) {}
+    if (typeof refreshDashboardStats_ === "function") {
+      try { refreshDashboardStats_(sheet.getParent()); } catch (_) {}
     }
 
     SpreadsheetApp.getActiveSpreadsheet().toast(`Zakończono analizę AI dla zgłoszenia ${ticketId} (${finalState}).`, "SmartCare AI (v0.2.8)", 5);
     return { success: true, diagnostics: aiAnalysis._diagnostics };
   } catch (err) {
     const rawMsg = err.toString();
-    const safeErrMsg = maskApiKey(rawMsg).replace(/^Error:\s*/, "");
+    const safeErrMsg = maskApiKey_(rawMsg).replace(/^Error:\s*/, "");
     Logger.log("Błąd processAiTicketAnalysis: " + safeErrMsg);
-    setValByHeader(sheet, rowNum, headers, "Stan analizy AI", "Błąd");
-    setValByHeader(sheet, rowNum, headers, "Szczegóły błędu AI", safeErrMsg);
+    setValByHeader_(sheet, rowNum, headers, "Stan analizy AI", "Błąd");
+    setValByHeader_(sheet, rowNum, headers, "Szczegóły błędu AI", safeErrMsg);
     return { success: false, error: safeErrMsg };
   } finally {
-    if (typeof releaseTicketAiLock === "function") {
-      releaseTicketAiLock(ticketId);
+    if (typeof releaseTicketAiLock_ === "function") {
+      releaseTicketAiLock_(ticketId);
     }
   }
 }
@@ -1138,7 +1141,7 @@ function processAiTicketAnalysis(ticketId, verifiedText) {
  *
  * @param {string} modelName Nazwa modelu (np. gemini-2.5-flash)
  */
-function enforceGeminiRateLimit(modelName) {
+function enforceGeminiRateLimit_(modelName) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(15000);
@@ -1185,7 +1188,7 @@ function enforceGeminiRateLimit(modelName) {
  * @param {Object} [headers] Nagłówki odpowiedzi HTTP
  * @returns {{ isQuota: boolean, limitType: string, retryDelaySec: number, description: string, message: string }}
  */
-function parseGeminiQuotaError(responseCode, responseText, headers = {}) {
+function parseGeminiQuotaError_(responseCode, responseText, headers = {}) {
   let isQuota = responseCode === 429;
   const text = String(responseText || "");
   if (text.includes("RESOURCE_EXHAUSTED") || text.includes("Quota exceeded") || text.includes("RATE_LIMIT_EXCEEDED")) {
@@ -1304,7 +1307,7 @@ function parseGeminiQuotaError(responseCode, responseText, headers = {}) {
   };
 }
 
-function callGeminiApiWithRetry(apiKey, ticketData, maxRetries = 1) {
+function callGeminiApiWithRetry_(apiKey, ticketData, maxRetries = 1) {
   let lastError = null;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
@@ -1312,14 +1315,14 @@ function callGeminiApiWithRetry(apiKey, ticketData, maxRetries = 1) {
         Logger.log(`Ponawianie zapytania do Gemini API (próba ${attempt + 1}/${maxRetries + 1})...`);
         Utilities.sleep(1000);
       }
-      return callGeminiApi(apiKey, ticketData);
+      return callGeminiApi_(apiKey, ticketData);
     } catch (err) {
       lastError = err;
       const errMsg = err.message || String(err);
       if (errMsg.includes("401") || errMsg.includes("403") || errMsg.includes("SAFETY") || errMsg.includes("RECITATION") || errMsg.includes("429") || errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("limit Gemini API") || errMsg.includes("cooldown")) {
         throw err;
       }
-      Logger.log(`Próba ${attempt + 1} nie powiodła się: ${maskApiKey(errMsg)}`);
+      Logger.log(`Próba ${attempt + 1} nie powiodła się: ${maskApiKey_(errMsg)}`);
     }
   }
   throw lastError;
@@ -1328,9 +1331,9 @@ function callGeminiApiWithRetry(apiKey, ticketData, maxRetries = 1) {
 /**
  * Bezpośrednie wywołanie Gemini API (v0.2.7) ze Structured Outputs
  */
-function callGeminiApi(apiKey, ticketData) {
-  const activeModel = getVerifiedGeminiModel(apiKey);
-  const thinkingConfig = getThinkingConfigForModel(activeModel);
+function callGeminiApi_(apiKey, ticketData) {
+  const activeModel = getVerifiedGeminiModel_(apiKey);
+  const thinkingConfig = getThinkingConfigForModel_(activeModel);
 
   const systemInstruction = 
     "Jesteś profesjonalnym asystentem operacyjnym Customer Service Intelligence w firmie komunalnej ELWOZ ECO w rejonie Kartuz.\n" +
@@ -1395,13 +1398,13 @@ function callGeminiApi(apiKey, ticketData) {
   const endpointUrl = `${SMARTCARE_AI_CONFIG.apiBaseUrl}/models/${encodeURIComponent(activeModel)}:generateContent?key=${apiKey}`;
   
   // Wymuszenie globalnego limitu zapytań (15 RPM barrier) przed strzałem HTTP (v0.2.8)
-  enforceGeminiRateLimit(activeModel);
+  enforceGeminiRateLimit_(activeModel);
 
   let response;
   try {
     response = UrlFetchApp.fetch(endpointUrl, options);
   } catch (netErr) {
-    throw new Error(`Błąd połączenia z Gemini API: ${maskApiKey(String(netErr))}`);
+    throw new Error(`Błąd połączenia z Gemini API: ${maskApiKey_(String(netErr))}`);
   }
 
   const responseCode = response.getResponseCode();
@@ -1413,7 +1416,7 @@ function callGeminiApi(apiKey, ticketData) {
   } catch (_) {}
 
   // 1. Rozróżnienie warstwy limitów i HTTP API
-  const quotaInfo = parseGeminiQuotaError(responseCode, responseText, headers);
+  const quotaInfo = parseGeminiQuotaError_(responseCode, responseText, headers);
   if (quotaInfo.isQuota) {
     try {
       PropertiesService.getScriptProperties().setProperty("GEMINI_BACKOFF_UNTIL", String(Date.now() + quotaInfo.retryDelaySec * 1000));
@@ -1435,7 +1438,7 @@ function callGeminiApi(apiKey, ticketData) {
         apiErrMsg += `: ${errJson.error.message}`;
       }
     } catch (_) {}
-    throw new Error(`Błąd API Gemini (${activeModel}): ${maskApiKey(apiErrMsg)}`);
+    throw new Error(`Błąd API Gemini (${activeModel}): ${maskApiKey_(apiErrMsg)}`);
   }
 
   // 2. Parsowanie odpowiedzi HTTP serwera
@@ -1482,10 +1485,10 @@ function callGeminiApi(apiKey, ticketData) {
   const rawContent = validParts.map(p => p.text).join("").trim();
 
   // 4. Bezpieczne parsowanie wygenerowanego JSON
-  const parsedData = extractAndParseModelJson(rawContent);
+  const parsedData = extractAndParseModelJson_(rawContent);
 
   // 5. Zgromadzenie diagnostyki wykonania
-  const usageDiagnostics = extractUsageDiagnostics(jsonResponse);
+  const usageDiagnostics = extractUsageDiagnostics_(jsonResponse);
 
   parsedData._diagnostics = {
     model: activeModel,
@@ -1503,7 +1506,7 @@ function callGeminiApi(apiKey, ticketData) {
 /**
  * Bezpieczne wyodrębnienie statystyk zużycia tokenów z odpowiedzi API
  */
-function extractUsageDiagnostics(jsonResponse) {
+function extractUsageDiagnostics_(jsonResponse) {
   const usage = jsonResponse.usageMetadata || {};
   let thinkingTokens = usage.thinkingTokenCount || 0;
   if (!thinkingTokens && Array.isArray(usage.candidatesTokensDetails)) {
@@ -1523,7 +1526,7 @@ function extractUsageDiagnostics(jsonResponse) {
 /**
  * Wyodrębnianie i parsowanie JSON wygenerowanego przez model
  */
-function extractAndParseModelJson(rawText) {
+function extractAndParseModelJson_(rawText) {
   if (!rawText || typeof rawText !== "string") {
     throw new Error("Odpowiedź wygenerowana przez model jest pusta.");
   }
@@ -1553,7 +1556,7 @@ function extractAndParseModelJson(rawText) {
 /**
  * Sprawdzenie kompletności i poprawności struktury JSON przed zapisaniem wyników do CRM (v0.2.7)
  */
-function validateAiAnalysisResult(data) {
+function validateAiAnalysisResult_(data) {
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     return { valid: false, error: "Wynik analizy nie jest poprawnym obiektem JSON." };
   }
@@ -1607,7 +1610,7 @@ function validateAiAnalysisResult(data) {
  * Maskuje e-maile, telefony, PESEL oraz dane zgłaszającego mieszkańca
  * (imię, nazwisko, nazwę ulicy, numer posesji, numer telefonu, adres e-mail)
  */
-function anonymizeSensitiveInfo(text, ticketData) {
+function anonymizeSensitiveInfo_(text, ticketData) {
   if (!text) return "";
   let sanitized = String(text)
     .replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, "[E-MAIL USUNIĘTO]")
@@ -1617,7 +1620,7 @@ function anonymizeSensitiveInfo(text, ticketData) {
   if (ticketData) {
     // Maskowanie adresu e-mail zgłaszającego
     if (ticketData.residentEmail && ticketData.residentEmail.includes("@")) {
-      const emailEsc = escapeRegExpAi(ticketData.residentEmail.trim());
+      const emailEsc = escapeRegExpAi_(ticketData.residentEmail.trim());
       sanitized = sanitized.replace(new RegExp(emailEsc, "gi"), "[E-MAIL MIESZKAŃCA]");
     }
 
@@ -1625,7 +1628,7 @@ function anonymizeSensitiveInfo(text, ticketData) {
     if (ticketData.residentPhone) {
       const cleanPhone = ticketData.residentPhone.replace(/[\s\-\+\(\)]/g, "");
       if (cleanPhone.length >= 7) {
-        sanitized = sanitized.replace(new RegExp(escapeRegExpAi(ticketData.residentPhone.trim()), "g"), "[TELEFON MIESZKAŃCA]");
+        sanitized = sanitized.replace(new RegExp(escapeRegExpAi_(ticketData.residentPhone.trim()), "g"), "[TELEFON MIESZKAŃCA]");
       }
     }
 
@@ -1634,7 +1637,7 @@ function anonymizeSensitiveInfo(text, ticketData) {
       const nameParts = ticketData.residentName.trim().split(/\s+/);
       for (let part of nameParts) {
         if (part.length >= 3 && !/^(pan|pani|mieszkaniec|kartuzy)$/i.test(part)) {
-          sanitized = sanitized.replace(new RegExp("\\b" + escapeRegExpAi(part) + "\\b", "gi"), "[MIESZKANIEC]");
+          sanitized = sanitized.replace(new RegExp("\\b" + escapeRegExpAi_(part) + "\\b", "gi"), "[MIESZKANIEC]");
         }
       }
     }
@@ -1643,7 +1646,7 @@ function anonymizeSensitiveInfo(text, ticketData) {
     if (ticketData.street) {
       const streetClean = ticketData.street.trim().replace(/^(ul\.|ulica)\s*/i, "");
       if (streetClean.length >= 4 && !/^(brak|nie wiem|nieznana|niewiadoma)$/i.test(streetClean)) {
-        sanitized = sanitized.replace(new RegExp("\\b" + escapeRegExpAi(streetClean) + "\\b", "gi"), "[ULICA]");
+        sanitized = sanitized.replace(new RegExp("\\b" + escapeRegExpAi_(streetClean) + "\\b", "gi"), "[ULICA]");
       }
     }
 
@@ -1651,7 +1654,7 @@ function anonymizeSensitiveInfo(text, ticketData) {
     if (ticketData.houseNumber) {
       const houseClean = ticketData.houseNumber.trim();
       if (houseClean.length >= 1 && !/^(brak|nie wiem)$/i.test(houseClean)) {
-        sanitized = sanitized.replace(new RegExp("(?:posesja|posesji|nr|numer|domu|dom)?\\s*\\b" + escapeRegExpAi(houseClean) + "\\b", "gi"), "[NR_POSESJI]");
+        sanitized = sanitized.replace(new RegExp("(?:posesja|posesji|nr|numer|domu|dom)?\\s*\\b" + escapeRegExpAi_(houseClean) + "\\b", "gi"), "[NR_POSESJI]");
       }
     }
   }
@@ -1659,14 +1662,14 @@ function anonymizeSensitiveInfo(text, ticketData) {
   return sanitized;
 }
 
-function escapeRegExpAi(str) {
+function escapeRegExpAi_(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /**
  * Pomocniczy zapis wartości do komórki na podstawie nazwy nagłówka
  */
-function setValByHeader(sheet, row, headers, headerName, value) {
+function setValByHeader_(sheet, row, headers, headerName, value) {
   for (let i = 0; i < headers.length; i++) {
     if (headers[i] === headerName || headers[i].startsWith(headerName)) {
       sheet.getRange(row, i + 1).setValue(value);
@@ -1679,6 +1682,7 @@ function setValByHeader(sheet, row, headers, headerName, value) {
  * Samodzielna funkcja diagnostyczna do weryfikacji integracji Gemini API (v0.2.7)
  */
 function testGeminiApiIntegration() {
+  requireSmartCarePermission_("diagnostics");
   const ui = SpreadsheetApp.getUi();
   const scriptProperties = PropertiesService.getScriptProperties();
   const apiKey = scriptProperties.getProperty("GEMINI_API_KEY");
@@ -1710,12 +1714,12 @@ function testGeminiApiIntegration() {
   };
 
   try {
-    const activeModel = getVerifiedGeminiModel(apiKey);
-    const result = callGeminiApiWithRetry(apiKey, testTicket, 1);
+    const activeModel = getVerifiedGeminiModel_(apiKey);
+    const result = callGeminiApiWithRetry_(apiKey, testTicket, 1);
     const durationMs = new Date().getTime() - startTime;
     const diag = result._diagnostics || {};
 
-    showDiagnosticResultDialog({
+    showDiagnosticResultDialog_({
       success: true,
       model: diag.model || activeModel,
       httpStatus: diag.httpStatus || 200,
@@ -1729,8 +1733,8 @@ function testGeminiApiIntegration() {
     });
   } catch (err) {
     const durationMs = new Date().getTime() - startTime;
-    const maskedMsg = maskApiKey(err.message || String(err));
-    showDiagnosticResultDialog({
+    const maskedMsg = maskApiKey_(err.message || String(err));
+    showDiagnosticResultDialog_({
       success: false,
       error: maskedMsg,
       durationMs: durationMs
@@ -1741,7 +1745,7 @@ function testGeminiApiIntegration() {
 /**
  * Wyświetla sformatowane okno dialogowe z pełną diagnostyką testu Gemini API (v0.2.7)
  */
-function showDiagnosticResultDialog(data) {
+function showDiagnosticResultDialog_(data) {
   const ui = SpreadsheetApp.getUi();
   let contentHtml = "";
 
@@ -1756,9 +1760,9 @@ function showDiagnosticResultDialog(data) {
 
       <table style="width:100%; border-collapse:collapse; font-size:12px; margin-bottom:14px;">
         <tr style="background:#f1f5f9;"><th style="padding:6px; text-align:left; border:1px solid #cbd5e1;">Parametr</th><th style="padding:6px; text-align:left; border:1px solid #cbd5e1;">Wartość</th></tr>
-        <tr><td style="padding:6px; border:1px solid #cbd5e1;">Model Gemini</td><td style="padding:6px; border:1px solid #cbd5e1;"><strong>${escapeHtml(data.model)}</strong></td></tr>
+        <tr><td style="padding:6px; border:1px solid #cbd5e1;">Model Gemini</td><td style="padding:6px; border:1px solid #cbd5e1;"><strong>${escapeHtml_(data.model)}</strong></td></tr>
         <tr><td style="padding:6px; border:1px solid #cbd5e1;">Kod HTTP</td><td style="padding:6px; border:1px solid #cbd5e1;"><span style="color:#059669; font-weight:bold;">${data.httpStatus} OK</span></td></tr>
-        <tr><td style="padding:6px; border:1px solid #cbd5e1;">finishReason</td><td style="padding:6px; border:1px solid #cbd5e1;"><strong>${escapeHtml(data.finishReason)}</strong></td></tr>
+        <tr><td style="padding:6px; border:1px solid #cbd5e1;">finishReason</td><td style="padding:6px; border:1px solid #cbd5e1;"><strong>${escapeHtml_(data.finishReason)}</strong></td></tr>
         <tr><td style="padding:6px; border:1px solid #cbd5e1;">Czas odpowiedzi</td><td style="padding:6px; border:1px solid #cbd5e1;">${data.durationMs} ms</td></tr>
         <tr><td style="padding:6px; border:1px solid #cbd5e1;">Części odpowiedzi</td><td style="padding:6px; border:1px solid #cbd5e1;">Łącznie: ${data.partsCount} (w tym myśli 'thought': ${data.thoughtPartsCount})</td></tr>
         <tr><td style="padding:6px; border:1px solid #cbd5e1;">Długość wygenerowanego tekstu</td><td style="padding:6px; border:1px solid #cbd5e1;">${data.textContentLength} znaków</td></tr>
@@ -1767,14 +1771,14 @@ function showDiagnosticResultDialog(data) {
 
       <h4 style="margin:10px 0 6px 0; font-size:13px; color:#1e293b;">Wynik Customer Service Intelligence:</h4>
       <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:6px; padding:10px; font-size:11px; max-height:170px; overflow-y:auto; line-height:1.5;">
-        <strong>Kategoria:</strong> ${escapeHtml(res.kategoria)}<br>
-        <strong>Sugerowany priorytet:</strong> <span style="font-weight:bold; color:#b91c1c;">${escapeHtml(res.sugerowanyPriorytet)}</span> (${escapeHtml(res.uzasadnieniePriorytetu)})<br>
-        <strong>Streszczenie:</strong> ${escapeHtml(res.streszczenie)}<br>
-        <strong>Brakujące informacje:</strong> ${escapeHtml(res.brakujaceInformacje)}<br>
-        <strong>Wykryte sprzeczności:</strong> ${escapeHtml(res.wykryteSprzecznosci)}<br>
-        <strong>Rekomendowany kolejny krok:</strong> ${escapeHtml(res.rekomendowanyKrok)} (Strona: ${escapeHtml(res.rekomendowanaStronaKroku)})<br>
-        <strong>Sugerowane działanie:</strong> ${escapeHtml(res.sugerowaneDzialanie)}<br>
-        <strong>Pre-generowana pierwsza odpowiedź:</strong> <em>${escapeHtml(res.proponowanaOdpowiedz)}</em>
+        <strong>Kategoria:</strong> ${escapeHtml_(res.kategoria)}<br>
+        <strong>Sugerowany priorytet:</strong> <span style="font-weight:bold; color:#b91c1c;">${escapeHtml_(res.sugerowanyPriorytet)}</span> (${escapeHtml_(res.uzasadnieniePriorytetu)})<br>
+        <strong>Streszczenie:</strong> ${escapeHtml_(res.streszczenie)}<br>
+        <strong>Brakujące informacje:</strong> ${escapeHtml_(res.brakujaceInformacje)}<br>
+        <strong>Wykryte sprzeczności:</strong> ${escapeHtml_(res.wykryteSprzecznosci)}<br>
+        <strong>Rekomendowany kolejny krok:</strong> ${escapeHtml_(res.rekomendowanyKrok)} (Strona: ${escapeHtml_(res.rekomendowanaStronaKroku)})<br>
+        <strong>Sugerowane działanie:</strong> ${escapeHtml_(res.sugerowaneDzialanie)}<br>
+        <strong>Pre-generowana pierwsza odpowiedź:</strong> <em>${escapeHtml_(res.proponowanaOdpowiedz)}</em>
       </div>
     `;
   } else {
@@ -1785,7 +1789,7 @@ function showDiagnosticResultDialog(data) {
       </div>
 
       <div style="background:#ffffff; border:1px solid #fecaca; border-radius:6px; padding:10px; font-size:12px; color:#7f1d1d; line-height:1.4; margin-bottom:14px; word-break:break-word;">
-        <strong>Komunikat błędu:</strong><br>${escapeHtml(data.error)}
+        <strong>Komunikat błędu:</strong><br>${escapeHtml_(data.error)}
       </div>
 
       <div style="font-size:12px; color:#475569; line-height:1.4;">
@@ -1831,17 +1835,17 @@ function showDiagnosticResultDialog(data) {
 
 /**
  * Przetwarza oczekujące zgłoszenia z kolejki analizy AI z kontrolą limitu 15 RPM (v0.2.8)
- * - globalny rate limiter enforceGeminiRateLimit (4200 ms pomiędzy strzałami)
+ * - globalny rate limiter enforceGeminiRateLimit_ (4200 ms pomiędzy strzałami)
  * - obsługa 429 backoff cooldown
  * - maksymalnie 3 próby na zgłoszenie (retry limit)
  * - per-ticket lock współbieżności (AI_IN_PROGRESS_X)
- * - obsługa wywołań bez aktywnego arkusza (getSmartCareSpreadsheet)
+ * - obsługa wywołań bez aktywnego arkusza (getSmartCareSpreadsheet_)
  *
  * @param {number} [maxBatch=5] Maksymalna liczba zgłoszeń do przetworzenia w jednej partii
  * @returns {{ processedCount: number, successCount: number, errorCount: number, errors: string[] }}
  */
-function processAiAnalysisQueue(maxBatch = 5) {
-  const ss = (typeof getSmartCareSpreadsheet === "function" ? getSmartCareSpreadsheet() : null) || SpreadsheetApp.getActiveSpreadsheet();
+function processAiAnalysisQueue_(maxBatch = 5) {
+  const ss = (typeof getSmartCareSpreadsheet_ === "function" ? getSmartCareSpreadsheet_() : null) || SpreadsheetApp.getActiveSpreadsheet();
   if (!ss) {
     return { processedCount: 0, successCount: 0, errorCount: 0, errors: ["Brak dostępu do arkusza."] };
   }
@@ -1868,9 +1872,9 @@ function processAiAnalysisQueue(maxBatch = 5) {
   const lastCol = sheet.getLastColumn();
   const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim());
 
-  const aiStateIdx = findHeaderIndex(headers, ["Stan analizy AI", "Status AI"]);
-  const idIdx = findHeaderIndex(headers, ["ID Zgłoszenia", "Numer zgłoszenia", "ID"]);
-  const aiErrorIdx = findHeaderIndex(headers, ["Szczegóły błędu AI", "Błąd AI"]);
+  const aiStateIdx = findHeaderIndex_(headers, ["Stan analizy AI", "Status AI"]);
+  const idIdx = findHeaderIndex_(headers, ["ID Zgłoszenia", "Numer zgłoszenia", "ID"]);
+  const aiErrorIdx = findHeaderIndex_(headers, ["Szczegóły błędu AI", "Błąd AI"]);
 
   if (aiStateIdx === -1) {
     return { processedCount: 0, successCount: 0, errorCount: 0, errors: ["Brak kolumny Stan analizy AI w arkuszu ZGŁOSZENIA."] };
@@ -1917,7 +1921,7 @@ function processAiAnalysisQueue(maxBatch = 5) {
       }
 
       // 2. Atomowa blokada per-ticket (zapobieganie równoległemu przetwarzaniu tej samej sprawy)
-      if (typeof tryAcquireTicketAiLock === "function" && !tryAcquireTicketAiLock(ticketId)) {
+      if (typeof tryAcquireTicketAiLock_ === "function" && !tryAcquireTicketAiLock_(ticketId)) {
         Logger.log(`[Kolejka AI] Zgłoszenie ${ticketId} jest już przetwarzane przez inny wątek - pomijam.`);
         continue;
       }
@@ -1929,7 +1933,7 @@ function processAiAnalysisQueue(maxBatch = 5) {
 
       try {
         Logger.log(`[Kolejka AI v0.2.8] Przetwarzam zgłoszenie ${ticketId} w wierszu ${rowNum} (próba ${retryCount + 1}/3)...`);
-        triggerAutoAiAnalysisForTicket(sheet, rowNum, headers, ticketId, true, true);
+        triggerAutoAiAnalysisForTicket_(sheet, rowNum, headers, ticketId, true, true);
 
         const updatedState = String(sheet.getRange(rowNum, aiStateIdx + 1).getValue() || "").trim();
         if (updatedState === "Gotowa" || updatedState === "Wymaga weryfikacji") {
@@ -1957,7 +1961,7 @@ function processAiAnalysisQueue(maxBatch = 5) {
         }
       } catch (qErr) {
         const rawErrStr = qErr.message || String(qErr);
-        const safeErr = maskApiKey(rawErrStr);
+        const safeErr = maskApiKey_(rawErrStr);
         const isQuotaErr = safeErr.includes("429") || safeErr.includes("RESOURCE_EXHAUSTED") || safeErr.includes("limit Gemini API") || safeErr.includes("cooldown");
 
         if (isQuotaErr) {
@@ -1981,8 +1985,8 @@ function processAiAnalysisQueue(maxBatch = 5) {
           errors.push(`${ticketId}: ${safeErr}`);
         }
       } finally {
-        if (typeof releaseTicketAiLock === "function") {
-          releaseTicketAiLock(ticketId);
+        if (typeof releaseTicketAiLock_ === "function") {
+          releaseTicketAiLock_(ticketId);
         }
       }
     }
@@ -1990,8 +1994,8 @@ function processAiAnalysisQueue(maxBatch = 5) {
 
   if (processedCount > 0) {
     SpreadsheetApp.flush();
-    if (typeof refreshDashboardStats === "function") {
-      try { refreshDashboardStats(ss); } catch (_) {}
+    if (typeof refreshDashboardStats_ === "function") {
+      try { refreshDashboardStats_(ss); } catch (_) {}
     }
   }
 

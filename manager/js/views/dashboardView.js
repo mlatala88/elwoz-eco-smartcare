@@ -1,3 +1,5 @@
+import { escapeHtml } from "../components/escapeHtml.js";
+
 /**
  * ELWOZ ECO SmartCare Manager v0.3.0
  * Dashboard View (Pulpit - Customer Service Intelligence)
@@ -43,9 +45,9 @@ export class DashboardView {
 
         <div class="custom-range-inputs" id="custom-range-inputs" style="display: ${this.currentPeriod === 'custom' ? 'flex' : 'none'};">
           <label style="color: var(--text-secondary);">Od:</label>
-          <input type="date" id="range-from" class="custom-date-input" value="${this.customRange ? this.customRange.from : ''}" />
+          <input type="date" id="range-from" class="custom-date-input" value="${escapeHtml(this.customRange ? this.customRange.from : '')}" />
           <label style="color: var(--text-secondary);">Do:</label>
-          <input type="date" id="range-to" class="custom-date-input" value="${this.customRange ? this.customRange.to : ''}" />
+          <input type="date" id="range-to" class="custom-date-input" value="${escapeHtml(this.customRange ? this.customRange.to : '')}" />
           <button class="btn btn-secondary btn-xs" id="btn-apply-custom-range">Zastosuj</button>
         </div>
       </div>
@@ -285,7 +287,7 @@ export class DashboardView {
           <i data-lucide="${k.icon}" class="kpi-icon"></i>
         </div>
         <div class="kpi-value-row">
-          <div class="kpi-value">${k.val}</div>
+          <div class="kpi-value">${escapeHtml(k.val)}</div>
         </div>
         <div class="kpi-hint">
           <span>${k.hint}</span>
@@ -318,30 +320,30 @@ export class DashboardView {
     }
 
     tbody.innerHTML = tickets.map(t => `
-      <tr class="row-clickable ${t.priority === 'PILNY' ? 'row-urgent' : ''}" data-ticket-id="${t.id}">
-        <td class="table-ticket-id">${t.id}</td>
+      <tr class="row-clickable ${t.priority === 'PILNY' ? 'row-urgent' : ''}" data-ticket-id="${escapeHtml(t.id)}">
+        <td class="table-ticket-id">${escapeHtml(t.id)}</td>
         <td>
-          <div style="font-weight: 600;">${t.city}</div>
-          <div style="font-size: 11px; color: var(--text-secondary);">${t.street} ${t.houseNumber || '(brak nr)'}</div>
+          <div style="font-weight: 600;">${escapeHtml(t.city)}</div>
+          <div style="font-size: 11px; color: var(--text-secondary);">${escapeHtml(t.street)} ${escapeHtml(t.houseNumber || '(brak nr)')}</div>
         </td>
         <td>
-          <div>${t.type}</div>
-          <div style="font-size: 11px; color: var(--text-secondary);">${t.fraction}</div>
+          <div>${escapeHtml(t.type)}</div>
+          <div style="font-size: 11px; color: var(--text-secondary);">${escapeHtml(t.fraction)}</div>
         </td>
         <td>
-          <span class="badge badge-prio-${t.priority.toLowerCase()}">${t.priority}</span>
+          <span class="badge badge-prio-${escapeHtml(t.priority.toLowerCase())}">${escapeHtml(t.priority)}</span>
         </td>
         <td>
           ${((t.slaDeadline && new Date(t.slaDeadline) < new Date()) || (t.nextActionDeadline && new Date(t.nextActionDeadline) < new Date()))
             ? '<span class="badge badge-prio-pilny">⚠️ Przekroczone SLA</span>' 
-            : `<span style="font-size: 11px; color: var(--text-secondary);">${t.slaDeadline ? 'Do: ' + t.slaDeadline.substring(11, 16) : 'Brak terminu'}</span>`}
+            : `<span style="font-size: 11px; color: var(--text-secondary);">${escapeHtml(t.slaDeadline ? 'Do: ' + t.slaDeadline.substring(11, 16) : 'Brak terminu')}</span>`}
         </td>
-        <td>${t.assignee || 'Nieprzypisany'}</td>
+        <td>${escapeHtml(t.assignee || 'Nieprzypisany')}</td>
         <td style="max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-          ${t.nextAction || '<span style="color: var(--prio-urgent); font-weight: 600;">Brak kolejnego kroku!</span>'}
+          ${escapeHtml(t.nextAction) || '<span style="color: var(--prio-urgent); font-weight: 600;">Brak kolejnego kroku!</span>'}
         </td>
         <td style="text-align: right;">
-          <button class="btn btn-navy btn-xs btn-open-detail" data-ticket-id="${t.id}">Otwórz</button>
+          <button class="btn btn-navy btn-xs btn-open-detail" data-ticket-id="${escapeHtml(t.id)}">Otwórz</button>
         </td>
       </tr>
     `).join("");

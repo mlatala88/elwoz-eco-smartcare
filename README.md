@@ -10,6 +10,8 @@
 **Aktywny formularz zgłoszeniowy:** [Formularz Google Forms](https://docs.google.com/forms/d/e/1FAIpQLSdZXjHX0Tt5GqF5yacDZpouKtrcsxPBhXx-K2s5cqYfEFtnkA/viewform)  
 **Zweryfikowany link do opinii Google:** [Wizytówka POK Kartuzy](https://search.google.com/local/writereview?placeid=ChIJ13yCwGSa_UYRqkDdyWL8wdA)  
 
+**Poprawka integracyjna 2026-11-28:** aktualizacja istniejącego panelu, bez zmiany formularza i QR. [Instrukcja zachowania adresu wdrożenia](docs/INSTRUKCJA-WDROZENIA-V030.md) · [257 testów lokalnych](docs/RAPORT-TESTOW.md). Stary PIN nie przyznaje dostępu; potrzebna jest potwierdzona tożsamość Google.
+
 ---
 
 ## 🚀 Nowość w wydaniu v0.3.0: ELWOZ ECO SmartCare Manager
@@ -23,13 +25,13 @@ W ramach wydania **v0.3.0** przygotowano kompletną, niezależną aplikację web
 - 💬 **Komunikacja & Satysfakcja:** Centralny dziennik audytu korespondencji i rozmów telefonicznych oraz panel monitorowania ocen CSAT z etycznym modułem zaproszeń do Google Reviews.
 - 🔍 **Diagnostyka & Bezpieczeństwo:** Telemetria połączeń, symulator błędów API do testów QA, zero kluczy API po stronie przeglądarki, twardy Whitelist Guard (`wsb.student.tester@gmail.com`) i serwerowy Pre-Send Guardrail.
 - ⚡ **Wdrożenie jako Google Apps Script Web App:** Dedykowany szablon `google/webapp.html` oraz kontroler `google/webapp.gs` umożliwiający natywne uruchomienie menedżera w chmurze Google Apps Script za pośrednictwem `HtmlService` i `google.script.run`.
-- 👥 **Dostęp zespołowy i role (5 osób):** Obsługa 5 zweryfikowanych członków zespołu (Michał Latała, Barbara Seroka, Diana Skierka, Anna Fedoruk, Michał Wadyński) z bezpieczną autoryzacją PIN (`1926`) w środowisku kont konsumenckich `@gmail.com`.
-- 🧪 **157 testów automatycznych (100% PASS):** 65 testów jednostkowych UI, 48 testów audytowych silnika v0.2.8 oraz 44 testy integracyjne Scenariuszy A-O (`tests/test-v030-integration.js`).
+- 👥 **Dostęp zespołowy i role:** pięć ról osobowych, z rzeczywistymi kontami mapowanymi przez `SMARTCARE_STAFF_EMAILS`; każda operacja sprawdza tożsamość i uprawnienia na serwerze. Wspólny PIN został wyłączony.
+- 🧪 **257 testów lokalnych:** 11 zestawów silnika, integracji, kontraktów widoków, dostępu i bezpieczeństwa treści. Uruchom `node scripts/test-all.js`. Testy nie zastępują odbioru wdrożenia Google.
 - 📚 **Kompletna dokumentacja techniczna:**
   - [Instrukcja Wdrożenia v0.3.0 (docs/INSTRUKCJA-WDROZENIA-V030.md)](docs/INSTRUKCJA-WDROZENIA-V030.md)
   - [Dokumentacja Architektury (docs/ARCHITEKTURA.md)](docs/ARCHITEKTURA.md)
   - [Kontrakt Integracji z Backendem Google Apps Script (docs/KONTRAKT-INTEGRACJI.md)](docs/KONTRAKT-INTEGRACJI.md)
-  - [Raport z Testów – 30/30 PASSED (docs/RAPORT-TESTOW.md)](docs/RAPORT-TESTOW.md)
+  - [Raport z Testów – poprawka integracyjna (docs/RAPORT-TESTOW.md)](docs/RAPORT-TESTOW.md)
   - [Instrukcja Uruchomienia (docs/INSTRUKCJA-URUCHOMIENIA.md)](docs/INSTRUKCJA-URUCHOMIENIA.md)
   - [Galeria Zrzutów Ekranu (docs/screenshots/)](docs/screenshots/)
 
@@ -179,7 +181,7 @@ elwoz-eco-smartcare/
 2. Otwórz [Google Sheets](https://sheets.google.com/) i utwórz nowy arkusz.
 3. Wybierz: **Rozszerzenia → Apps Script**.
 4. Wklej zawartość plików `google/setup.gs`, `google/communication.gs` oraz `google/ai.gs`.
-5. Uruchom funkcję **`setupSmartCareSystem`** i zaakceptuj uprawnienia.
+5. Uruchom funkcję **`setupSmartCareSystem_`** i zaakceptuj uprawnienia.
 
 ### Dla istniejącej instalacji (aktualizacja do Customer Service Intelligence v0.2.7):
 Jeśli arkusz i formularz są już zainstalowane na koncie `wsb.student.tester@gmail.com`:

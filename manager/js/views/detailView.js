@@ -1,3 +1,5 @@
+import { escapeHtml } from "../components/escapeHtml.js";
+
 /**
  * ELWOZ ECO SmartCare Manager v0.3.0
  * Ticket Detail View (Centrum obsługi pojedynczego zgłoszenia – 3 kolumny)
@@ -36,7 +38,7 @@ export class DetailView {
       this.container.innerHTML = `
         <div class="empty-state">
           <i data-lucide="alert-octagon" class="empty-state-icon"></i>
-          <div class="empty-state-title">Nie odnaleziono zgłoszenia ${this.ticketId}</div>
+          <div class="empty-state-title">Nie odnaleziono zgłoszenia ${escapeHtml(this.ticketId)}</div>
           <button class="btn btn-navy btn-sm" id="btn-back-tickets">Wróć do listy zgłoszeń</button>
         </div>
       `;
@@ -77,9 +79,9 @@ export class DetailView {
               <span>Powrót</span>
             </button>
             <div class="detail-ticket-heading">
-              <span>${this.ticket.id}</span>
-              <span class="badge badge-status-${this.ticket.status.toLowerCase().replace(/\s+/g, '-')}">${this.ticket.status}</span>
-              <span class="badge badge-prio-${this.ticket.priority.toLowerCase()}">${this.ticket.priority}</span>
+              <span>${escapeHtml(this.ticket.id)}</span>
+              <span class="badge badge-status-${escapeHtml(this.ticket.status.toLowerCase().replace(/\s+/g, '-'))}">${escapeHtml(this.ticket.status)}</span>
+              <span class="badge badge-prio-${escapeHtml(this.ticket.priority.toLowerCase())}">${escapeHtml(this.ticket.priority)}</span>
             </div>
           </div>
 
@@ -111,21 +113,21 @@ export class DetailView {
                   <i data-lucide="user" class="info-icon"></i>
                   <div class="info-value-block">
                     <span class="info-label">Imię i nazwisko</span>
-                    <span class="info-value">${this.ticket.applicantName || 'Mieszkaniec'}</span>
+                    <span class="info-value">${escapeHtml(this.ticket.applicantName || 'Mieszkaniec')}</span>
                   </div>
                 </div>
                 <div class="info-row">
                   <i data-lucide="phone" class="info-icon"></i>
                   <div class="info-value-block">
                     <span class="info-label">Telefon</span>
-                    <span class="info-value">${this.ticket.applicantPhone || '<span style="color: var(--text-muted); font-weight: normal;">Brak telefonu</span>'}</span>
+                    <span class="info-value">${escapeHtml(this.ticket.applicantPhone) || '<span style="color: var(--text-muted); font-weight: normal;">Brak telefonu</span>'}</span>
                   </div>
                 </div>
                 <div class="info-row">
                   <i data-lucide="mail" class="info-icon"></i>
                   <div class="info-value-block">
                     <span class="info-label">Adres e-mail</span>
-                    <span class="info-value" style="word-break: break-all;">${this.ticket.applicantEmail || '<span style="color: var(--text-muted); font-weight: normal;">Brak e-mail</span>'}</span>
+                    <span class="info-value" style="word-break: break-all;">${escapeHtml(this.ticket.applicantEmail) || '<span style="color: var(--text-muted); font-weight: normal;">Brak e-mail</span>'}</span>
                   </div>
                 </div>
                 <div class="info-row">
@@ -143,7 +145,7 @@ export class DetailView {
                   <i data-lucide="map-pin" class="info-icon"></i>
                   <div class="info-value-block">
                     <span class="info-label">Adres zdarzenia</span>
-                    <span class="info-value">${this.ticket.city}, ul. ${this.ticket.street} ${this.ticket.houseNumber || '<span style="color: var(--prio-urgent);">(brak numeru posesji!)</span>'}</span>
+                    <span class="info-value">${escapeHtml(this.ticket.city)}, ul. ${escapeHtml(this.ticket.street)} ${escapeHtml(this.ticket.houseNumber) || '<span style="color: var(--prio-urgent);">(brak numeru posesji!)</span>'}</span>
                   </div>
                 </div>
                 <div class="info-row">
@@ -151,8 +153,8 @@ export class DetailView {
                   <div class="info-value-block">
                     <span class="info-label">Frakcja odpadów</span>
                     <span class="fraction-pill" style="margin-top: 3px;">
-                      <span class="fraction-dot fraction-${this.ticket.fraction.toLowerCase().split(' ')[0]}"></span>
-                      ${this.ticket.fraction}
+                      <span class="fraction-dot fraction-${escapeHtml(this.ticket.fraction.toLowerCase().split(' ')[0])}"></span>
+                      ${escapeHtml(this.ticket.fraction)}
                     </span>
                   </div>
                 </div>
@@ -160,7 +162,7 @@ export class DetailView {
                   <i data-lucide="calendar" class="info-icon"></i>
                   <div class="info-value-block">
                     <span class="info-label">Data rejestracji / zdarzenia</span>
-                    <span class="info-value">${this.ticket.timestamp} (zdarzenie: ${this.ticket.incidentDate || '-'})</span>
+                    <span class="info-value">${escapeHtml(this.ticket.timestamp)} (zdarzenie: ${escapeHtml(this.ticket.incidentDate || '-')})</span>
                   </div>
                 </div>
               </div>
@@ -168,7 +170,7 @@ export class DetailView {
               <div class="info-section">
                 <span class="info-section-title">Oryginalna treść zgłoszenia</span>
                 <div class="ticket-original-description">
-                  ${this.ticket.description || 'Brak treści opisu.'}
+                  ${escapeHtml(this.ticket.description || 'Brak treści opisu.')}
                 </div>
               </div>
 
@@ -198,27 +200,27 @@ export class DetailView {
                     <i data-lucide="sparkles" style="width: 16px; height: 16px;"></i>
                     <span>Analiza Customer Service Intelligence</span>
                   </div>
-                  <span class="badge ${this.ticket.aiState === 'Błąd' ? 'badge-ai-blad' : 'badge-ai-przeanalizowano'}">${this.ticket.aiState}</span>
+                  <span class="badge ${this.ticket.aiState === 'Błąd' ? 'badge-ai-blad' : 'badge-ai-przeanalizowano'}">${escapeHtml(this.ticket.aiState)}</span>
                 </div>
 
                 <!-- Streszczenie -->
                 <div class="ai-insight-box">
                   <div class="ai-insight-label">Streszczenie problemu:</div>
-                  <div>${this.ticket.aiSummary || 'Brak wygenerowanego streszczenia.'}</div>
+                  <div>${escapeHtml(this.ticket.aiSummary || 'Brak wygenerowanego streszczenia.')}</div>
                 </div>
 
                 <!-- Wykryte braki i sprzeczności -->
                 ${this.ticket.aiMissingInfo && this.ticket.aiMissingInfo !== 'Brak braków' ? `
                   <div class="ai-alert-missing">
                     <i data-lucide="alert-circle" style="width: 16px; height: 16px; flex-shrink: 0;"></i>
-                    <div><strong>Wykryte braki danych:</strong> ${this.ticket.aiMissingInfo}</div>
+                    <div><strong>Wykryte braki danych:</strong> ${escapeHtml(this.ticket.aiMissingInfo)}</div>
                   </div>
                 ` : ''}
 
                 ${this.ticket.contradictions && this.ticket.contradictions !== 'Brak sprzeczności' ? `
                   <div class="ai-alert-missing" style="background-color: #FEF0C7; border-color: #FEDF89; color: #B54708;">
                     <i data-lucide="alert-triangle" style="width: 16px; height: 16px; flex-shrink: 0;"></i>
-                    <div><strong>Wykryte sprzeczności:</strong> ${this.ticket.contradictions}</div>
+                    <div><strong>Wykryte sprzeczności:</strong> ${escapeHtml(this.ticket.contradictions)}</div>
                   </div>
                 ` : ''}
 
@@ -226,15 +228,15 @@ export class DetailView {
                 <div style="display: grid; grid-template-columns: auto 1fr; gap: 10px; font-size: 12px; align-items: center;">
                   <span style="font-weight: 700; color: var(--text-secondary);">Rekomendowany priorytet:</span>
                   <div>
-                    <span class="badge badge-prio-${(this.ticket.suggestedPriority || 'standardowy').toLowerCase()}">${this.ticket.suggestedPriority || 'STANDARDOWY'}</span>
-                    <span style="color: var(--text-secondary); margin-left: 6px;">${this.ticket.priorityRationale || ''}</span>
+                    <span class="badge badge-prio-${escapeHtml((this.ticket.suggestedPriority || 'standardowy').toLowerCase())}">${escapeHtml(this.ticket.suggestedPriority || 'STANDARDOWY')}</span>
+                    <span style="color: var(--text-secondary); margin-left: 6px;">${escapeHtml(this.ticket.priorityRationale || '')}</span>
                   </div>
                 </div>
 
                 <!-- Rekomendowany kolejny krok -->
                 <div style="font-size: 12px; border-top: 1px dashed #D9EAD3; padding-top: 8px;">
                   <span style="font-weight: 700; color: var(--brand-green-dark);">Rekomendowane działanie dyspozytora:</span>
-                  <div style="margin-top: 2px;">${this.ticket.aiSuggestedAction || this.ticket.aiRecommendedStep || 'Weryfikacja zgłoszenia'}</div>
+                  <div style="margin-top: 2px;">${escapeHtml(this.ticket.aiSuggestedAction || this.ticket.aiRecommendedStep || 'Weryfikacja zgłoszenia')}</div>
                 </div>
               </div>
 
@@ -274,7 +276,7 @@ export class DetailView {
                   <div class="form-group" style="margin-bottom: 0;">
                     <label class="form-label">Odbiorca (E-mail / Telefon)</label>
                     <input type="text" class="form-control" id="msg-recipient" 
-                           value="${this.ticket.applicantEmail || this.ticket.applicantPhone || ''}" />
+                           value="${escapeHtml(this.ticket.applicantEmail || this.ticket.applicantPhone || '')}" />
                   </div>
 
                   <div class="form-group" style="margin-bottom: 0;">
@@ -290,7 +292,7 @@ export class DetailView {
                 <div class="form-group" style="margin-bottom: 0;">
                   <label class="form-label">Temat wiadomości</label>
                   <input type="text" class="form-control" id="msg-subject" 
-                         value="Zgłoszenie ${this.ticket.id} – ELWOZ ECO POK Kartuzy" />
+                         value="Zgłoszenie ${escapeHtml(this.ticket.id)} – ELWOZ ECO POK Kartuzy" />
                 </div>
 
                 <div class="form-group" style="margin-bottom: 0;">
@@ -301,7 +303,7 @@ export class DetailView {
                       <span>✨ Usprawnij styl z AI (CX/PR)</span>
                     </button>
                   </div>
-                  <textarea class="form-control" id="msg-content" rows="6" style="font-family: inherit; font-size: 13px;">${this.ticket.aiDraftReply || ''}</textarea>
+                  <textarea class="form-control" id="msg-content" rows="6" style="font-family: inherit; font-size: 13px;">${escapeHtml(this.ticket.aiDraftReply || '')}</textarea>
                 </div>
 
                 <div class="ai-refine-banner">
@@ -341,7 +343,7 @@ export class DetailView {
               <div class="sla-timer-card ${isOverdue ? 'overdue' : 'ok'}">
                 <div>
                   <div class="sla-label">Licznik SLA 1. reakcji</div>
-                  <div class="sla-value">${slaDisplay}</div>
+                  <div class="sla-value">${escapeHtml(slaDisplay)}</div>
                 </div>
                 <i data-lucide="${isOverdue ? 'alert-triangle' : 'shield-check'}" 
                    style="width: 22px; height: 22px; color: ${isOverdue ? 'var(--prio-urgent)' : 'var(--brand-green)'};"></i>
@@ -374,7 +376,7 @@ export class DetailView {
                 <label class="form-label form-label-required">Pracownik odpowiedzialny</label>
                 <select class="form-select" id="detail-assignee">
                   <option value="Nieprzypisany">Nieprzypisany</option>
-                  ${this.staffList.map(s => `<option value="${s.name}" ${this.ticket.assignee === s.name ? 'selected' : ''}>${s.name} (${s.role})</option>`).join("")}
+                  ${this.staffList.map(s => `<option value="${escapeHtml(s.name)}" ${this.ticket.assignee === s.name ? 'selected' : ''}>${escapeHtml(s.name)} (${escapeHtml(s.role)})</option>`).join("")}
                 </select>
               </div>
 
@@ -382,7 +384,7 @@ export class DetailView {
               <div class="form-group">
                 <label class="form-label form-label-required">Następne działanie (Kolejny krok)</label>
                 <textarea class="form-control" id="detail-next-action" rows="2" 
-                          placeholder="np. Weryfikacja zapisu kamer trasy...">${this.ticket.nextAction || ''}</textarea>
+                          placeholder="np. Weryfikacja zapisu kamer trasy...">${escapeHtml(this.ticket.nextAction || '')}</textarea>
                 ${!this.ticket.nextAction && !isClosed ? `
                   <div class="warning-no-step" style="margin-top: 6px;">
                     <i data-lucide="alert-octagon" style="width: 14px; height: 14px; flex-shrink: 0;"></i>
@@ -403,7 +405,7 @@ export class DetailView {
                 <div class="form-group">
                   <label class="form-label">Termin działania</label>
                   <input type="datetime-local" class="form-control" id="detail-next-deadline" 
-                         value="${this.ticket.nextActionDeadline ? this.ticket.nextActionDeadline.replace(' ', 'T') : ''}" />
+                         value="${escapeHtml(this.ticket.nextActionDeadline ? this.ticket.nextActionDeadline.replace(' ', 'T') : '')}" />
                 </div>
               </div>
 
@@ -411,7 +413,7 @@ export class DetailView {
               <div class="form-group" id="resolution-method-group" style="display: ${isClosed ? 'block' : 'none'};">
                 <label class="form-label form-label-required">Rzeczywisty sposób rozwiązania sprawy</label>
                 <textarea class="form-control" id="detail-resolution-method" rows="2" 
-                          placeholder="Opisz konkretne działania wykonane przez firmę...">${this.ticket.resolutionMethod || ''}</textarea>
+                          placeholder="Opisz konkretne działania wykonane przez firmę...">${escapeHtml(this.ticket.resolutionMethod || '')}</textarea>
                 <span class="form-hint">Zgodnie ze standardem CX, nie wolno zamknąć sprawy bez opisu wykonanych działań.</span>
               </div>
 
@@ -419,7 +421,7 @@ export class DetailView {
               <div class="form-group">
                 <label class="form-label">Notatki wewnętrzne (Poufne)</label>
                 <textarea class="form-control" id="detail-employee-note" rows="3" 
-                          placeholder="Wpisz wewnętrzne ustalenia, nr tachografu, kontakt z dyspozytornią...">${this.ticket.employeeNote || ''}</textarea>
+                          placeholder="Wpisz wewnętrzne ustalenia, nr tachografu, kontakt z dyspozytornią...">${escapeHtml(this.ticket.employeeNote || '')}</textarea>
               </div>
 
               <!-- Przycisk zapisu zmian -->
@@ -449,10 +451,10 @@ export class DetailView {
     return this.communications.map(c => `
       <div style="background-color: var(--bg-muted); border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 8px; font-size: 11px;">
         <div style="display: flex; justify-content: space-between; font-weight: 600; color: var(--brand-navy);">
-          <span>${c.actionType} (${c.channel})</span>
-          <span style="font-weight: normal; color: var(--text-secondary);">${c.timestamp.substring(11, 16)}</span>
+          <span>${escapeHtml(c.actionType)} (${escapeHtml(c.channel)})</span>
+          <span style="font-weight: normal; color: var(--text-secondary);">${escapeHtml(c.timestamp.substring(11, 16))}</span>
         </div>
-        <div style="color: var(--text-secondary); margin-top: 2px;">Odbiorca: ${c.recipient} • Przez: ${c.author}</div>
+        <div style="color: var(--text-secondary); margin-top: 2px;">Odbiorca: ${escapeHtml(c.recipient)} • Przez: ${escapeHtml(c.author)}</div>
       </div>
     `).join("");
   }
@@ -666,7 +668,7 @@ export class DetailView {
           content: `
             <div class="form-group">
               <label class="form-label form-label-required">Numer telefonu rozmówcy</label>
-              <input type="text" class="form-control" id="call-phone" value="${this.ticket.applicantPhone || ''}" placeholder="+48..." />
+              <input type="text" class="form-control" id="call-phone" value="${escapeHtml(this.ticket.applicantPhone || '')}" placeholder="+48..." />
             </div>
             <div class="form-group">
               <label class="form-label form-label-required">Wynik rozmowy</label>

@@ -1,3 +1,5 @@
+import { escapeHtml } from "../components/escapeHtml.js";
+
 /**
  * ELWOZ ECO SmartCare Manager v0.3.0
  * Tickets View (Wszystkie zgłoszenia – Kompaktowa tabela operacyjna)
@@ -97,7 +99,7 @@ export class TicketsView {
             <div class="input-group">
               <i data-lucide="search" class="input-icon" style="width: 15px; height: 15px;"></i>
               <input type="text" id="filter-search" class="form-control input-with-icon" 
-                     placeholder="ID, nazwisko, adres, opis..." value="${this.filters.search || ''}" />
+                     placeholder="ID, nazwisko, adres, opis..." value="${escapeHtml(this.filters.search || '')}" />
             </div>
           </div>
 
@@ -143,7 +145,7 @@ export class TicketsView {
             <select class="form-select" id="filter-assignee">
               <option value="all">Wszyscy pracownicy</option>
               <option value="Nieprzypisany">Nieprzypisany</option>
-              ${staffList.map(s => `<option value="${s.name}">${s.name}</option>`).join("")}
+              ${staffList.map(s => `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}</option>`).join("")}
             </select>
           </div>
 
@@ -195,6 +197,9 @@ export class TicketsView {
       </div>
     `;
 
+    for (const [id, key] of [["priority","priority"],["category","category"],["assignee","assignee"],["deadline","deadlineFilter"],["ai-state","aiState"]]) {
+      this.container.querySelector("#filter-" + id).value = this.filters[key] || "all";
+    }
     this.bindEvents();
     await this.loadTickets();
 
@@ -246,6 +251,7 @@ export class TicketsView {
         sortField: "timestamp",
         sortOrder: "desc"
       };
+      this.router.navigate("tickets");
       this.render();
     };
 
@@ -268,7 +274,9 @@ export class TicketsView {
   }
 
   async loadTickets() {
-    const tickets = await this.dataProvider.getTickets(this.filters);
+    const requestId = this.loadRequestId = (this.loadRequestId || 0) + 1;
+    const tickets = await this.dataProvider.getTickets({ ...this.filters });
+    if (requestId !== this.loadRequestId) return;
 
     const countLabel = this.container.querySelector("#tickets-count-label");
     if (countLabel) {
@@ -281,7 +289,7 @@ export class TicketsView {
       if (this.filters.metricKey) {
         badgesHtml += `
           <span class="badge badge-status-w-realizacji" style="margin-right: 6px;">
-            Filtr wskaźnika: ${this.filters.metricKey}
+            Filtr wskaźnika: ${escapeHtml(this.filters.metricKey)}
             <button id="btn-clear-metric" style="background: none; border: none; cursor: pointer; margin-left: 4px; color: inherit;">&times;</button>
           </span>
         `;
@@ -289,7 +297,7 @@ export class TicketsView {
       if (this.filters.period === "custom" && this.filters.customRange && this.filters.customRange.from && this.filters.customRange.to) {
         badgesHtml += `
           <span class="badge badge-status-do-weryfikacji">
-            Zakres dat: ${this.filters.customRange.from} do ${this.filters.customRange.to}
+            Zakres dat: ${escapeHtml(this.filters.customRange.from)} do ${escapeHtml(this.filters.customRange.to)}
             <button id="btn-clear-range" style="background: none; border: none; cursor: pointer; margin-left: 4px; color: inherit;">&times;</button>
           </span>
         `;
@@ -395,69 +403,69 @@ export class TicketsView {
 
     tbody.innerHTML = tickets.map(t => {
       const isUrgent = t.priority === "PILNY";
-      let rowHtml = `<tr class="row-clickable ${isUrgent ? 'row-urgent' : ''}" data-ticket-id="${t.id}">`;
+      let rowHtml = `<tr class="row-clickable ${isUrgent ? 'row-urgent' : ''}" data-ticket-id="${escapeHtml(t.id)}">`;
 
-      if (isVis("id")) rowHtml += `<td class="table-ticket-id">${t.id}</td>`;
-      if (isVis("timestamp")) rowHtml += `<td style="white-space: nowrap; font-size: 12px; color: var(--text-secondary);">${t.timestamp}</td>`;
+      if (isVis("id")) rowHtml += `<td class="table-ticket-id">${escapeHtml(t.id)}</td>`;
+      if (isVis("timestamp")) rowHtml += `<td style="white-space: nowrap; font-size: 12px; color: var(--text-secondary);">${escapeHtml(t.timestamp)}</td>`;
       if (isVis("location")) {
         rowHtml += `
           <td>
-            <div style="font-weight: 600;">${t.city}</div>
-            <div style="font-size: 11px; color: var(--text-secondary);">${t.street} ${t.houseNumber || '(brak nr)'}</div>
+            <div style="font-weight: 600;">${escapeHtml(t.city)}</div>
+            <div style="font-size: 11px; color: var(--text-secondary);">${escapeHtml(t.street)} ${escapeHtml(t.houseNumber || '(brak nr)')}</div>
           </td>
         `;
       }
-      if (isVis("type")) rowHtml += `<td style="font-weight: 500;">${t.type}</td>`;
+      if (isVis("type")) rowHtml += `<td style="font-weight: 500;">${escapeHtml(t.type)}</td>`;
       if (isVis("fraction")) {
         rowHtml += `
           <td>
             <span class="fraction-pill">
-              <span class="fraction-dot fraction-${t.fraction.toLowerCase().split(' ')[0]}"></span>
-              ${t.fraction}
+              <span class="fraction-dot fraction-${escapeHtml(t.fraction.toLowerCase().split(' ')[0])}"></span>
+              ${escapeHtml(t.fraction)}
             </span>
           </td>
         `;
       }
       if (isVis("priority")) {
-        rowHtml += `<td><span class="badge badge-prio-${t.priority.toLowerCase()}">${t.priority}</span></td>`;
+        rowHtml += `<td><span class="badge badge-prio-${escapeHtml(t.priority.toLowerCase())}">${escapeHtml(t.priority)}</span></td>`;
       }
       if (isVis("status")) {
         const statusSlug = t.status.toLowerCase().replace(/\s+/g, '-');
-        rowHtml += `<td><span class="badge badge-status-${statusSlug}">${t.status}</span></td>`;
+        rowHtml += `<td><span class="badge badge-status-${escapeHtml(statusSlug)}">${escapeHtml(t.status)}</span></td>`;
       }
       if (isVis("assignee")) {
-        rowHtml += `<td>${t.assignee || '<span style="color: var(--prio-urgent);">Nieprzypisany</span>'}</td>`;
+        rowHtml += `<td>${escapeHtml(t.assignee) || '<span style="color: var(--prio-urgent);">Nieprzypisany</span>'}</td>`;
       }
       if (isVis("nextAction")) {
         rowHtml += `
-          <td style="max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${t.nextAction || ''}">
-            ${t.nextAction || '<span class="badge badge-prio-pilny">Brak kroku</span>'}
+          <td style="max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(t.nextAction || '')}">
+            ${escapeHtml(t.nextAction) || '<span class="badge badge-prio-pilny">Brak kroku</span>'}
           </td>
         `;
       }
       if (isVis("deadline")) {
-        rowHtml += `<td style="font-size: 12px; white-space: nowrap;">${t.nextActionDeadline || '-'}</td>`;
+        rowHtml += `<td style="font-size: 12px; white-space: nowrap;">${escapeHtml(t.nextActionDeadline || '-')}</td>`;
       }
       if (isVis("aiState")) {
         let aiBadgeClass = "badge-ai-przeanalizowano";
         if (t.aiState === "Wymaga weryfikacji") aiBadgeClass = "badge-ai-weryfikacja";
         if (t.aiState === "Błąd") aiBadgeClass = "badge-ai-blad";
         if (t.aiState === "Brak") aiBadgeClass = "badge-ai-brak";
-        rowHtml += `<td><span class="badge ${aiBadgeClass}">${t.aiState || 'Brak'}</span></td>`;
+        rowHtml += `<td><span class="badge ${aiBadgeClass}">${escapeHtml(t.aiState || 'Brak')}</span></td>`;
       }
 
       // Opcjonalne
       if (isVis("applicant")) {
-        rowHtml += `<td><div style="font-size: 12px; font-weight: 600;">${t.applicantName || '-'}</div><div style="font-size: 11px; color: var(--text-secondary);">${t.applicantPhone || ''}</div></td>`;
+        rowHtml += `<td><div style="font-size: 12px; font-weight: 600;">${escapeHtml(t.applicantName || '-')}</div><div style="font-size: 11px; color: var(--text-secondary);">${escapeHtml(t.applicantPhone || '')}</div></td>`;
       }
       if (isVis("contactRequest")) {
-        rowHtml += `<td><span class="badge ${t.contactRequest === 'TAK' ? 'badge-prio-wysoki' : 'badge-status-progress'}">${t.contactRequest}</span></td>`;
+        rowHtml += `<td><span class="badge ${t.contactRequest === 'TAK' ? 'badge-prio-wysoki' : 'badge-status-progress'}">${escapeHtml(t.contactRequest)}</span></td>`;
       }
       if (isVis("slaDeadline")) {
-        rowHtml += `<td style="font-size: 12px;">${t.slaDeadline || '-'}</td>`;
+        rowHtml += `<td style="font-size: 12px;">${escapeHtml(t.slaDeadline || '-')}</td>`;
       }
       if (isVis("satisfaction")) {
-        rowHtml += `<td>${t.satisfactionScore ? `${t.satisfactionScore} ★` : '-'}</td>`;
+        rowHtml += `<td>${t.satisfactionScore ? `${escapeHtml(t.satisfactionScore)} ★` : '-'}</td>`;
       }
       if (isVis("reviewInvite")) {
         rowHtml += `<td>${t.reviewInviteSent === 'TAK' ? '<span class="badge badge-status-rozwiazane">Wysłano</span>' : 'NIE'}</td>`;
@@ -465,7 +473,7 @@ export class TicketsView {
 
       rowHtml += `
         <td style="text-align: right; white-space: nowrap;">
-          <button class="btn btn-navy btn-xs btn-open-detail" data-ticket-id="${t.id}">Otwórz</button>
+          <button class="btn btn-navy btn-xs btn-open-detail" data-ticket-id="${escapeHtml(t.id)}">Otwórz</button>
         </td>
       </tr>`;
       return rowHtml;
@@ -492,10 +500,10 @@ export class TicketsView {
     import("../components/modal.js").then(({ Modal }) => {
       const colItemsHtml = this.columnDefs.map(c => `
         <label style="display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 13px; cursor: pointer;">
-          <input type="checkbox" class="col-toggle-checkbox" data-col-id="${c.id}" 
+          <input type="checkbox" class="col-toggle-checkbox" data-col-id="${escapeHtml(c.id)}"
                  ${this.visibleColumns.has(c.id) ? 'checked' : ''} 
                  ${c.required ? 'disabled' : ''} style="width: 16px; height: 16px; accent-color: var(--brand-navy);" />
-          <span style="${c.required ? 'font-weight: 600;' : ''}">${c.label} ${c.required ? '(wymagana)' : ''}</span>
+          <span style="${c.required ? 'font-weight: 600;' : ''}">${escapeHtml(c.label)} ${c.required ? '(wymagana)' : ''}</span>
         </label>
       `).join("");
 
